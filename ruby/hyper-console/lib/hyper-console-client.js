@@ -29362,7 +29362,7 @@ Opal.modules["react/component"] = function(Opal) {
         var self = this;
 
         
-        self.$deprecation_warning(base, "The module name React::Component has been deprecated.  Use Hyperloop::Component::Mixin instead.");
+        self.$deprecation_warning(base, "The module name React::Component has been deprecated.  Use Hyperloop::Component instead.");
         return base.$include(Opal.const_get_qualified(Opal.const_get_qualified(Opal.const_get_relative($nesting, 'Hyperloop'), 'Component'), 'Mixin'));
       }, TMP_Component_included_29.$$arity = 1);
       Opal.defs(self, '$deprecation_warning', TMP_Component_deprecation_warning_30 = function $$deprecation_warning(name, message) {
