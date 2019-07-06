@@ -50,7 +50,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'pusher-fake'
   spec.add_development_dependency 'rails', '>= 4.0.0'
   spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'react-rails', '>= 2.4.0', '< 2.5.0'
+  spec.add_development_dependency 'react-rails', '>= 2.4.0', '<= 2.5.0'
   spec.add_development_dependency 'reactrb-rails-generator'
   spec.add_development_dependency 'rspec-collection_matchers'
   spec.add_development_dependency 'rspec-expectations'
