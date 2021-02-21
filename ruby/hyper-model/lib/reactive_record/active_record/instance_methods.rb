@@ -29,6 +29,11 @@ module ActiveRecord
 
     def method_missing(missing, *args, &block)
       missing ||= `Opal.__name_of_super`
+      # skip json setter from server loading for pk column
+      if missing.split("_hyperstack_internal_setter_").last == primary_key.to_s
+        yield args,primary_key.to_s if block
+        return args
+      end
       column = self.class.columns_hash.detect { |name, *| missing =~ /^#{name}/ }
       if column
         name = column[0]
