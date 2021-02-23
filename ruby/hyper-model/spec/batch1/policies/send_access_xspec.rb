@@ -374,4 +374,3 @@ describe "regulate_broadcast" do
     )
   end
 end
-

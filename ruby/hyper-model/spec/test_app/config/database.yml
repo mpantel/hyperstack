@@ -4,6 +4,23 @@
 #   Ensure the SQLite 3 gem is defined in your Gemfile
 #   gem 'sqlite3'
 #
+# default: &default
+#   adapter: mysql2
+#   encoding: utf8
+#   username: root
+#
+# development:
+#   <<: *default
+#   database: hyper_mesh_development_db
+#
+# test:
+#   <<: *default
+#   database: hyper_mesh_test_db
+#
+# production:
+#   <<: *default
+#   database: hyper_mesh_production_db
+
 default: &default
   adapter: mysql2
   encoding: utf8

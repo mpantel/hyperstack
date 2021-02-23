@@ -29,10 +29,6 @@ module ActiveRecord
 
     def method_missing(missing, *args, &block)
       missing ||= `Opal.__name_of_super`
-      # skip json setter from server loading for pk column
-      # if missing.split("_hyperstack_internal_setter_").last == primary_key.to_s
-      #   self.id = arg.first
-      # end
       column = self.class.columns_hash.detect { |name, *| missing =~ /^#{name}/ }
       if column
         name = column[0]
@@ -47,9 +43,6 @@ module ActiveRecord
         super
       end
     end
-
-    # ignore load_from_json when it calls _hyperstack_internal_setter_id
-    def _hyperstack_internal_setter_id(*); end
 
     # the system assumes that there is "virtual" model_name and type attribute so
     # we define the internal setter here.  If the user defines some other attributes
