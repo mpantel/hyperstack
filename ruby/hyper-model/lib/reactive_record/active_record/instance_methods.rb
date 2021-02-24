@@ -45,7 +45,7 @@ module ActiveRecord
     end
 
     # ignore load_from_json when it calls _hyperstack_internal_setter_id
-    #def _hyperstack_internal_setter_id(*); end
+    def _hyperstack_internal_setter_id(*); end
 
     # the system assumes that there is "virtual" model_name and type attribute so
     # we define the internal setter here.  If the user defines some other attributes
