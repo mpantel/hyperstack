@@ -2,12 +2,15 @@ ARG PRIVATE_REGISTRY=ci.ru.aegean.gr:5000
 FROM ${PRIVATE_REGISTRY}/base20:ruby
 USER root
 RUN apt-get -y update && apt-get -y install  mariadb-server mariadb-client libmysqlclient-dev postgresql postgresql-contrib
-RUN systemctl enable postgresql && systemctl enable mariadb && systemctl enable redis-server
+#RUN systemctl enable postgresql && systemctl enable mariadb && systemctl enable redis-server
 RUN echo "sudo service postgresql start" >> /etc/bash.bashrc
 RUN echo "sudo service mysql start" >> /etc/bash.bashrc
 RUN echo "sudo redis-server /etc/redis/redis.conf" >> /etc/bash.bashrc
 
+RUN echo "ALTER USER postgres PASSWORD '${GEM_SERVER_KEY}';" | psql
+
 USER user
+
 ARG RUBY_VERSION_TO_INSTALL1=2.7.8
 RUN rbenv install ${RUBY_VERSION_TO_INSTALL1} && rbenv global ${RUBY_VERSION_TO_INSTALL1} \
 && rbenv rehash && gem install bundler
