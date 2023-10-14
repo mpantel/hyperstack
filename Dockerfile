@@ -7,7 +7,7 @@ RUN echo "sudo service postgresql start" >> /etc/bash.bashrc
 RUN echo "sudo service mysql start" >> /etc/bash.bashrc
 RUN echo "sudo redis-server /etc/redis/redis.conf" >> /etc/bash.bashrc
 
-RUN echo "ALTER USER postgres PASSWORD '${GEM_SERVER_KEY}';" | psql
+RUN echo "echo \"ALTER USER postgres PASSWORD '${GEM_SERVER_KEY}';\" | psql"  >> /etc/bash.bashrc
 
 USER user
 
