@@ -18,8 +18,9 @@ RUN sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postg
 #    until pg_isready --username=postgres --host=localhost; do sleep 1; done && \
 #    echo "echo \"ALTER USER postgres PASSWORD '${GEM_SERVER_KEY}';\" | psql"
 
-RUN mkdir -p /home/user/aegean-schedule/local_gems && chown -R 1000:1001 /home/user/aegean-schedule && \
-mkdir -p /home/user/aegean-schedule/node_modules && chown -R 1000:1001 /home/user/aegean-schedule/node_modules
+RUN mkdir -p /home/user/aegean-schedule/local_gems && \
+    mkdir -p /home/user/aegean-schedule/node_modules && \
+    chown -R 1000:1001 /home/user/aegean-schedule
 
 USER user
 
