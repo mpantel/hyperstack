@@ -31,17 +31,18 @@ services:
     container_name: "hyperstack"
     entrypoint: ./runone
     stdin_open: true
+    user: user
     tty: true
-    working_dir: /root/hyperstack
+    working_dir: /home/user/hyperstack
     environment:
-      BUNDLE_PATH: "/root/local_gems"
+      BUNDLE_PATH: "/home/user/local_gems"
       DRIVER: "${DRIVER}"
       COMPONENT: "${COMPONENT}"
       RUBY_VERSION: "${RUBY_VERSION}"
       TASK: "${TASK}"
       DB: "${DB}"
     volumes:
-      - ${MOUNT_PATH:-..}/hyperstack:/root/hyperstack
-      - local_gems:/root/local_gems
+      - ${MOUNT_PATH:-..}/hyperstack:/home/user/hyperstack
+#      - local_gems:/home/user/local_gems
     networks:
       default:
