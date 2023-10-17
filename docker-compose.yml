@@ -42,7 +42,7 @@ services:
       TASK: "${TASK}"
       DB: "${DB}"
     volumes:
-      - ${MOUNT_PATH:-..}/hyperstack:/home/user/hyperstack
+      - ${MOUNT_PATH:-..}/${GO_PIPELINE_NAME}:/home/user/hyperstack
 #      - local_gems:/home/user/local_gems
     networks:
       default:
