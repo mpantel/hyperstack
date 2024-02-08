@@ -36,6 +36,10 @@ ARG RUBY_VERSION_TO_INSTALL4=3.2.2
 RUN rbenv install ${RUBY_VERSION_TO_INSTALL4} && rbenv global ${RUBY_VERSION_TO_INSTALL4} \
 && rbenv rehash && gem install bundler
 
+ARG RUBY_VERSION_TO_INSTALL4=3.3.0
+RUN rbenv install ${RUBY_VERSION_TO_INSTALL4} && rbenv global ${RUBY_VERSION_TO_INSTALL4} \
+&& rbenv rehash && gem install bundler
+
 USER root
 
 RUN git config --global --add safe.directory /root/hyperstack
