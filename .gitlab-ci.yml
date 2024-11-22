@@ -97,7 +97,7 @@ stages:
 .test_gem_pg: &_test_gem_pg
   stage: test
 
-  before_install:
+  before_script:
     - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
     - sudo service postgresql restart
     - sleep 1
@@ -109,7 +109,6 @@ stages:
     - ln -s /usr/lib/chromium-browser/chromedriver ~/bin/chromedriver
     - echo 'install completed'
 
-  before_script:
     - echo before_script $COMPONENT
     - echo updating chrome driver
     - cd ruby/$COMPONENT
@@ -153,7 +152,7 @@ stages:
 #  services:
 #    - redis-server
 
-  before_install:
+  before_script:
     - echo installing $COMPONENT
 #    - sudo apt-get remove --purge mysql-server mysql-client mysql-common
 #    - sudo apt-get autoremove
@@ -179,7 +178,6 @@ stages:
 
     - echo 'install completed'
 
-  before_script:
     - echo before_script $COMPONENT
     - cd ruby/$COMPONENT
 
@@ -229,7 +227,7 @@ stages:
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-store       RUBY_VERSION=2.5.1
 hyper-operation:
-  extends: ._test_gem
+  extends: .test_gem
   variables:
     COMPONENT: hyper-operation
     RUBY_VERSION: 2.7.8
@@ -347,196 +345,3 @@ hyper-operation:
     # # - <<: *_deploy_gem
     # #   env: COMPONENT=hyperstack-config
 
-
-#######
-
-
-.create-databases:
-  image: $PRIVATE_REGISTRY/docker-passbolt-cli
-  when: manual
-  stage: databases
-  tags:
-    - database
-  script:
-    - ./create-ci-docker-volumes
-    - export SA_PASSWORD=$GEM_SERVER_KEY
-    - export MYSQL_ROOT_PASSWORD=$GEM_SERVER_KEY
-    - docker compose -f docker-compose.yml up --force-recreate -d mssql mysql postgresql
-    - sleep 60
-  only:
-    - edge
-
-.backup-databases:
-  image: $PRIVATE_REGISTRY/docker-passbolt-cli
-  when: manual
-  stage: databases
-  tags:
-    - production
-  script:
-    - |
-      # Get passwords from Passbolt
-    -  source get_pass "RU-DB SQL Server" "sa"
-    -  export mssql_root_password=$PASSWORD
-    - ./sqlscripts/1_copy_mssql_dbs_from_production.sh
-    -  source get_pass "ru-dm-mysql" "root"
-    -  export mysql_root_password=$PASSWORD
-    - ./sqlscripts/1_copy_mysql_dbs_from_production.sh
-    -  export SA_PASSWORD=$GEM_SERVER_KEY
-    - ./sqlscripts/2_truncate_dbs_from_production.sh
-
-  only:
-    - edge
-
-.restore-databases:
-  image: $PRIVATE_REGISTRY/docker-passbolt-cli
-  when: manual
-  stage: databases
-  tags:
-    - database
-  script:
-    - ./sqlscripts/3_download_dbs.sh
-    - export SA_PASSWORD=$GEM_SERVER_KEY
-    - ./sqlscripts/4_restore_mssql_dev_dbs.sh
-    - export MYSQL_ROOT_PASSWORD=$GEM_SERVER_KEY
-    - ./sqlscripts/5_restore_mysql_dev_dbs.sh
-  only:
-    - edge
-
-.ruby:test:
-  except: 
-    - master
-  stage: test
-  tags:
-    - invoicing
-  variables:
-    TERM: ansi
-    RAILS_ENV: test
-    RACK_ENV: test
-    NODE_ENV: test
-    DRIVER: "travis"
-    EPAY_DB_HOST: "mysql"
-    ELE_DB_HOST: "mysql"
-    BASE_DOMAIN: "test.ru.aegean.gr"
-    API_DB: "Aegean2Dev"
-    API_DB_SERVER: "mssql"
-    RESCOM_DB_FDQN: "mssql"
-    RESCOM_DB: "resCom"
-    #  RESCOM_MIGRATION_DB: "Aegean_Migration_DB"
-    RESCOM_DB_USER: "sa"
-    INVOICING_ROOT_URL: " https://w3.test.ru.aegean.gr"
-    ALKAIOS_USER: "sa"
-    ELE_DB_NAME: "ele"
-    ELE_DB_USERNAME: "ele"
-    API_DB_FDQN: "mssql"
-    INVOICING_USERNAME: "invoicing"
-    PAYROLL_USERNAME: "payroll"
-    API_USERNAME: "api"
-    BASE_TEST_DOMAIN: "test.ru.aegean.gr"
-    PHDLESSONS_DB_HOST: "mysql"
-    PHDLESSONS_DB: "phd_lessons"
-    PHDLESSONS_USER: "phd_lessons"
-    PROTOCOL_FILES_PATH: "/home/user/invoicing/protocol"
-
-  script:
-    - export MYSQL_ROOT_PASSWORD=$GEM_SERVER_KEY
-    - export EPAY_DB_PASSWORD=$GEM_SERVER_KEY
-    - export ELE_DB_PASSWORD=$GEM_SERVER_KEY
-    - export RESCOM_DB_PASSWORD=$GEM_SERVER_KEY
-    - export API_PASSWORD=$GEM_SERVER_KEY
-    - export SA_PASSWORD=$GEM_SERVER_KEY
-    - export ALKAIOS_DB_PASSWORD=$GEM_SERVER_KEY
-    - export PAYROLL_PASSWORD=$GEM_SERVER_KEY
-    - export INVOICING_PASSWORD=$GEM_SERVER_KEY
-    - export DIAS_CODE_GENERATION_API_KEY=$GEM_SERVER_KEY
-    #- bundle config set --local path local_gems
-#    - bundle
-#    - bundle exec rails assets:precompile
-    - docker compose -f docker-compose.yml run --rm --no-deps --entrypoint "/bin/bash -c 'rm -rf tmp/cache/* public/assets/* public/packs/* public/packs-test/* && bundle && bundle exec rails assets:precompile'" invoicing
-    #    - bundle exec brakeman -A -q --skip-files local_gems/ --no-exit-on-warn --no-exit-on-error -o log/brakeman-report.html
-    - docker compose -f docker-compose.yml run --rm --no-deps --entrypoint "/bin/bash -c 'bundle && bundle exec brakeman -A -q --skip-files local_gems/ --no-exit-on-warn --no-exit-on-error -o log/brakeman-report.html'" invoicing
-#    - sudo redis-server --daemonize yes
-#    - bundle exec rake db:migrate
-#    - bundle exec rspec --format RspecJunitFormatter --out rspec.xml spec/components/calls/criteria/attachments_obligatoriness_spec.rb
-    - docker compose -f docker-compose.yml run --rm --no-deps --entrypoint "/bin/bash -c \"sudo redis-server --daemonize yes && bundle && bundle exec rake db:migrate && bundle exec rspec --format RspecJunitFormatter --out rspec.xml \"" invoicing
-
-  artifacts:
-    when: always
-    paths:
-      #- log/rspec.html
-      - log/brakeman-report.html
-      - log/test.log
-#      - test/reports
-      - tmp/screenshots/*.*
-    reports:
-      junit: rspec.xml
-  # only:
-  #   - edge
-
-
-.pages:
-  variables:
-    GIT_CHECKOUT: "false"
-  stage: report
-  allow_failure: true
-  dependencies:
-    - ruby:test
-  artifacts:
-    name: reports
-    paths:
-      - public
-    exclude:
-      - public/assets
-      - public/pack*
-  only:
-    - edge
-  script:
-#    - mv test/html_reports/* public/ || true
-    # - mv log/aegean-epos-brakeman-report.html public/ || true
-    # - mv log/bundler_audit.html public/ || true
-    #- mv log/rspec.html public/index.html || true
-    - mv log/brakeman-report.html public/index.html || true
-    - mv tmp/screenshots public/ || true
-
-.approve:
-  stage: approve
-  tags:
-    - production
-  script:
-    - echo Approve to Deploy
-  environment:
-    name: production
-    url: https://www.ru.aegean.gr
-  when: manual
-  allow_failure: false
-  only:
-    - master
-
-.deploy:
-  stage: deploy
-  tags:
-    - production
-#  when: manual
-  image:
-    name: ${PRIVATE_REGISTRY}/base20:hyperstack
-    # docker:
-    #   user: user
-  script:
-    - command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )
-    - eval $(ssh-agent -s)
-    # store in ci as variable with 
-    # cat ~/.ssh/id_ed25519 | base64 -w0
-    - ssh-add <(echo "$SSH_PRIVATE_KEY" | base64 -d)
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - git config --global user.email "ruit@aegean.gr"
-    - git config --global user.name "Gitlab RUIT"
-    - ssh -oStrictHostKeyChecking=no $DEPLOY_TO_USER_AT_HOST 'hostname'
-    - bundle config set --local path local_gems
-    - bundle
-    - bundle exec cap production deploy
-    # - docker compose -f docker-compose.yml run --rm --no-deps --entrypoint "/bin/bash -c 'bundle && bundle exec cap production deploy'" invoicing
-  environment:
-    name: production
-    url: https://www.ru.aegean.gr
-  only:
-    - master
