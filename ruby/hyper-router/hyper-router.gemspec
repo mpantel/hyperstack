@@ -40,5 +40,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'shoulda'
   spec.add_development_dependency 'shoulda-matchers'
   spec.add_development_dependency 'sqlite3', '~> 1.4.2' # see https://github.com/rails/rails/issues/35153
-  spec.add_development_dependency 'timecop', '~> 0.9.1'
+  spec.add_development_dependency 'timecop', '0.9.4'
 end
