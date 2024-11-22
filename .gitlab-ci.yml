@@ -228,8 +228,11 @@ stages:
 #  include:
     # - <<: *_test_gem
     #   env: COMPONENT=rails-hyperstack  RUBY_VERSION=2.5.1
-    # - <<: *_test_gem
-    #   env: COMPONENT=hyper-spec        RUBY_VERSION=2.5.1
+hyper-spec:
+  extends: .test_gem
+  variables:
+    COMPONENT: hyper-spec
+    RUBY_VERSION: 2.7.8
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-trace       RUBY_VERSION=2.5.1
     # - <<: *_test_gem
@@ -248,12 +251,20 @@ hyper-operation:
     COMPONENT: hyper-operation
     RUBY_VERSION: 2.7.8
 
-hyper-model:
+hyper-model:part1:
   extends: .test_gem_pg
   variables:
     COMPONENT: hyper-model
     RUBY_VERSION: 2.7.8
     TASK: part1 
+    DB: hyper_mesh_test_db
+
+hyper-model:part2:
+  extends: .test_gem_pg
+  variables:
+    COMPONENT: hyper-model
+    RUBY_VERSION: 2.7.8
+    TASK: part2
     DB: hyper_mesh_test_db
 
     # - <<: *_test_gem_pg
