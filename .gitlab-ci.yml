@@ -173,12 +173,10 @@ stages:
     - until pg_isready --username=postgres --host=localhost; do sleep 1; done
     - sudo redis-server --daemonize yes
 
-    - bundle config set --local path local_gems
-    - bundle install
+    # - bundle config set --local path local_gems
+    # - bundle install
 
-    - echo 'install completed'
-
-    - echo before_script $COMPONENT
+    - echo initialized for $COMPONENT
     - cd ruby/$COMPONENT
 
     - bundle config set --local path ../../local_gems
@@ -191,6 +189,9 @@ stages:
     - bundle exec rake spec:prepare
     - ln -s /node_modules/ ../../node_modules
     - yarn install
+
+    - echo 'install completed'
+
   script:
     - echo running script $COMPONENT
     - DRIVER=travis bundle exec rake $TASK
