@@ -235,10 +235,10 @@ hyper-spec:
 
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-trace       RUBY_VERSION=2.5.1
-hyper-config:
+hyperstack-config:
   extends: .test_gem
   variables:
-    COMPONENT: hyper-config
+    COMPONENT: hyperstack-config
 
 hyper-state:
   extends: .test_gem
