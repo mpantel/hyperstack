@@ -7,6 +7,7 @@ require File.expand_path('../test_app/config/environment', __FILE__)
 require 'rspec/rails'
 require 'rspec-steps'
 require 'timecop'
+require 'mini_racer'
 
 module Helpers
   def computed_style(selector, prop)

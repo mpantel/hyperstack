@@ -245,13 +245,13 @@ hyper-spec:
     #   env: COMPONENT=hyper-router      RUBY_VERSION=2.5.1
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-store       RUBY_VERSION=2.5.1
-hyper-operation:
+.hyper-operation:
   extends: .test_gem
   variables:
     COMPONENT: hyper-operation
     RUBY_VERSION: 2.7.8
 
-hyper-model:part1:
+.hyper-model:part1:
   extends: .test_gem_pg
   variables:
     COMPONENT: hyper-model
@@ -259,7 +259,7 @@ hyper-model:part1:
     TASK: part1 
     DB: hyper_mesh_test_db
 
-hyper-model:part2:
+.hyper-model:part2:
   extends: .test_gem_pg
   variables:
     COMPONENT: hyper-model
