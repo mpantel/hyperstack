@@ -245,10 +245,10 @@ hyper-state:
   variables:
     COMPONENT: hyper-state
 
-  hyper-component:
-    extends: .test_gem
-    variables:
-      COMPONENT: hyper-component
+hyper-component:
+  extends: .test_gem
+  variables:
+    COMPONENT: hyper-component
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-router      RUBY_VERSION=2.5.1
 hyper-store:
