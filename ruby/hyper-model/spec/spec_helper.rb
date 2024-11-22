@@ -28,23 +28,23 @@ RSpec.configure do |config|
 
   config.before :suite do
     # grab the prerendered .js file, for debugging purposes
-    # class MiniRacer::Context
-    #   alias original_eval eval
-    #   def eval(str, options = nil)
-    #     original_eval str, options
-    #   rescue Exception => e
-    #     File.write('react_prerendering_src.js', str) rescue nil
-    #     raise e
-    #   end
-    # end
-    # MiniRacer_Backup = MiniRacer
-    # Object.send(:remove_const, :MiniRacer)
+    class MiniRacer::Context
+      alias original_eval eval
+      def eval(str, options = nil)
+        original_eval str, options
+      rescue Exception => e
+        File.write('react_prerendering_src.js', str) rescue nil
+        raise e
+      end
+    end
+    MiniRacer_Backup = MiniRacer
+    Object.send(:remove_const, :MiniRacer)
   end
 
   config.around(:each, :prerendering_on) do |example|
-    # MiniRacer = MiniRacer_Backup
+    MiniRacer = MiniRacer_Backup
     example.run
-    # Object.send(:remove_const, :MiniRacer)
+    Object.send(:remove_const, :MiniRacer)
   end
 
   config.color = true

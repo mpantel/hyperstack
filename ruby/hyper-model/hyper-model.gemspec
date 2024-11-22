@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'factory_bot_rails'
   spec.add_development_dependency 'hyper-spec', HyperModel::VERSION
   spec.add_development_dependency 'hyper-trace', HyperModel::VERSION
-  spec.add_development_dependency 'mini_racer'#, '< 0.4.0' # something is busted with 0.4.0 and its libv8-node dependency
+  spec.add_development_dependency 'mini_racer', '< 0.6.0' # something is busted with 0.4.0 and its libv8-node dependency
   spec.add_development_dependency 'pg'
   spec.add_development_dependency 'opal-rails'
   spec.add_development_dependency 'pry-rescue'
@@ -53,5 +53,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'shoulda-matchers'
   spec.add_development_dependency 'spring-commands-rspec', '~> 1.0.4'
   spec.add_development_dependency 'sqlite3', '~> 1.4.2' # see https://github.com/rails/rails/issues/35153, '~> 1.3.6'
-  spec.add_development_dependency 'timecop'#, '~> 0.8.1'
+  spec.add_development_dependency 'timecop', '~> 0.9.1'
 end

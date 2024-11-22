@@ -28,7 +28,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'jquery-rails'
   spec.add_development_dependency 'listen'
   spec.add_development_dependency 'mime-types'
-  spec.add_development_dependency 'mini_racer'#, '< 0.4.0' # something is busted with 0.4.0 and its libv8-node dependency
+  spec.add_development_dependency 'mini_racer', '< 0.6.0' # something is busted with 0.4.0 and its libv8-node dependency
   spec.add_development_dependency 'nokogiri'
   spec.add_development_dependency 'opal-jquery'
   spec.add_development_dependency 'opal-rails'
@@ -41,5 +41,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rspec-rails'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
   spec.add_development_dependency 'sqlite3', '~> 1.4.2'
-  spec.add_development_dependency 'timecop'#, '~> 0.8.1'
+  spec.add_development_dependency 'timecop', '~> 0.9.1'
 end
