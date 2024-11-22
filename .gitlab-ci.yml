@@ -232,7 +232,8 @@ hyper-spec:
   extends: .test_gem
   variables:
     COMPONENT: hyper-spec
-    RUBY_VERSION: 2.7.8
+    RUBY_VERSION: 6.0.0
+
     # - <<: *_test_gem
     #   env: COMPONENT=hyper-trace       RUBY_VERSION=2.5.1
     # - <<: *_test_gem
