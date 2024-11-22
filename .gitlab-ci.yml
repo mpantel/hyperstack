@@ -173,7 +173,7 @@ stages:
     - until pg_isready --username=postgres --host=localhost; do sleep 1; done
     - sudo redis-server --daemonize yes
 
-    - git config --global --add safe.directory .
+    - git config --global --add safe.directory $CI_PROJECT_DIR
     # - bundle config set --local path local_gems
     # - bundle install
 
