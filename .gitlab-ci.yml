@@ -68,7 +68,7 @@ variables:
   PGUSE: postgres
   PGPORT: 5432
   PGHOST: localhost
-
+  RUBYOPT: "-W0"
 #services:
 #  - docker:27.3.1-dind
 
