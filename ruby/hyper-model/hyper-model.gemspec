@@ -53,5 +53,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'shoulda-matchers'
   spec.add_development_dependency 'spring-commands-rspec', '~> 1.0.4'
   spec.add_development_dependency 'sqlite3', '~> 1.4.2' # see https://github.com/rails/rails/issues/35153, '~> 1.3.6'
-  spec.add_development_dependency 'timecop', '0.9.4'
+  spec.add_development_dependency 'timecop', '0.9.3'
 end
