@@ -94,40 +94,54 @@ stages:
 #  - approve
 #  - deploy
 
-.test_gem_pg: &_test_gem_pg
+.test_gem_pg:
   stage: test
 
   before_script:
-    - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
-    - sudo service postgresql restart
-    - sleep 1
-    - postgres --version
-    - sudo rm -f /usr/local/bin/yarn
-    - nvm install 10
-    - rvm install 2.6.3  # was 2.5.1
-    - gem install bundler
-    - ln -s /usr/lib/chromium-browser/chromedriver ~/bin/chromedriver
-    - echo 'install completed'
+    # - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
+    # - sudo service postgresql restart
+    # - sleep 1
+    # - postgres --version
+    # - sudo rm -f /usr/local/bin/yarn
+    # - nvm install 10
+    # - rvm install 2.6.3  # was 2.5.1
+    # - gem install bundler
+    # - ln -s /usr/lib/chromium-browser/chromedriver ~/bin/chromedriver
+    # - echo 'install completed'
 
-    - echo before_script $COMPONENT
-    - echo updating chrome driver
+    - sudo service postgresql start
+    - until pg_isready --username=postgres --host=localhost; do sleep 1; done
+    - sudo redis-server --daemonize yes
+
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+
+# - bundle config set --local path local_gems
+    # - bundle install
+
+    - echo initialized for $COMPONENT
     - cd ruby/$COMPONENT
+
     - echo creating psql database
     - psql -c 'create database hyper_mesh_test_db;' -U postgres
+
+    - bundle config set --local path ../../local_gems
+
     - bundle install --jobs=3 --retry=3
-    - bundle exec ruby -e 'require "webdrivers";  Webdrivers::Chromedriver.update; puts Webdrivers::Chromedriver.current_version'
-    - ls -la ~/.webdrivers
-    - sudo cp  ~/.webdrivers/chromedriver /usr/lib/chromium-browser/chromedriver
-    - bundle exec rake spec:prepare
     - google-chrome --version
-    - which google-chrome
+    - bundle exec ruby -e 'require "webdrivers";  Webdrivers::Chromedriver.update; puts Webdrivers::Chromedriver.current_version'
+#    - ls -la ~/.webdrivers
+#    - sudo cp  ~/.webdrivers/chromedriver /usr/lib/chromium-browser/chromedriver
+    - bundle exec rake spec:prepare
+    - ln -s /node_modules/ ../../node_modules
     - yarn install
+
+    - echo 'install completed'
 
   script:
     - echo running script $COMPONENT
     - DRIVER=travis bundle exec rake $TASK
 
-.test_gem: &_test_gem
+.test_gem:
   stage: test
 
 #  language: ruby
@@ -234,8 +248,14 @@ hyper-operation:
     COMPONENT: hyper-operation
     RUBY_VERSION: 2.7.8
 
-    # - <<: *_test_gem_pg
-    #   env: COMPONENT=hyper-model       RUBY_VERSION=2.5.1 TASK=part1 DB=hyper_mesh_test_db
+hyper-model:
+  extends: .test_gem_pg
+  variables:
+    COMPONENT: hyper-model
+    RUBY_VERSION: 2.7.8
+    TASK: part1 
+    DB: hyper_mesh_test_db
+
     # - <<: *_test_gem_pg
     #   env: COMPONENT=hyper-model       RUBY_VERSION=2.5.1 TASK=part2 DB=hyper_mesh_test_db
     # - <<: *_test_gem_pg
