@@ -81,7 +81,7 @@ variables:
 #  RBENV_VERSION: 3.1.6
   RBENV_VERSION: 3.2.6
 #  RUBY_VERSION: 2.7.8
-
+  RUBY_YJIT_ENABLE: true
 #services:
 #  - docker:27.3.1-dind
 
