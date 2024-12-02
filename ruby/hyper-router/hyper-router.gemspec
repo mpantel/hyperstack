@@ -19,26 +19,26 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'hyper-state', HyperRouter::VERSION
 
   spec.add_development_dependency 'bundler'
-  spec.add_development_dependency 'chromedriver-helper'
+  # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-spec', HyperRouter::VERSION
   spec.add_development_dependency 'hyper-store', HyperRouter::VERSION
   spec.add_development_dependency 'listen'
-  spec.add_development_dependency 'mini_racer'  , '< 0.6.0' # something is busted with 0.4.0 and its libv8-node dependency
+  spec.add_development_dependency 'mini_racer' # , '< 0.8.0' # something is busted with 0.4.0 and its libv8-node dependency
   spec.add_development_dependency 'opal-rails'
   spec.add_development_dependency 'opal-jquery'
   spec.add_development_dependency 'pry-rescue'
   spec.add_development_dependency 'pry-stack_explorer'
-  spec.add_development_dependency 'puma', '<= 5.4.0'
+  spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'rails', ENV['RAILS_VERSION'] || '>= 5.0.0', '< 7.0'
   spec.add_development_dependency 'rake'
   spec.add_development_dependency 'rspec-collection_matchers'
   spec.add_development_dependency 'rspec-expectations'
   spec.add_development_dependency 'rspec-its'
   spec.add_development_dependency 'rspec-mocks'
-  spec.add_development_dependency 'rspec-rails'
+  spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rspec-steps', '~> 2.1.1'
   spec.add_development_dependency 'shoulda'
   spec.add_development_dependency 'shoulda-matchers'
-  spec.add_development_dependency 'sqlite3', '~> 1.4.2' # see https://github.com/rails/rails/issues/35153
-  spec.add_development_dependency 'timecop', '0.9.2'
+  spec.add_development_dependency 'sqlite3', '< 2' # see https://github.com/rails/rails/issues/35153
+  spec.add_development_dependency 'timecop', '~> 0.9.0'
 end

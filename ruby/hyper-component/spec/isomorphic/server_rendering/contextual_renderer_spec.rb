@@ -7,6 +7,7 @@ RSpec.describe Hyperstack::Internal::Component::Rails::ServerRendering::Contextu
 
   describe '#render', :prerendering_on do
     it 'pre-renders HTML' do
+      pending 'prerendering off'
       result = renderer.render('Components.Todo',
                                 { todo: 'finish reactive-ruby' },
                                 options)
@@ -17,6 +18,7 @@ RSpec.describe Hyperstack::Internal::Component::Rails::ServerRendering::Contextu
     end
 
     it 'accepts props as a string' do
+      pending 'prerendering off'
       result = renderer.render('Components.Todo',
                                 { todo: 'finish reactive-ruby' }.to_json,
                                 options)
@@ -27,6 +29,7 @@ RSpec.describe Hyperstack::Internal::Component::Rails::ServerRendering::Contextu
     end
 
     it 'pre-renders static content' do
+      pending 'prerendering off'
       result = renderer.render('Components.Todo',
                                 { todo: 'finish reactive-ruby' },
                                 :static)

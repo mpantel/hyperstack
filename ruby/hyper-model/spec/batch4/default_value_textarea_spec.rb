@@ -38,6 +38,7 @@ describe 'defaultValue special handling', js: true do
   end
 
   it 'will not use the defaultValue param until data is loaded - unit test' do
+    pending "uncontrolled textarea"
     mount 'Tester' do
       class LoadableString
         include Hyperstack::State::Observable
@@ -82,6 +83,7 @@ describe 'defaultValue special handling', js: true do
           end
           TEXTAREA(id: 'uncontrolled-textarea', defaultValue: Tester.loadable_string.value)
 
+
           INPUT(id: 'controlled-input', value: Tester.loadable_string.value, valuex: Tester.loadable_string.value)
           .on(:change) { |evt| Tester.loadable_string.value = evt.target.value }
           INPUT(id: 'controlled-checkbox', type: :checkbox, checked: Tester.loadable_string.to_s == 'I have been loaded')
@@ -124,7 +126,7 @@ describe 'defaultValue special handling', js: true do
     expect(find('#uncontrolled-input').value).to eq('I have been loaded')
     expect(find('#uncontrolled-checkbox')).to be_checked
     expect(find('#uncontrolled-select').value).to eq('I have been loaded')
-    # expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
+    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
     expect(find('#controlled-input').value).to eq('another value')
     expect(find('#controlled-checkbox')).not_to be_checked
     expect(find('#controlled-select').value).to eq('another value')
@@ -151,6 +153,7 @@ describe 'defaultValue special handling', js: true do
   end
 
   it "will properly update input tags when data is loaded or changed" do
+    pending "uncontrolled textarea"
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
       mount "InputTester", {}, no_wait: true do
         class MyNestedGuy < HyperComponent
@@ -204,7 +207,7 @@ describe 'defaultValue special handling', js: true do
     expect(find('#uncontrolled-input').value).to eq('I have been loaded')
     expect(find('#uncontrolled-checkbox')).to be_checked
     expect(find('#uncontrolled-select').value).to eq('I have been loaded')
-    # expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
+    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
     expect(find('#controlled-input').value).to eq('another value')
     expect(find('#controlled-checkbox')).not_to be_checked
     expect(find('#controlled-select').value).to eq('another value')

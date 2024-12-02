@@ -1,2 +1,8 @@
 /.idea/
 /ruby/**/*.gem
+/ruby/**/*.lock
+/ruby/**/node_modules/
+/**/.byebug_history
+/node_modules/node_modules
+/local_gems/
+.DS_Store

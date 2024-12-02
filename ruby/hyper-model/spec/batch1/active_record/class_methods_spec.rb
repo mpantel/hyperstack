@@ -15,7 +15,7 @@ describe "ActiveRecord::ClassMethods", js: true do
         end
 
         error
-      end.to eq("nil is not a symbol nor a string")
+      end.to eq("User is not a symbol nor a string")
     end
   end
 end

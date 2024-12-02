@@ -19,7 +19,7 @@ module HyperI18n
     end
 
     step do
-      params.localization = ::I18n.l(date_or_time, opts)
+      params.localization = ::I18n.l(date_or_time, **opts)
     end
   end
 end

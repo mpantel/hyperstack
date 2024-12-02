@@ -4,7 +4,7 @@ require 'opal'
 require 'unparser'
 require 'method_source'
 require 'filecache'
-require 'webdrivers'
+# require 'webdrivers'
 
 
 require 'capybara/rspec'
@@ -28,7 +28,7 @@ require 'parser/current'
 if defined?(Selenium::WebDriver::Firefox)
   require 'selenium/web_driver/firefox/profile'
 end
-require 'selenium-webdriver'
+# require 'selenium-webdriver'
 
 require 'hyper-spec/version'
 
@@ -82,31 +82,31 @@ end
 # of Selenium Webdriver, but why?
 require 'selenium-webdriver'
 
-module Selenium
-  module WebDriver
-    module Chrome
-      module Bridge
-        if const_defined?(:COMMANDS)
-          COMMANDS = remove_const(:COMMANDS).dup
-          COMMANDS[:get_log] = [:post, 'session/:session_id/log']
-          COMMANDS.freeze
-        end
-
-        def log(type)
-          data = execute :get_log, {}, type: type.to_s
-
-          Array(data).map do |l|
-            begin
-              LogEntry.new l.fetch('level', 'UNKNOWN'), l.fetch('timestamp'), l.fetch('message')
-            rescue KeyError
-              next
-            end
-          end
-        end
-      end
-    end
-  end
-end
+# module Selenium
+#   module WebDriver
+#     module Chrome
+#       module Bridge
+#         if const_defined?(:COMMANDS)
+#           COMMANDS = remove_const(:COMMANDS).dup
+#           COMMANDS[:get_log] = [:post, 'session/:session_id/log']
+#           COMMANDS.freeze
+#         end
+#
+#         def log(type)
+#           data = execute :get_log, {}, type: type.to_s
+#
+#           Array(data).map do |l|
+#             begin
+#               LogEntry.new l.fetch('level', 'UNKNOWN'), l.fetch('timestamp'), l.fetch('message')
+#             rescue KeyError
+#               next
+#             end
+#           end
+#         end
+#       end
+#     end
+#   end
+# end
 
 module Capybara
   class << self

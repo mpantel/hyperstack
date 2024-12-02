@@ -9,6 +9,7 @@ module Hyperstack
       if RUBY_ENGINE == 'opal'
         if on_opal_client?
           def run(*args)
+            puts args.inspect
             hash = _Railway.params_wrapper.combine_arg_array(args)
             hash = serialize_params(hash)
             Hyperstack::HTTP.post(
@@ -17,9 +18,12 @@ module Hyperstack
               headers: headers.merge('X-CSRF-Token' => Hyperstack::ClientDrivers.opts[:form_authenticity_token])
               )
             .then do |response|
+              puts response.inspect
               deserialize_response response.json[:response]
             end
             .fail do |response|
+              puts response.inspect
+
               begin
                 const_get(response.json[:error_class]).new(response.json[:error])
               rescue
@@ -29,6 +33,7 @@ module Hyperstack
           end
         elsif on_opal_server?
           def run(*args)
+            Rails.logger args.inspect
             promise = Promise.new
             response = internal_iso_run(name, args)
             if response[:json][:response]
@@ -44,7 +49,7 @@ module Hyperstack
       isomorphic_method(:internal_iso_run) do |f, klass_name, op_params|
         f.send_to_server(klass_name, op_params)
         f.when_on_server {
-          Hyperstack::ServerOp.run_from_client(:acting_user, controller, klass_name, *op_params)
+          Hyperstack::ServerOp.run_from_client(:acting_user, controller, klass_name, **op_params)
         }
       end
 

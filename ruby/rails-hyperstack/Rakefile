@@ -11,6 +11,12 @@ namespace :spec do
     Dir.chdir('spec') do
       sh('rm -rf test_app')
       Bundler.with_unbundled_env do
+        # sh("rails _#{rails_version}_ new test_app -T")
+        sh("gem install zeitwerk -v 2.6.18") if rails_version < '7'
+        sh("gem install nokogiri -v 1.15.6") if rails_version < '7'
+        sh("gem install net-imap -v 0.4.18") if rails_version < '7'
+        sh("gem install foreman")
+        sh("gem install rails --version=#{rails_version}")
         sh("rails _#{rails_version}_ new test_app -T")
       end
       Bundler.with_unbundled_env do

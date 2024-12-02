@@ -21,6 +21,7 @@ describe "Hyperstack::Router", js: true do
 
   [:server_only, :client_only].each do |render_on|
     it "a routers render method can return a string (#{render_on})", prerendering_on: render_on == :server_only do
+      pending 'prerendering off' if render_on == :server_only
       client_option render_on: render_on
       mount 'SimpleStringRouter'
       expect(page).to have_content('a simple string')

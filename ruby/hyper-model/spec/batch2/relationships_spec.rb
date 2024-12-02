@@ -316,6 +316,8 @@ describe "synchronizing relationships", js: true do
     page.should have_content(TestModel.first.test_attribute)
   end
 
-  it "composed_of"
+  it "composed_of" do
+    skip 'missing test'
+  end
 
 end

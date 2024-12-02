@@ -11,7 +11,6 @@ require 'hyper-spec'
 require 'hyper-component'
 require 'hyper-state'
 
-
 RSpec.configure do |config|
   config.color = true
   config.formatter = :documentation

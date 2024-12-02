@@ -40,7 +40,7 @@ module Install
     end
 
     def move_and_update_application_record
-      unless File.exists? 'app/hyperstack/models/application_record.rb'
+      unless File.exist? 'app/hyperstack/models/application_record.rb'
         `mv app/models/application_record.rb app/hyperstack/models/application_record.rb`
         create_file 'app/models/application_record.rb', <<-RUBY
 # app/models/application_record.rb
@@ -82,6 +82,9 @@ if false
       run 'yarn add react'
       run 'yarn add react-dom'
       run 'yarn add react-router'
+      run 'yarn @babel/plugin-proposal-private-methods'
+      run 'yarn @babel/plugin-proposal-private-property-in-object'
+
       create_file 'app/javascript/packs/hyperstack.js', <<-CODE
         // Import all the modules
         import React from 'react';
@@ -147,6 +150,9 @@ Rails.application.config.assets.paths << Rails.root.join('public', 'packs', 'js'
       # yarn 'history'#, '4.2' this will be brought in by react-router
       yarn 'react_ujs', '^2.5.0'
       yarn 'jquery', '^3.4.1'
+      yarn '@babel/plugin-proposal-private-methods', '^7.18.6'
+      yarn '@babel/plugin-proposal-private-property-in-object', '^7.21.11'
+
     end
 
     def add_webpacker_gem

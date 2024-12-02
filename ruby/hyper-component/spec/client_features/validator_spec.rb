@@ -108,6 +108,7 @@ describe 'Hyperstack::Internal::Component::Validator', js: true do
           PROPS
         end
       end
+      NEED_THIS_FOR_TESTS_TO_PASS=true
     end
     expect_evaluate_ruby('VALIDATOR.validate(PROPS)').to eq([])
     expect_evaluate_ruby('VALIDATOR.props_wrapper.new(Dummy.new).baz').to eq({ "biz" => 'biz', "baz" => 'baz' })

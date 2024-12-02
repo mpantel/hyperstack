@@ -305,10 +305,10 @@ module ActiveRecord
     # end
 
     [:belongs_to, :has_many, :has_one].each do |macro|
-      define_method(macro) do |*args| # is this a bug in opal?  saying name, scope=nil, opts={} does not work!
+      define_method(macro) do |*args,**opts| # is this a bug in opal?  saying name, scope=nil, opts={} does not work!
         name = args.first
-        opts = (args.count > 1 and args.last.is_a? Hash) ? args.last : {}
-        assoc = Associations::AssociationReflection.new(self, macro, name, opts)
+        # opts = (args.count > 1 and args.last.is_a? Hash) ? args.last : {}
+        assoc = Associations::AssociationReflection.new(self, macro, name, **opts)
         if macro == :has_many
           define_method(name) { @backing_record.get_has_many(assoc, nil) }
           define_method("_hyperstack_internal_setter_#{name}") { |val| @backing_record.set_has_many(assoc, val) }

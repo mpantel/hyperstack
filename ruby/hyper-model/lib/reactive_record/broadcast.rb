@@ -11,7 +11,8 @@ module ReactiveRecord
         if !Hyperstack.on_server? && Hyperstack::Connection.root_path
           send_to_server(operation, data, model.__synchromesh_update_time) rescue nil # fails if server no longer running so ignore
         else
-          SendPacket.run(data, operation: operation, updated_at: model.__synchromesh_update_time)
+          # see: https://github.com/hyperstack-org/hyperstack/issues/453
+          SendPacket.run(data, operation: operation, updated_at: model.__synchromesh_update_time).tap { |p| raise p.error if p.error }
         end
       end
     rescue ActiveRecord::StatementInvalid => e

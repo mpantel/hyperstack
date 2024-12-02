@@ -127,7 +127,7 @@ module Hyperstack
             @ctx = ctx
             if defined? @@ctx_methods
               @@ctx_methods.each do |method_name, block|
-                @ctx.attach("ServerSideIsomorphicMethod.#{method_name}", proc{|args| block.call(args.to_json)})
+                @ctx.attach("ServerSideIsomorphicMethod.#{method_name}", proc{|*args| block.call(args.to_json)})
               end
             end
           end

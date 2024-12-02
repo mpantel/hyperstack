@@ -26,10 +26,14 @@
 #   <<: *default
 #   database: production_db_name
 
+#default: &default
+#  adapter: mysql2
+#  encoding: utf8
+#  username: root
 default: &default
-  adapter: mysql2
-  encoding: utf8
-  username: root
+  adapter: postgresql
+  pool: 5
+  timeout: 5000
 
 development:
   <<: *default

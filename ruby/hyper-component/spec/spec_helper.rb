@@ -2,6 +2,7 @@ ENV["RAILS_ENV"] ||= 'test'
 
 require 'opal'
 require 'opal-jquery'
+require 'mini_racer'
 
 begin
   require File.expand_path('../test_app/config/environment', __FILE__)

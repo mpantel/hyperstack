@@ -2,7 +2,6 @@ require './ruby/version'
 desc 'Publish hyperstack gems to private dir'
 task :publish do
   base_path = ENV['PWD']
-  sh "gem", "install", "geminabox"
   #  hyper-console
   %w{
     hyper-component
@@ -19,9 +18,9 @@ task :publish do
   }.each do|gem|
     puts "Publishing #{gem} gem"
     Dir.chdir("#{base_path}/ruby/#{gem}") do
-      #sh ['bundle', 'update']
+      sh ['bundle', 'update']
       sh 'gem' ,'build', "#{gem}.gemspec"
-      sh 'gem' ,'inabox' ,"#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'-g' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
+      sh 'gem' ,'push' ,"#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'--host' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
     end
   end
 end

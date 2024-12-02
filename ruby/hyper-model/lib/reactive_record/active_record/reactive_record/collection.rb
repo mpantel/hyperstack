@@ -6,7 +6,7 @@ module ReactiveRecord
       def new
         @master ||= super
       end
-      def method_missing(*args)
+      def method_missing(*)
       end
     end
 

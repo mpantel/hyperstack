@@ -19,14 +19,17 @@ describe 'Auto Unmounting', js: true do
           end
           render do
             puts "rendering with #{@state}"
-            case @state
-            when :cancel_and_wait
-              "waiting..."
-            when :final_result
-              "works!" if !!Mounter.stayed_running == @KeepRunning
-            else
-              Mounted(keep_running: @KeepRunning)
-            end
+            # case @state
+            # when :cancel_and_wait
+            #   "waiting..."
+            # when :final_result
+            #   "works!" if !!Mounter.stayed_running == @KeepRunning
+            # else
+            #   Mounted(keep_running: @KeepRunning)
+            # end
+            return "waiting..." if @state == :cancel_and_wait
+            return "works!" if @state == :final_result && !!Mounter.stayed_running == @KeepRunning
+            return Mounted(keep_running: @KeepRunning)
           end
         end
         class Mounted < Hyperloop::Component
@@ -71,14 +74,17 @@ describe 'Auto Unmounting', js: true do
         before_mount { @observable_object = ObservableObject.new }
         render do
           puts "rendering with #{@observable_object.state}"
-          case @observable_object.state
-          when :mounted
-            Mounted(observable_object: @observable_object)
-          when :waiting_to_unmount
-            "waiting to unmount"
-          when :unmounted
-            "unmounted"
-          end
+          # case @observable_object.state
+          # when :mounted
+          #   Mounted(observable_object: @observable_object)
+          # when :waiting_to_unmount
+          #   "waiting to unmount"
+          # when :unmounted
+          #   "unmounted"
+          # end
+          return Mounted(observable_object: @observable_object) if @observable_object.state == :mounted
+          return "waiting to unmount" if @observable_object.state == :waiting_to_unmount
+          return "unmounted" if @observable_object.state == :unmounted
         end
       end
       class Mounted < Hyperloop::Component

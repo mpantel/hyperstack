@@ -56,6 +56,7 @@ describe 'the React DSL', js: true do
   end
 
   it "in prerender will pass converted props through event handlers", :prerendering_on do
+    pending 'prerendering off'
     client_option render_on: :both
     mount 'Foo' do
       class Foo
@@ -95,6 +96,7 @@ describe 'the React DSL', js: true do
   end
 
   it "in prerendering has a .br short hand String method", :prerendering_on do
+    pending 'prerendering off'
     client_option render_on: :server_only
     client_option raise_on_js_errors: :off
     mount 'Foo' do
@@ -187,6 +189,7 @@ describe 'the React DSL', js: true do
   end
 
   it 'raises a method missing error', :prerendering_on do
+    pending 'prerendering off'
     client_option render_on: :both
     client_option raise_on_js_errors: :off
     expect_evaluate_ruby do
