@@ -10,7 +10,9 @@ module HyperI18n
     end
 
     step do
-      params.translation = ::I18n.t(params.attribute, opts)
+      Rails.logger.info "trans: #{::I18n.t(params.attribute, **pts)}"
+
+      params.translation = ::I18n.t(params.attribute, **opts)
     end
   end
 end

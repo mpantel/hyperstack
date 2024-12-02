@@ -29,16 +29,17 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'websocket' # for hot loader
 
   spec.add_development_dependency 'bundler'
-  spec.add_development_dependency 'chromedriver-helper'
+  # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'opal-rails' #, '>= 0.9.4', '< 2.0'
+  spec.add_development_dependency 'opal-browser' , '0.3.3'
   spec.add_development_dependency 'pry-rescue'
   spec.add_development_dependency 'pry-stack_explorer'
-  spec.add_development_dependency 'puma', '<= 5.4.0'
+  spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'rails', ENV['RAILS_VERSION'] || '>= 5.0.0', '< 7.0'
   spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'rspec', '~> 3.7.0'
-  spec.add_development_dependency 'rspec-rails'
+  spec.add_development_dependency 'rspec', '~> 3.11.0'
+  spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
-  spec.add_development_dependency 'sqlite3', '~> 1.4.2' # see https://github.com/rails/rails/issues/35153
-  spec.add_development_dependency 'timecop', '0.9.2'
+  spec.add_development_dependency 'sqlite3', '< 2' # see https://github.com/rails/rails/issues/35153
+  spec.add_development_dependency 'timecop', '~> 0.9.0'
 end

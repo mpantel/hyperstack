@@ -21,8 +21,8 @@ rescue Exception => e
     class << self
       alias old_parse parse
     end
-    def self.parse(*args, &block)
-      old_parse *args, &block
+    def self.parse(...)
+      old_parse(...)
     rescue Exception => e
       raise StandardError.new e.message
     end

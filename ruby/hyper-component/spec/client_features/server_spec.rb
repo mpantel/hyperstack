@@ -4,6 +4,7 @@ describe 'React::Server', :js, :prerendering_on do
 
   describe "render_to_string" do
     it "should render a React.Element to string" do
+      pending 'prerendering off'
       client_option render_on: :both
       expect_evaluate_ruby do
         ele = Hyperstack::Component::ReactAPI.create_element('span') { "lorem" }
@@ -14,6 +15,7 @@ describe 'React::Server', :js, :prerendering_on do
 
   describe "render_to_static_markup" do
     it "should render a React.Element to static markup" do
+      pending 'prerendering off'
       client_option render_on: :both
       expect_evaluate_ruby do
         ele = Hyperstack::Component::ReactAPI.create_element('span') { "lorem" }

@@ -66,14 +66,14 @@ You can control how much of the stack gets installed as well:
   spec.add_dependency 'rails', ENV['RAILS_VERSION'] || '>= 5.0.0', '< 7.0'
 
   spec.add_development_dependency 'bundler'
-  spec.add_development_dependency 'chromedriver-helper'
+  # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-spec', Hyperstack::VERSION
   spec.add_development_dependency 'pry'
-  spec.add_development_dependency 'puma', '<= 5.4.0'
+  spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'bootsnap'
-  spec.add_development_dependency 'rspec-rails'
+  spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
-  spec.add_development_dependency 'sqlite3', '~> 1.4' # was 1.3.6 -- see https://github.com/rails/rails/issues/35153
+  spec.add_development_dependency 'sqlite3', '< 2' # '~> 1.4' # was 1.3.6 -- see https://github.com/rails/rails/issues/35153
   spec.add_development_dependency 'sass-rails', '>= 5.0'
   # Use Uglifier as compressor for JavaScript assets
   spec.add_development_dependency 'uglifier', '>= 1.3.0'
@@ -85,7 +85,7 @@ You can control how much of the stack gets installed as well:
   # Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
   spec.add_development_dependency 'turbolinks', '~> 5'
   # Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
-  spec.add_development_dependency 'jbuilder', '~> 2.5'
+  spec.add_development_dependency 'jbuilder'#, '~> 2.5'
   spec.add_development_dependency 'foreman'
   spec.add_development_dependency 'database_cleaner'
 end

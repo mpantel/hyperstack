@@ -35,6 +35,7 @@ describe 'Hyperstack::Internal::Callbacks', js: true do
           @turned_off_laptop = args
         end
       end
+      NEED_THIS_FOR_TESTS_TO_PASS=true
     end
     evaluate_ruby { @instance = Foo.new }
     expect { @instance.respond_to?(:wash_hands) }.on_client_to be_truthy
@@ -63,6 +64,8 @@ describe 'Hyperstack::Internal::Callbacks', js: true do
             @turned_off_laptop = args
           end
         end
+        NEED_THIS_FOR_TESTS_TO_PASS=true
+
       end
       evaluate_ruby { @instance = Foo.new }
       expect { @instance.run_callback(:before_dinner, 1, 2, 3) }.on_client_to eq [1, 2, 3]
@@ -147,6 +150,8 @@ describe 'Hyperstack::Internal::Callbacks', js: true do
         after_dinner :eat_ice_cream
         def eat_ice_cream(a,b,c);  end
       end
+      NEED_THIS_FOR_TESTS_TO_PASS=true
+
     end
     expect_evaluate_ruby do
       foo = Foo.new

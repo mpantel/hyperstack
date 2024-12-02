@@ -12,3 +12,6 @@ Rails.application.config.assets.paths << Rails.root.join('node_modules', 'app', 
 # application.js, application.css, and all non-JS/CSS in the app/assets
 # folder are already added.
 Rails.application.config.assets.precompile += %w(time_cop.js)
+
+Opal::Config.source_map_enabled = true # default
+Rails.application.config.assets.debug = true

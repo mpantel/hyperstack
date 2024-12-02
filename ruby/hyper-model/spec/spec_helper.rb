@@ -3,7 +3,7 @@ ENV["RAILS_ENV"] ||= 'test'
 require 'hyper-spec'
 require 'pry'
 require 'opal-browser'
-
+require 'mini_racer'
 
 begin
   require File.expand_path('../test_app/config/environment', __FILE__)
@@ -94,7 +94,7 @@ require 'database_cleaner'
 require 'capybara/rspec'
 require 'capybara/rails'
 # require 'support/component_helpers'
-require 'selenium-webdriver'
+# require 'selenium-webdriver'
 
 def policy_allows_all
   stub_const 'TestApplication', Class.new

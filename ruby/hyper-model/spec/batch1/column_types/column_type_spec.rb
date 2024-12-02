@@ -140,7 +140,7 @@ describe "column types on client", js: true do
         TypeTest.find(1).send(attr).class
       end
     end.to_on_client eq([
-      'Number', 'NilClass', 'Boolean', 'Date', 'Time', 'Number', 'Number', 'Number',
+      'Number', 'NilClass', 'FalseClass', 'Date', 'Time', 'Number', 'Number', 'Number',
       'Number', 'String', 'String', 'Time', 'Time', 'NilClass', 'NilClass'
     ])
     check_errors
@@ -212,7 +212,7 @@ describe "column types on client", js: true do
     end.to_then eq([
       'Number', 1,
       'NilClass', nil,
-      'Boolean', true,
+      'TrueClass', true,
       'Date', t.to_date.as_json,
       'Time', t.as_json,
       'Number', 12.2,

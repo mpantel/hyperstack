@@ -4,6 +4,7 @@ module Opal
   def self.hyperspec_compile(str, opts = {})
     compile(str, opts).gsub("// Prepare super implicit arguments\n", '')
                 .delete("\n").gsub('(Opal);', '(Opal)')
+                      .gsub(' try',"\ntry")
   # rubocop:disable Lint/RescueException
   # we are going to reraise it anyway, so its fine to catch EVERYTHING!
   rescue Exception => e

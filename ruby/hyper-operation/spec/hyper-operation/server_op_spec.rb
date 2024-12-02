@@ -79,7 +79,7 @@ describe "isomorphic operations", js: true do
       expect(response_spy).to have_received(:status=).with(400)
       expect_promise do
         ServerFacts.run(n: 10000000000).fail { |exception| Promise.new.resolve(exception.inspect) }
-      end.to eq('#<Exception: stack level too deep>')
+      end.to eq('#<SystemStackError: stack level too deep>')
       expect(response_spy).to have_received(:status=).with(500)
     end
 

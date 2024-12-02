@@ -19,7 +19,10 @@ module Hyperstack
         @@component_classes = {}
 
         def self.stateless?(ncc)
-          `typeof #{ncc} === 'symbol' || (typeof #{ncc} === 'function' && !(#{ncc}.prototype && #{ncc}.prototype.isReactComponent))`
+          # sse: https://github.com/hyperstack-org/hyperstack/issues/420
+          #`typeof #{ncc} === 'symbol' || (typeof #{ncc} === 'function' && !(#{ncc}.prototype && #{ncc}.prototype.isReactComponent))`
+          `typeof #{ncc} === 'symbol' || typeof #{ncc}.$$typeof === 'symbol' || (typeof #{ncc} === 'function' && !(#{ncc}.prototype && #{ncc}.prototype.isReactComponent))`
+
         end
 
         def self.import_native_component(opal_class, native_class)

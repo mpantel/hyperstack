@@ -149,7 +149,8 @@ module HyperSpec
     # Opal compiler, etc.
 
     def to_js(*args, &block)
-      opal_compile(*process_params(*args, &block))
+      # see: https://github.com/hyperstack-org/hyperstack/issues/393
+      opal_compile(process_params(*args, &block).first)
     end
 
     # legacy methods for backwards compatibility

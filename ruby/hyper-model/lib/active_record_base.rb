@@ -21,7 +21,7 @@ module ActiveRecord
 
       alias pre_hyperstack_has_and_belongs_to_many has_and_belongs_to_many unless RUBY_ENGINE == 'opal'
 
-      def has_and_belongs_to_many(other, opts = {}, &block)
+      def has_and_belongs_to_many(other, scope = nil, **opts, &block)
         join_table_name = [other.to_s, table_name].sort.join('_')
         join_model_name = "HyperstackInternalHabtm#{join_table_name.singularize.camelize}"
         join_model =
@@ -42,7 +42,7 @@ module ActiveRecord
         else
           join_model.table_name = join_table_name
           join_model.belongs_to other
-          pre_hyperstack_has_and_belongs_to_many(other, opts, &block)
+          pre_hyperstack_has_and_belongs_to_many(other, scope, **opts, &block)
         end
       end
     end
@@ -286,23 +286,23 @@ module ActiveRecord
 
         alias pre_syncromesh_has_many has_many
 
-        def has_many(name, *args, &block)
+        def has_many(name, *args,**kwargs, &block)
           __synchromesh_regulate_from_macro(
-            opts = args.extract_options!,
+            opts = kwargs, # args.extract_options!,
             name,
             method_defined?(:"__secure_remote_access_to_#{name}"),
             &method(:regulate_relationship)
           )
-          pre_syncromesh_has_many name, *args, opts.except(:regulate), &block
+          pre_syncromesh_has_many name, *args,**opts.except(:regulate), &block
         end
 
         %i[belongs_to has_one composed_of].each do |macro|
           alias_method :"pre_syncromesh_#{macro}", macro
-          define_method(macro) do |name, *aargs, &block|
-            define_method(:"__secure_remote_access_to_#{name}") do |this, _acting_user, *args|
-              this.send(name, *args)
+          define_method(macro) do |name, *aargs,**kkwargs, &block|
+            define_method(:"__secure_remote_access_to_#{name}") do |this, _acting_user, *args,**kwargs|
+              this.send(name, *args,**kwargs)
             end
-            send(:"pre_syncromesh_#{macro}", name, *aargs, &block)
+            send(:"pre_syncromesh_#{macro}", name, *aargs,**kkwargs, &block)
           end
         end
       end

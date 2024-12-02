@@ -22,6 +22,9 @@ module TestApp
     config.opal.dynamic_require_severity = :ignore
     config.opal.enable_specs = true
     config.opal.spec_location = 'spec-opal'
+    config.active_record.yaml_column_permitted_classes = [Symbol, ActiveSupport::HashWithIndifferentAccess,
+                                                          ActiveSupport::TimeWithZone, Time, ActiveSupport::TimeZone
+    ]
 
     config.assets.cache_store = :null_store
 

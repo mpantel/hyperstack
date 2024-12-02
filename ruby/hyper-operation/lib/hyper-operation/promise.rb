@@ -54,7 +54,7 @@ class Promise
   end
 
   def act?
-    @action.has_key?(:success) || @action.has_key?(:always)
+    @action.key?(:success) || @action.key?(:always)
   end
 
   def action
@@ -66,7 +66,7 @@ class Promise
   end
 
   def realized?
-    !!@realized
+    @realized != false
   end
 
   def resolved?
@@ -83,7 +83,7 @@ class Promise
 
   def ^(promise)
     promise << self
-    self    >> promise
+    self >> promise
 
     promise
   end
@@ -102,7 +102,7 @@ class Promise
     elsif resolved?
       promise.resolve(@delayed ? @delayed[0] : value)
     elsif rejected?
-      if !@action.has_key?(:failure) || Promise === (@delayed ? @delayed[0] : @error)
+      if !@action.key?(:failure) || Promise === (@delayed ? @delayed[0] : @error)
         promise.reject(@delayed ? @delayed[0] : error)
       elsif promise.action.include?(:always)
         promise.reject(@delayed ? @delayed[0] : error)
@@ -122,8 +122,8 @@ class Promise
     end
 
     begin
-      if block = @action[:success] || @action[:always]
-        @realized = :resolve
+      block = @action[:success] || @action[:always]
+      if block
         value = block.call(value)
       end
 
@@ -156,14 +156,15 @@ class Promise
     end
 
     begin
-      if block = @action[:failure] || @action[:always]
+      block = @action[:failure] || @action[:always]
+      if block
         # temporarily set values so always can determine if this
         # was a reject or resolve
         @realized = :reject
         value = block.call(value)
       end
 
-      if @action.has_key?(:always)
+      if @action.key?(:always)
         resolve!(value)
       else
         reject!(value)
@@ -208,9 +209,6 @@ class Promise
     self.then(&block)
   end
 
-  alias do then
-  alias do! then!
-
   def fail(&block)
     self ^ Promise.new(failure: block)
   end
@@ -220,11 +218,6 @@ class Promise
     fail(&block)
   end
 
-  alias rescue fail
-  alias catch fail
-  alias rescue! fail!
-  alias catch! fail!
-
   def always(&block)
     self ^ Promise.new(always: block)
   end
@@ -233,11 +226,6 @@ class Promise
     there_can_be_only_one!
     always(&block)
   end
-
-  alias finally always
-  alias ensure always
-  alias finally! always!
-  alias ensure! always!
 
   def trace(depth = nil, &block)
     self ^ Trace.new(depth, block)
@@ -261,14 +249,35 @@ class Promise
       result += " >> #{@next.inspect}"
     end
 
-    if realized?
-      result += ": #{(@value || @error).inspect}>"
-    else
-      result += ">"
-    end
+    result += if realized?
+                ": #{(@value || @error).inspect}>"
+              else
+                '>'
+              end
 
     result
   end
+
+  def to_v2
+    v2 = PromiseV2.new
+
+    self.then { |i| v2.resolve(i) }.rescue { |i| v2.reject(i) }
+
+    v2
+  end
+
+  alias catch fail
+  alias catch! fail!
+  alias do then
+  alias do! then!
+  alias ensure always
+  alias ensure! always!
+  alias finally always
+  alias finally! always!
+  alias rescue fail
+  alias rescue! fail!
+  alias to_n to_v2
+  alias to_v1 itself
 
   class Trace < self
     def self.it(promise)
@@ -278,7 +287,8 @@ class Promise
         current.push(promise.value)
       end
 
-      if prev = promise.prev
+      prev = promise.prev
+      if prev
         current.concat(it(prev))
       else
         current
@@ -307,36 +317,32 @@ class Promise
 
       @wait = []
 
-      promises.each {|promise|
+      promises.each do |promise|
         wait promise
-      }
+      end
     end
 
     def each(&block)
       raise ArgumentError, 'no block given' unless block
 
-      self.then {|values|
+      self.then do |values|
         values.each(&block)
-      }
+      end
     end
 
     def collect(&block)
       raise ArgumentError, 'no block given' unless block
 
-      self.then {|values|
+      self.then do |values|
         When.new(values.map(&block))
-      }
+      end
     end
 
     def inject(*args, &block)
-      self.then {|values|
+      self.then do |values|
         values.reduce(*args, &block)
-      }
+      end
     end
-
-    alias map collect
-
-    alias reduce inject
 
     def wait(promise)
       unless Promise === promise
@@ -349,29 +355,34 @@ class Promise
 
       @wait << promise
 
-      promise.always {
+      promise.always do
         try if @next.any?
-      }
+      end
 
       self
     end
 
-    alias and wait
-
     def >>(*)
-      super.tap {
+      super.tap do
         try
-      }
+      end
     end
 
     def try
       if @wait.all?(&:realized?)
-        if promise = @wait.find(&:rejected?)
+        promise = @wait.find(&:rejected?)
+        if promise
           reject(promise.error)
         else
           resolve(@wait.map(&:value))
         end
       end
     end
+
+    alias map collect
+    alias reduce inject
+    alias and wait
   end
 end
+
+PromiseV1 = Promise

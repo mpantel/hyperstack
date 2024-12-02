@@ -73,7 +73,7 @@ end
 
 class User < ActiveRecord::Base
 
-  def as_json(*args)
+  def as_json(...)
     {name: "bozo"}
   end
 

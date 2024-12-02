@@ -12,7 +12,9 @@ module Hyperstack
         end
 
         step do
-          params.translation = ::I18n.t(params.attribute, opts)
+          Rails.logger.info "trans: #{::I18n.t(params.attribute, **opts)}"
+
+          params.translation = ::I18n.t(params.attribute, **opts)
         end
       end
     end

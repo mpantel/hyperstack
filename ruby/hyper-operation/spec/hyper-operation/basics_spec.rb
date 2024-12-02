@@ -87,7 +87,7 @@ describe 'Hyperstack::Operation basics' do
       MyOperation.param foo: 12, type: Integer
       stub_const "SubOperation", Class.new(MyOperation)
       SubOperation.param :bar
-      expect(Store).to receive(:receiver).with(foo: 15, bar: 'hello')
+      expect(Store).to receive(:receiver).with({ foo: 15, bar: 'hello' })
       SubOperation.run(foo: 15, bar: 'hello')
     end
 
@@ -108,7 +108,7 @@ describe 'Hyperstack::Operation basics' do
       MyOperation.param :array, type: []
       MyOperation.param :int_array, type: [Integer]
       MyOperation.param :hash, type: {}
-      expect(Store).to receive(:receiver).with(array: ['hi'], int_array: [1], hash: {a: 1})
+      expect(Store).to receive(:receiver).with({ array: ['hi'], int_array: [1], hash: { a: 1 } })
       expect(MyOperation.run(array: ['hi'], int_array: [1], hash: {a: 1})).to be_resolved
       expect(MyOperation.run(array: 'hi', int_array: [1], hash: {a: 1}))
       .to have_failed_with(Hyperstack::Operation::ValidationException)
@@ -123,7 +123,7 @@ describe 'Hyperstack::Operation basics' do
         string :a
         integer :b
       end
-      expect(Store).to receive(:receiver).with(hash: {a: '1', b: 1})
+      expect(Store).to receive(:receiver).with({ hash: { a: '1', b: 1 } })
       expect(MyOperation.run(hash: {a: '1', b: '1'})).to be_resolved
     end
 
@@ -155,7 +155,7 @@ describe 'Hyperstack::Operation basics' do
     it "params cannot be updated in a reciever" do
       MyOperation.param :sku, type: String
       Store.class_eval do
-        def self.receiver(*args)
+        def self.receiver(...)
         end
         MyOperation.on_dispatch do |params|
           begin

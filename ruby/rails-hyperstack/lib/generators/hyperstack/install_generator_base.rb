@@ -264,6 +264,9 @@ jQuery = require('jquery');                    // remove if you don't need jQuer
         yarn 'react_ujs', '^2.5.0'
         yarn 'jquery', '^3.4.1'
         yarn 'create-react-class'
+        yarn '@babel/plugin-proposal-private-methods', '^7.18.6'
+        yarn '@babel/plugin-proposal-private-property-in-object', '^7.21.11'
+
       end
 
       def cancel_react_source_import

@@ -142,6 +142,9 @@ run 'yarn add react-router-dom@^5.0.0'
 # run 'yarn add history' # this will be brought in by react-router
 run 'yarn add react_ujs@^2.5.0'
 run 'yarn add jquery@^3.4.1'
+run 'yarn add @babel/plugin-proposal-private-methods@7.18.6'
+run 'yarn add @babel/plugin-proposal-private-property-in-object@7.21.11'
+
 
   # ----------------------------------- application.js
 

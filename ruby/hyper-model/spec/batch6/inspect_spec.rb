@@ -113,15 +113,14 @@ RSpec::Steps.steps 'ActiveRecord::Base.inspect displays', js: true do
   end
 
   it 'new records with the errors after attempting to save (deprecated error handler)' do
-
     evaluate_ruby do
       class ReactiveRecord::Base
         def errors
           @errors ||= ActiveModel::Error.new
         end
       end
+      NEED_THIS_FOR_TESTS_TO_PASS=true
     end
-
     TodoItem.validates :title, presence: true
     expect_promise do
       todo = TodoItem.new(description: 'this has no title')

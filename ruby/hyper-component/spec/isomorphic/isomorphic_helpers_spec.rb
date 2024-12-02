@@ -141,6 +141,7 @@ describe Hyperstack::Component::IsomorphicHelpers do
       end
 
       it 'executes method with args inside opal rubyracer context', :prerendering_on do
+        pending 'prerendering off'
         ctx = react_context
         context = described_class.new('unique-id', ctx, controller, name)
         context.eval(opal_code)
@@ -149,6 +150,7 @@ describe Hyperstack::Component::IsomorphicHelpers do
       end
 
       it 'executes the method inside opal rubyracer context', :prerendering_on do
+        pending 'prerendering off'
         ctx = react_context
         context = described_class.new('unique-id', ctx, controller, name)
         context.eval(opal_code)

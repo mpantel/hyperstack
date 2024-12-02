@@ -122,7 +122,8 @@ RSpec::Steps.steps 'server_method', js: true do
     expect { Hyperstack::Model.load { TodoItem.last.broken } }.on_client_to be_nil
     expect { TodoItem.last.defaulted }.on_client_to eq "loading"
     expect { Hyperstack::Model.load { TodoItem.last.defaulted } }.on_client_to eq("defaulted")
-    errors = page.driver.browser.manage.logs.get(:browser).select { |m| m.level == "SEVERE" }
+    # errors = page.driver.browser.manage.logs.get(:browser).select { |m| m.level == "SEVERE" }
+    errors = page.driver.browser.logs.get(:browser).select { |m| m.level == "SEVERE" }
     expect(errors.count).to eq(2)
     expect(errors.first.message).to match(/the server responded with a status of 403 \(Forbidden\)/)
   end
