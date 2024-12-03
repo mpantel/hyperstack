@@ -202,7 +202,7 @@ module Hyperstack
     def initialize(socket, handshake, server)
       @socket = socket
       @handshake = handshake
-      @frame = WebSocket::Frame::Incoming::Server.new(:version => @handshake.version)
+      @frame = WebSocket::Frame::Incoming::Server.new({ :version => @handshake.version })
       @opened = false
       @messaged = []
       @lazy_queue = []
@@ -216,7 +216,7 @@ module Hyperstack
     end
 
     def send(data)
-      frame = WebSocket::Frame::Outgoing::Server.new(:version => @handshake.version, :data => data, :type => :text)
+      frame = WebSocket::Frame::Outgoing::Server.new({ :version => @handshake.version, :data => data, :type => :text })
       begin
         @socket.write frame
         @socket.flush
