@@ -123,7 +123,7 @@ module Hyperstack
             self.class.client.hmset("#{table_name}:#{id}", *self.class.jsonize_attributes(attributes))
 
             unless self.class.client.smembers(table_name).include?(id)
-              self.class.client.sadd(table_name, id)
+              self.class.client.sadd?(table_name, id)
             end
 
             true
