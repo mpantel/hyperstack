@@ -206,6 +206,10 @@ module Hyperstack
         alias other collect_other_params_as
         alias opts collect_other_params_as
 
+        # https://github.com/hyperstack-org/hyperstack/issues/363
+        def accepts_list
+          @@accepts_list ||= {}
+        end
         def fires(name, opts = {})
           aka = opts[:alias] || "#{name}!"
           name = if name =~ /^<(.+)>$/
@@ -217,6 +221,7 @@ module Hyperstack
                  end
           validator.event(name)
           define_method(aka) { |*args| props[name]&.call(*args) }
+          accepts_list[opts[:alias] || aka.chomp('!')] = name
         end
 
         alias triggers fires

@@ -1,4 +1,4 @@
-require 'hyperloop-config'
+require 'hyperstack-config'
 require 'rubygems'
 require 'opal-rails'
 require 'hyper-operation'

@@ -1,3 +1,3 @@
 module HyperModel
-  VERSION = '1.0.alpha1.8.0024'
+  VERSION = '1.0.alpha1.8.0025'
 end

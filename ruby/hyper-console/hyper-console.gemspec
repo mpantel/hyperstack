@@ -27,11 +27,11 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'hyper-operation', Hyperloop::Console::VERSION
   spec.add_development_dependency 'hyper-store', Hyperloop::Console::VERSION
   spec.add_development_dependency 'hyperstack-config', Hyperloop::Console::VERSION
-  spec.add_development_dependency 'opal', '>= 0.11.0', '< 0.12.0'
+  spec.add_development_dependency 'opal', ENV['OPAL_VERSION'] || '>= 0.11.0', '< 2.0'
   spec.add_development_dependency 'opal-browser'
   spec.add_development_dependency 'opal-jquery'
-  spec.add_development_dependency 'opal-rails', '~> 0.9.4'
+  spec.add_development_dependency 'opal-rails' #, '~> 0.9.4'
   spec.add_development_dependency 'rails', ENV['RAILS_VERSION'] || '>= 5.0.0', '< 7.0'
   spec.add_development_dependency 'rake'#, '~> 10.0'
-  spec.add_development_dependency 'uglifier', '4.1.6'
+  spec.add_development_dependency 'uglifier'#, '4.1.6'
 end

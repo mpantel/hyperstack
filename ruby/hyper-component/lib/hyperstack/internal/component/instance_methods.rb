@@ -59,6 +59,11 @@ module Hyperstack
           `#{self}.__hyperstack_component_native.forceUpdate()`
         end
 
+        # https://github.com/hyperstack-org/hyperstack/issues/363
+        def accepts?(aka)
+          self.props[self.class.accepts_list[aka]]
+        end
+
         private
 
         # can be overriden by the Router include
