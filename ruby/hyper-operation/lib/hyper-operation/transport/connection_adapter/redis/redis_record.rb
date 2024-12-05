@@ -135,7 +135,7 @@ module Hyperstack
           end
 
           def destroy
-            self.class.client.srem(table_name, id)
+            self.class.client.srem?(table_name, id)
 
             self.class.client.hdel("#{table_name}:#{id}", attributes.keys)
 
