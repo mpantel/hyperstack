@@ -79,7 +79,7 @@ variables:
 #  OPAL_VERSION: 1.7.0
 #  RBENV_VERSION: 3.0.7
 #  RBENV_VERSION: 3.1.6
-  RBENV_VERSION: 3.2.6
+  RBENV_VERSION: 3.2.7
 #  RUBY_VERSION: 2.7.8
   RUBY_YJIT_ENABLE: "1"
 #services:
@@ -233,6 +233,7 @@ stages:
   resource_group: production
   stage: deploy
   before_script:
+    - git config --global --add safe.directory $CI_PROJECT_DIR
     - cd ruby/$COMPONENT
   environment:
     name: production
@@ -242,7 +243,7 @@ stages:
   script:
     - echo deploying $COMPONENT
     - gem build $COMPONENT.gemspec
-    - gem push "#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'--host' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
+    - gem push "#{$COMPONENT}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'--host' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
 #  deploy:
 #    - provider: rubygems
 #      api_key:

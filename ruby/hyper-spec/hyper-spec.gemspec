@@ -54,4 +54,6 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   spec.add_development_dependency 'shoulda'
   spec.add_development_dependency 'shoulda-matchers'
   spec.add_development_dependency 'spring-commands-rspec'
+  spec.add_development_dependency 'concurrent-ruby', '1.3.4' # not needed after rails 7.1  https://www.devgem.io/posts/resolving-the-activesupport-logger-issue-in-rails-applications-a-step-by-step-guide
+
 end

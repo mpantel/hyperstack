@@ -40,5 +40,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
   spec.add_development_dependency 'sqlite3', '< 2'
   spec.add_development_dependency 'timecop', '~> 0.9.0'
+  spec.add_development_dependency 'concurrent-ruby', '1.3.4' # not needed after rails 7.1  https://www.devgem.io/posts/resolving-the-activesupport-logger-issue-in-rails-applications-a-step-by-step-guide
 
 end

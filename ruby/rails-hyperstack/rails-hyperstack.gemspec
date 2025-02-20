@@ -88,4 +88,6 @@ You can control how much of the stack gets installed as well:
   spec.add_development_dependency 'jbuilder'#, '~> 2.5'
   spec.add_development_dependency 'foreman'
   spec.add_development_dependency 'database_cleaner'
+  spec.add_development_dependency 'concurrent-ruby', '1.3.4' # not needed after rails 7.1  https://www.devgem.io/posts/resolving-the-activesupport-logger-issue-in-rails-applications-a-step-by-step-guide
+
 end
