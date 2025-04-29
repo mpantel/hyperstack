@@ -28,7 +28,7 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-model', Hyperstack::I18n::VERSION
   spec.add_development_dependency 'hyper-spec', Hyperstack::I18n::VERSION
-  spec.add_development_dependency 'mini_racer' # , '< 0.8.0' # something is busted with 0.4.0 and its libv8-node dependency
+  # spec.add_development_dependency 'mini_racer' # , '< 0.8.0' # something is busted with 0.4.0 and its libv8-node dependency
   spec.add_development_dependency 'opal-rails'
   spec.add_development_dependency 'pry'
   spec.add_development_dependency 'puma'# , '<= 5.4.0'

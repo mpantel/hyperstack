@@ -20,7 +20,7 @@ begin
   require 'opal-rails'
   require 'hyper-model'
   require 'hyper-router'
-  require 'mini_racer'
+  # require 'mini_racer'
 rescue LoadError
 end
 require 'react-rails'

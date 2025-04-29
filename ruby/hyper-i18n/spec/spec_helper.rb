@@ -7,7 +7,7 @@ require File.expand_path('../test_app/config/environment', __FILE__)
 require 'rspec/rails'
 require 'hyper-spec'
 require 'hyper-i18n'
-require 'mini_racer'
+# require 'mini_racer'
 
 RSpec.configure do |config|
 

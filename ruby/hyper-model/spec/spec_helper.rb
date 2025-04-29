@@ -3,7 +3,7 @@ ENV["RAILS_ENV"] ||= 'test'
 require 'hyper-spec'
 require 'pry'
 require 'opal-browser'
-require 'mini_racer'
+# require 'mini_racer'
 
 begin
   require File.expand_path('../test_app/config/environment', __FILE__)

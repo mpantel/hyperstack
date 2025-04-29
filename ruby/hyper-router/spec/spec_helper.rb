@@ -8,7 +8,7 @@ require File.expand_path('../test_app/config/environment', __FILE__)
 require 'rspec/rails'
 require 'rspec-steps'
 require 'hyper-router'
-require 'mini_racer'
+# require 'mini_racer'
 
 #require "rspec/wait"
 #require 'database_cleaner'
