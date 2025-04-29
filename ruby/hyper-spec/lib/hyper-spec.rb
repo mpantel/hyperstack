@@ -248,7 +248,7 @@ RSpec.configure do |config|
 
   Capybara.register_driver :firefox_headless do |app|
     options = Selenium::WebDriver::Firefox::Options.new
-    options.headless!
+    options.args << '--headless'
     Capybara::Selenium::Driver.new(app, browser: :firefox, options: options)
   end if defined?(Selenium::WebDriver::Firefox)
 
@@ -275,6 +275,7 @@ RSpec.configure do |config|
     when 'headless' then :selenium_chrome_headless
     when 'safari' then :safari
     when 'travis' then :chrome_headless_docker_travis
+    when 'selenium_chrome' then :selenium_chrome
     else :selenium_chrome_headless
     end
 end
