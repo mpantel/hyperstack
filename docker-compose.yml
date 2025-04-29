@@ -1,5 +1,3 @@
-version: '3.5'
-
 volumes:
   local_gems:
     external: true
@@ -25,24 +23,24 @@ services:
   #############################
 
   hyperstack:
-    image: ${PRIVATE_REGISTRY}/base20:hyperstack
+    image: ${PRIVATE_REGISTRY}/base24:hyperstack
     domainname: ${BASE_TEST_DOMAIN}
     hostname: hyperstack
     container_name: "hyperstack"
     entrypoint: ./runone
     stdin_open: true
-    user: user
+    user: ubuntu
     tty: true
-    working_dir: /home/user/hyperstack
+    working_dir: /home/ubuntu/hyperstack
     environment:
-      BUNDLE_PATH: "/home/user/local_gems"
+      BUNDLE_PATH: "/home/ubuntu/local_gems"
       DRIVER: "${DRIVER}"
       COMPONENT: "${COMPONENT}"
       RUBY_VERSION: "${RUBY_VERSION}"
       TASK: "${TASK}"
       DB: "${DB}"
     volumes:
-      - ${MOUNT_PATH:-..}/${GO_PIPELINE_NAME}:/home/user/hyperstack
-#      - local_gems:/home/user/local_gems
+      - ${MOUNT_PATH:-..}/${GO_PIPELINE_NAME}:/home/ubuntu/hyperstack
+#      - local_gems:/home/ubuntu/local_gems
     networks:
       default:
