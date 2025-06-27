@@ -196,41 +196,58 @@ RSpec.configure do |config|
   Capybara.default_max_wait_time = 10
 
   Capybara.register_driver :chrome_undocked do |app|
-    opts = Selenium::WebDriver::Chrome::Options.new(args: %w[auto-open-devtools-for-tabs])
-    opts.add_preference(
-      'devtools',
-      'preferences' => {
-        'currentDockState'  => '"undocked"', # Or '"bottom"', '"right"', etc.
+    options = Selenium::WebDriver::Chrome::Options.new
+    options.add_argument('auto-open-devtools-for-tabs')
+    
+    # Set devtools preferences
+    options.add_option('prefs', {
+      'devtools.preferences' => {
+        'currentDockState' => '"undocked"', # Or '"bottom"', '"right"', etc.
         'panel-selectedTab' => '"console"'
       }
-    )
-    caps = Selenium::WebDriver::Remote::Capabilities.chrome
-    caps["goog:loggingPrefs"] = { browser: 'ALL' }
+    })
 
-    Capybara::Selenium::Driver.new(app, browser: :chrome, options: opts, desired_capabilities: caps)
+    # Set logging preferences
+    options.add_option('goog:loggingPrefs', { browser: 'ALL' })
+
+    Capybara::Selenium::Driver.new(
+      app,
+      browser: :chrome,
+      capabilities: options
+    )
   end
 
   Capybara.register_driver :chrome_docked do |app|
-    opts = Selenium::WebDriver::Chrome::Options.new(args: %w[auto-open-devtools-for-tabs])
-    opts.add_preference(
-      'devtools',
-      'preferences' => {
-        'currentDockState'  => '"right"', # Or '"bottom"', '"undocked"', etc.
+    options = Selenium::WebDriver::Chrome::Options.new
+    options.add_argument('auto-open-devtools-for-tabs')
+    
+    # Set devtools preferences
+    options.add_option('prefs', {
+      'devtools.preferences' => {
+        'currentDockState' => '"right"',
         'panel-selectedTab' => '"console"'
       }
-    )
-    caps = Selenium::WebDriver::Remote::Capabilities.chrome
-    caps["goog:loggingPrefs"] = { browser: 'ALL' }
+    })
 
-    Capybara::Selenium::Driver.new(app, browser: :chrome, options: opts, desired_capabilities: caps)
+    # Set logging preferences
+    options.add_option('goog:loggingPrefs', { browser: 'ALL' })
+
+    Capybara::Selenium::Driver.new(
+      app,
+      browser: :chrome,
+      capabilities: options
+    )
   end
 
   Capybara.register_driver :chrome do |app|
-    caps = Selenium::WebDriver::Remote::Capabilities.chrome
+    options = Selenium::WebDriver::Chrome::Options.new
+    options.logging_prefs = { browser: 'ALL' } # if ENV['LOG_JS']
 
-    caps["goog:loggingPrefs"] = { browser: 'ALL' } # if ENV['LOG_JS']
-
-    Capybara::Selenium::Driver.new(app, browser: :chrome, desired_capabilities: caps)
+    Capybara::Selenium::Driver.new(
+      app,
+      browser: :chrome,
+      options: options
+    )
   end
 
   Capybara.register_driver :firefox do |app|
