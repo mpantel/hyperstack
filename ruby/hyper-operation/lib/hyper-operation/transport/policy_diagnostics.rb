@@ -92,7 +92,15 @@ module Hyperstack
         attribute = pastel.red(attribute) unless allowed
         table << [attribute] + statuses
       end
-      rendered = table.render(:unicode, indent: 4).split("\n")
+      rendered = table.render(:unicode) do |renderer|
+        renderer.indent = 4
+        renderer.resize = true
+        renderer.width = 150
+
+      end.split("\n")
+
+
+
       rendered = rendered.insert(6, rendered[2]).join("\n")
       model_string = "<##{model.class} id: #{model.id}>"
       if acting_user
