@@ -98,9 +98,6 @@ module Hyperstack
         renderer.width = 150
 
       end.split("\n")
-
-
-
       rendered = rendered.insert(6, rendered[2]).join("\n")
       model_string = "<##{model.class} id: #{model.id}>"
       if acting_user
