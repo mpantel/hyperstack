@@ -23,7 +23,7 @@ services:
   #############################
 
   hyperstack:
-    image: ${PRIVATE_REGISTRY}/base24:hyperstack
+    image: ${PRIVATE_REGISTRY}/base24:yjit
     domainname: ${BASE_TEST_DOMAIN}
     hostname: hyperstack
     container_name: "hyperstack"
