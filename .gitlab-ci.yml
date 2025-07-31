@@ -52,7 +52,7 @@
 # rbenv install 3.0.7
 
 image:
-  name: ${PRIVATE_REGISTRY}/base20:hyperstack
+  name: ${PRIVATE_REGISTRY}/base24:yjit
   docker:
     user: user
 
