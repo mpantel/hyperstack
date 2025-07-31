@@ -54,7 +54,7 @@
 image:
   name: ${PRIVATE_REGISTRY}/base24:yjit
   docker:
-    user: user
+    user: ubuntu
 
 workflow:
   rules:
