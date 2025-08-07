@@ -510,7 +510,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     # We'll just verify that dims matches what the browser can actually achieve
     expected_adjusted = adjusted(1024, 768)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -521,7 +521,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     # The height should be the adjusted height from 1024
     expected_adjusted = adjusted(768, 1024)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -529,7 +529,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     size_window(:small)
     expected_adjusted = adjusted(480, 320)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -537,7 +537,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     size_window(:mobile)
     expected_adjusted = adjusted(640, 480)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -545,7 +545,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     size_window(:tablet)
     expected_adjusted = adjusted(960, 640)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -553,7 +553,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     size_window(:large)
     expected_adjusted = adjusted(1920, 6000)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -562,7 +562,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     # Portrait with mobile: mobile [640,480] becomes [480,640] after portrait swap
     expected_adjusted = adjusted(480, 640)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -571,7 +571,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     # Mobile with portrait: same as above, mobile [640,480] becomes [480,640]
     expected_adjusted = adjusted(480, 640)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
@@ -579,7 +579,7 @@ RSpec::Steps.steps "will size_window to", js: true do
     size_window(600, 600)
     expected_adjusted = adjusted(600, 600)
     expect(dims[1]).to eq(expected_adjusted[1])  # Height should match exactly
-    expect(dims[0]).to be > expected_adjusted[0]  # Width will be larger due to debugger width
+    expect(dims[0]).to be >= expected_adjusted[0]  # Width will be at least the adjusted width (debugger width can be 0)
     expect(dims[0]).to be <= expected_adjusted[0] + 100  # But not unreasonably larger
   end
 
