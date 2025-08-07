@@ -2,6 +2,26 @@
 # to autoload shadowed server side files that match files
 # in the hyperstack directory
 
+# Fix for Rails 6.1+ / Ruby 3.2+ compatibility
+# ActiveSupport::LoggerThreadSafeLevel was removed in newer Rails versions
+unless defined?(ActiveSupport::LoggerThreadSafeLevel)
+  module ActiveSupport
+    module LoggerThreadSafeLevel
+      Logger = ::Logger
+    end
+  end
+end
+
+# Fix for Spring + Rails 6.1.7.10 + Ruby 3.2.9 compatibility
+# Spring tries to instantiate Rails::Application directly which is abstract
+if defined?(Spring) && Rails.respond_to?(:application) && Rails.application.nil?
+  begin
+    require Rails.root.join('config', 'application')
+  rescue LoadError
+    # Application file not found or already loaded
+  end
+end
+
 if Rails.configuration.try(:autoloader) == :zeitwerk
   Rails.autoloaders.each do |loader|
     loader.on_load do |_cpath, _value, abspath|

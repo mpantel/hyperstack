@@ -152,6 +152,33 @@ module Rails
           create_file file_name, <<-RUBY
 #{s}
 
+# Fix for Rails 6.1+ / Ruby 3.2+ compatibility
+# ActiveSupport::LoggerThreadSafeLevel was removed in newer Rails versions
+unless defined?(ActiveSupport::LoggerThreadSafeLevel)
+  module ActiveSupport
+    module LoggerThreadSafeLevel
+      Logger = ::Logger
+    end
+  end
+end
+
+# Fix for Spring + Rails 6.1.7.10 + Ruby 3.2.9 compatibility
+# Spring 4.3.0 has issues with Rails 6.1.7.10 + Ruby 3.2.9
+# This configuration helps but may require DISABLE_SPRING=1 for some commands
+if defined?(Spring)
+  begin
+    # Ensure Rails application is properly initialized for Spring
+    if Rails.respond_to?(:application) && Rails.application.nil?
+      require Rails.root.join('config', 'application')
+    end
+  rescue LoadError, NameError, RuntimeError => e
+    # Spring compatibility issue detected
+    if e.message =~ /Rails::Application is abstract/
+      Rails.logger.debug "Spring compatibility issue detected. Use DISABLE_SPRING=1 if needed."
+    end
+  end
+end
+
 # server_side_auto_require will patch the ActiveSupport Dependencies module
 # so that you can define classes and modules with files in both the
 # app/hyperstack/xxx and app/xxx directories.  For example you can split
