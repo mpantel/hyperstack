@@ -80,6 +80,8 @@ variables:
   RUBY_YJIT_ENABLE: "1"
 
   DISABLE_SPRING: "1"
+  NODE_OPTIONS: "--openssl-legacy-provider"
+
 #services:
 #  - docker:27.3.1-dind
 
