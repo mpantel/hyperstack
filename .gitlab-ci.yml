@@ -78,6 +78,8 @@ variables:
   OPAL_VERSION: 1.5.1
   RBENV_VERSION: 3.2.9
   RUBY_YJIT_ENABLE: "1"
+
+  DISABLE_SPRING: "1"
 #services:
 #  - docker:27.3.1-dind
 

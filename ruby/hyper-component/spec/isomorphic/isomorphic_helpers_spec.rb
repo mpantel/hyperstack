@@ -134,7 +134,9 @@ describe Hyperstack::Component::IsomorphicHelpers do
 
       it 'raises an error when react cannot be loaded', :prerendering_on do
         context = described_class.new('unique-id', v8_context, controller, name)
-        context.instance_variable_set(:@ctx, test_context)
+        # Create a basic ExecJS context without React or server rendering
+        basic_ctx = ExecJS.compile("var global = this;")
+        context.instance_variable_set(:@ctx, basic_ctx)
         expect {
           context.send_to_opal(:foo)
         }.to raise_error(/No Hyperstack components found/)

@@ -15,7 +15,9 @@ module Hyperstack
 
           def load(file = components)
             return true if loaded?
-            !!v8_context.eval(opal(file))
+            opal_code = opal(file)
+            return false unless opal_code
+            !!v8_context.eval(opal_code)
           end
 
           def load!(file = components)
@@ -26,7 +28,8 @@ module Hyperstack
           end
 
           def loaded?
-            !!v8_context.eval('Opal.Hyperstack !== undefined')
+            # Check if React is available - this is required for component rendering
+            !!v8_context.eval('typeof React !== "undefined"')
           rescue ::ExecJS::Error
             false
           end
@@ -41,6 +44,9 @@ module Hyperstack
 
           def opal(file)
             Opal::Sprockets.load_asset(file)
+          rescue StandardError => e
+            # If asset cannot be loaded, return nil
+            nil
           end
         end
       end
