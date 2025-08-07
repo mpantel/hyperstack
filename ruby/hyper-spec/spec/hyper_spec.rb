@@ -506,47 +506,47 @@ RSpec::Steps.steps "will size_window to", js: true do
 
   it "the default size" do
     size_window
-    expect(dims).to eq(adjusted(dims[0], 768))
+    expect(dims).to eq(expected_dims(1024, 768))
   end
 
   it "the default portrait size" do
     size_window(:portrait)
-    expect(dims).to eq(adjusted(dims[0], 1024))
+    expect(dims).to eq(expected_dims(768, 1024))
   end
 
   it ":small" do
     size_window(:small)
-    expect(dims).to eq(adjusted(dims[0], 320))
+    expect(dims).to eq(expected_dims(480, 320))
   end
 
   it ":mobile" do
     size_window(:mobile)
-    expect(dims).to eq(adjusted(dims[0], 480))
+    expect(dims).to eq(expected_dims(640, 480))
   end
 
   it ":tablet" do
     size_window(:tablet)
-    expect(dims).to eq(adjusted(dims[0], 640))
+    expect(dims).to eq(expected_dims(960, 640))
   end
 
   it ":large" do
     size_window(:large)
-    expect(dims).to eq(adjusted(dims[0], 6000))
+    expect(dims).to eq(adjusted(1920, 6000))
   end
 
   it ":portrait (as first arg)" do
     size_window(:portrait, :mobile)
-    expect(dims).to eq(adjusted(dims[0], 640))
+    expect(dims).to eq(adjusted(480, 640))
   end
 
   it ":portrait (as second arg)" do
     size_window(:mobile, :portrait)
-    expect(dims).to eq(adjusted(dims[0], 640))
+    expect(dims).to eq(adjusted(480, 640))
   end
 
   it "to a custom size" do
     size_window(600, 600)
-    expect(dims).to eq(adjusted(dims[0], 600))
+    expect(dims).to eq(adjusted(600, 600))
   end
 
 end

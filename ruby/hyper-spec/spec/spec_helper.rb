@@ -47,6 +47,29 @@ module Helpers
       [@max_height, [height - @height_adjust, @min_height].max].min
     ]
   end
+
+  def expected_dims(width, height)
+    # This accounts for both debugger width and browser constraints
+    # similar to determine_size + window adjustments
+    adjusted_dims = adjusted(width, height)
+    # Add the debugger width like determine_size does
+    # Use the same calculation as window_sizing.rb
+    debugger_w = calculate_debugger_width
+    [adjusted_dims[0] + debugger_w, adjusted_dims[1]]
+  end
+
+  def calculate_debugger_width
+    # Use the actual debugger width calculated during window restrictions setup
+    # This matches the logic in window_sizing.rb
+    return @debugger_width if @debugger_width
+    
+    # If not calculated yet, get current width and subtract window.innerWidth
+    # to find the chrome/debugger width
+    current_outer_width = page.evaluate_script('window.outerWidth')
+    current_inner_width = page.evaluate_script('window.innerWidth')
+    @debugger_width = current_outer_width - current_inner_width
+    @debugger_width
+  end
 end
 
 RSpec.configure do |config|
