@@ -390,8 +390,9 @@ ActiveRecord::Base.public_columns_hash[model.name] = model.columns_hash
 
 The model's `define_attribute_methods` might not be called, leading to missing internal setter methods.
 
-**Solution**: The `LazyColumnsHash#[]=` method now automatically calls `define_attribute_methods` when a model is assigned:
+**Solution**: Both `LazyColumnsHash` and the eager mode hash now automatically call `define_attribute_methods` when a model is assigned:
 
+#### For Lazy Mode (LazyColumnsHash):
 ```ruby
 def []=(model_name, value)
   @loaded_models[model_name] = value
@@ -410,7 +411,33 @@ def []=(model_name, value)
 end
 ```
 
-This ensures that dynamically added models (particularly in tests) have their required internal methods properly defined.
+#### For Eager Mode (Regular Hash with Extension):
+```ruby
+module PublicColumnsHashExtension
+  def []=(model_name, value)
+    result = super(model_name, value)
+
+    # Automatically define attribute methods for dynamically added models
+    begin
+      if Object.const_defined?(model_name)
+        model_class = Object.const_get(model_name)
+        if model_class.respond_to?(:define_attribute_methods)
+          model_class.define_attribute_methods
+        end
+      end
+    rescue => e
+      Rails.logger.warn "[Hyperstack] Failed to define attribute methods for #{model_name}: #{e.message}"
+    end
+
+    result
+  end
+end
+
+# Applied in build_eager_columns_hash
+hash.extend(PublicColumnsHashExtension)
+```
+
+This ensures that dynamically added models (particularly in tests) have their required internal methods properly defined, regardless of whether lazy loading is enabled or disabled.
 
 ## Future Enhancements
 
