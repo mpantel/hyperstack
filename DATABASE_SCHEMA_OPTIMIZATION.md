@@ -377,6 +377,41 @@ fresh_hash = ActiveRecord::Base.public_columns_hash
 
 The caching is designed to be **zero-maintenance** - it handles cache invalidation automatically based on your Rails environment and application lifecycle.
 
+## Bug Fixes Included
+
+### Automatic Attribute Method Definition
+
+The optimization includes a fix for the "undefined method `_hyperstack_internal_setter_*`" error that can occur when models are dynamically added to the `public_columns_hash` (commonly in test environments).
+
+**Problem**: When tests manually add models to `public_columns_hash` using:
+```ruby
+ActiveRecord::Base.public_columns_hash[model.name] = model.columns_hash
+```
+
+The model's `define_attribute_methods` might not be called, leading to missing internal setter methods.
+
+**Solution**: The `LazyColumnsHash#[]=` method now automatically calls `define_attribute_methods` when a model is assigned:
+
+```ruby
+def []=(model_name, value)
+  @loaded_models[model_name] = value
+
+  # Automatically define attribute methods for dynamically added models
+  begin
+    if Object.const_defined?(model_name)
+      model_class = Object.const_get(model_name)
+      if model_class.respond_to?(:define_attribute_methods)
+        model_class.define_attribute_methods
+      end
+    end
+  rescue => e
+    Rails.logger.warn "[Hyperstack] Failed to define attribute methods for #{model_name}: #{e.message}"
+  end
+end
+```
+
+This ensures that dynamically added models (particularly in tests) have their required internal methods properly defined.
+
 ## Future Enhancements
 
 Potential further optimizations:

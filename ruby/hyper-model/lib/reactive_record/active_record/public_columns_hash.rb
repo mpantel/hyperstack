@@ -125,6 +125,20 @@ module ActiveRecord
 
       def []=(model_name, value)
         @loaded_models[model_name] = value
+
+        # When a model is manually added (e.g., in tests), ensure its attribute methods are defined
+        # This prevents the "undefined method `_hyperstack_internal_setter_*`" errors
+        begin
+          if Object.const_defined?(model_name)
+            model_class = Object.const_get(model_name)
+            if model_class.respond_to?(:define_attribute_methods)
+              model_class.define_attribute_methods
+            end
+          end
+        rescue => e
+          # Log the error but don't break the assignment
+          Rails.logger.warn "[Hyperstack] Failed to define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        end
       end
 
       def key?(model_name)
