@@ -6,7 +6,12 @@ describe "unnamed and non-standard pluralized relationships and models", js: tru
     class ActiveRecord::Base
       class << self
         def public_columns_hash
-          @public_columns_hash ||= {}
+          unless @public_columns_hash
+            @public_columns_hash = {}
+            # Apply the extension to handle dynamic model additions
+            @public_columns_hash.extend(PublicColumnsHashExtension) if defined?(PublicColumnsHashExtension)
+          end
+          @public_columns_hash
         end
       end
     end
