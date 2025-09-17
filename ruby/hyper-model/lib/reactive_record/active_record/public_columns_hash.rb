@@ -1,5 +1,8 @@
 module Hyperstack
   define_setting :public_model_directories, [File.join('app','hyperstack','models'), File.join('app','models','public')]
+  define_setting :public_columns_hash_lazy_loading, true
+  define_setting :public_columns_hash_exclude_patterns, []
+  define_setting :public_columns_hash_performance_logging, Rails.env.development?
 end
 
 module ActiveRecord
@@ -7,25 +10,135 @@ module ActiveRecord
   # this works because the public folder is currently required to be eager loaded.
   class Base
     @@hyper_stack_public_columns_hash_mutex = Mutex.new
+    @@hyper_stack_lazy_columns_cache = {}
+
     def self.public_columns_hash
       @@hyper_stack_public_columns_hash_mutex.synchronize do
         return @public_columns_hash if @public_columns_hash && Rails.env.production?
-        files = []
-        Hyperstack.public_model_directories.each do |dir|
-          dir_length = Rails.root.join(dir).to_s.length + 1
-          Dir.glob(Rails.root.join(dir, '**', '*.rb')).each do |file|
-            require_dependency(file) # still the file is loaded to make sure for development and test env
-            files << file[dir_length..-4]
-          end
+
+        start_time = Time.current if Hyperstack.public_columns_hash_performance_logging
+
+        files = get_public_model_files
+
+        if Hyperstack.public_columns_hash_lazy_loading
+          @public_columns_hash = build_lazy_columns_hash(files)
+        else
+          @public_columns_hash = build_eager_columns_hash(files)
         end
-        @public_columns_hash = {}
-        # descendants only works for already loaded models!
-        descendants.each do |model|
-          if files.include?(model.name.underscore) && model.name.underscore != 'application_record'
-            @public_columns_hash[model.name] = model.columns_hash rescue nil # why rescue?
-          end
+
+        if Hyperstack.public_columns_hash_performance_logging
+          total_time = Time.current - start_time
+          model_count = @public_columns_hash.respond_to?(:keys) ? @public_columns_hash.keys.size : filtered_descendants(files).size
+          Rails.logger.info "[Hyperstack] public_columns_hash loaded #{model_count} models in #{(total_time * 1000).round(2)}ms (lazy: #{Hyperstack.public_columns_hash_lazy_loading})"
         end
+
         @public_columns_hash
+      end
+    end
+
+    private
+
+    def self.get_public_model_files
+      files = []
+      Hyperstack.public_model_directories.each do |dir|
+        next unless Dir.exist?(Rails.root.join(dir))
+        dir_length = Rails.root.join(dir).to_s.length + 1
+        Dir.glob(Rails.root.join(dir, '**', '*.rb')).each do |file|
+          require_dependency(file) # still the file is loaded to make sure for development and test env
+          files << file[dir_length..-4]
+        end
+      end
+      files
+    end
+
+    def self.filtered_descendants(files)
+      descendants.select do |model|
+        next false unless files.include?(model.name.underscore)
+        next false if model.name.underscore == 'application_record'
+        next false if excluded_model?(model)
+        next false unless model.table_exists? rescue false # Skip models without tables
+        true
+      end
+    end
+
+    def self.excluded_model?(model)
+      model_name = model.name.underscore
+      Hyperstack.public_columns_hash_exclude_patterns.any? do |pattern|
+        case pattern
+        when String
+          model_name.include?(pattern)
+        when Regexp
+          model_name =~ pattern
+        else
+          false
+        end
+      end
+    end
+
+    def self.build_lazy_columns_hash(files)
+      # Return a lazy-loading hash that only loads columns when accessed
+      LazyColumnsHash.new(filtered_descendants(files))
+    end
+
+    def self.build_eager_columns_hash(files)
+      hash = {}
+      filtered_descendants(files).each do |model|
+        begin
+          hash[model.name] = get_model_columns_hash(model)
+        rescue => e
+          Rails.logger.warn "[Hyperstack] Failed to load columns for #{model.name}: #{e.message}" if Hyperstack.public_columns_hash_performance_logging
+        end
+      end
+      hash
+    end
+
+    def self.get_model_columns_hash(model)
+      # Use schema cache if available to avoid database queries
+      if model.connection.schema_cache.data_source_exists?(model.table_name)
+        model.columns_hash
+      else
+        {}
+      end
+    rescue
+      {}
+    end
+
+    # Lazy-loading hash implementation
+    class LazyColumnsHash
+      def initialize(models)
+        @models_by_name = models.index_by(&:name)
+        @loaded_models = {}
+      end
+
+      def [](model_name)
+        return @loaded_models[model_name] if @loaded_models.key?(model_name)
+
+        model = @models_by_name[model_name]
+        return nil unless model
+
+        @loaded_models[model_name] = ActiveRecord::Base.get_model_columns_hash(model)
+      end
+
+      def keys
+        @models_by_name.keys
+      end
+
+      def each(&block)
+        @models_by_name.keys.each do |key|
+          yield(key, self[key])
+        end
+      end
+
+      def to_h
+        result = {}
+        @models_by_name.keys.each do |key|
+          result[key] = self[key]
+        end
+        result
+      end
+
+      def as_json(options = nil)
+        to_h.as_json(options)
       end
     end
 
