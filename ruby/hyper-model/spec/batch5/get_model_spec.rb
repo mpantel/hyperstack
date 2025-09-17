@@ -8,7 +8,7 @@ describe "ReactiveRecord::ServerDataCache.get_model" do
   end
 
   it "will raise an access violation for an unloaded class" do
-    expect { ReactiveRecord::ServerDataCache.get_model('UnloadedClass') }.to raise_exception
+    expect { ReactiveRecord::ServerDataCache.get_model('UnloadedClass') }.to raise_error(Hyperstack::AccessViolation)
   end
 
   it "will not raise an access violation for an AR model in the Models folder" do

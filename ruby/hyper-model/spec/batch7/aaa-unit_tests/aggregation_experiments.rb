@@ -18,7 +18,7 @@ describe "aggregation experiments" do
 
   it "updating an aggregate does NOT change the container" do
     user = User.new
-    expect { user.address.state = "philly" }.to raise_error
+    expect { user.address.state = "philly" }.to raise_error(StandardError)
     address = user.address
     user.address.save
     expect(user).not_to be_changed

@@ -235,6 +235,148 @@ For applications that want to maximize the performance benefit:
 3. **Monitor performance:** Enable logging to understand the impact
 4. **Adjust as needed:** Fine-tune settings based on your specific use case
 
+## Schema Caching and Cache Management
+
+### Caching Layers
+
+There are **two different types** of schema caching at play:
+
+#### 1. Rails Schema Cache (Database Level)
+This is Rails' built-in schema caching that stores database metadata:
+
+```ruby
+# Rails automatically caches table/column information
+Rails.application.config.active_record.use_schema_cache_dump = true
+```
+
+- **Location:** Usually in `db/schema_cache.yml` or similar
+- **Updates:** Rails handles this automatically when schema changes
+
+#### 2. Hyperstack Column Cache (Application Level)
+This is our new lazy loading cache:
+
+```ruby
+# Our LazyColumnsHash caches loaded columns in memory
+@loaded_models = {} # This cache
+```
+
+- **Location:** In-memory only (not persisted to disk)
+- **Updates:** Automatically cleared on app restart
+
+### Cache Behavior by Environment
+
+#### Development/Test Environments
+```ruby
+# Cache is disabled by default in development
+return @public_columns_hash if @public_columns_hash && Rails.env.production?
+```
+- Cache is **cleared on every request** in development
+- Schema changes are picked up immediately
+- No action required
+
+#### Production Environment
+```ruby
+# Cache persists in production for performance
+@public_columns_hash ||= build_columns_hash
+```
+- Cache **clears automatically** on app restart
+- Deploy/restart picks up schema changes
+- No manual clearing needed
+
+### Handling Schema Changes
+
+#### Database Migrations
+```bash
+# After running migrations, just restart the app
+rails db:migrate
+# Then restart your server - cache will rebuild automatically
+```
+
+#### Adding/Removing Models
+```ruby
+# The cache automatically detects new models on restart
+descendants.each do |model|  # Picks up new models
+  # ... load columns
+end
+```
+
+#### Model Changes
+- **Column additions/removals:** Detected on next app restart
+- **New models:** Automatically included in descendants
+- **Deleted models:** Automatically excluded
+
+### Manual Cache Control (If Needed)
+
+#### Clear Hyperstack Cache
+```ruby
+# In Rails console or code
+ActiveRecord::Base.instance_variable_set(:@public_columns_hash, nil)
+```
+
+#### Clear Rails Schema Cache
+```bash
+# Command line
+rails db:schema:cache:clear
+
+# Or in code
+ActiveRecord::Base.connection.schema_cache.clear!
+```
+
+#### Force Reload in Development
+```ruby
+# Add to development.rb if you want to disable caching completely
+config.after_initialize do
+  Hyperstack.public_columns_hash_lazy_loading = false  # Disable lazy loading
+  # OR
+  ActiveRecord::Base.instance_variable_set(:@public_columns_hash, nil)  # Clear on each request
+end
+```
+
+### Best Practices
+
+#### Normal Development Workflow
+```bash
+# 1. Make schema changes
+rails generate migration add_field_to_users name:string
+rails db:migrate
+
+# 2. Restart your server (cache rebuilds automatically)
+rails server
+
+# That's it! No manual cache management needed
+```
+
+#### Production Deployment
+```bash
+# 1. Deploy with migrations
+rails db:migrate
+
+# 2. Restart the application (cache rebuilds automatically)
+# PM2, Docker, Kubernetes, etc. - whatever you use
+
+# Cache is automatically fresh with new schema
+```
+
+#### Debugging Schema Issues
+```ruby
+# Check what's in the cache
+puts ActiveRecord::Base.public_columns_hash.keys
+
+# Force fresh reload
+ActiveRecord::Base.instance_variable_set(:@public_columns_hash, nil)
+fresh_hash = ActiveRecord::Base.public_columns_hash
+```
+
+### Cache Management Summary
+
+✅ **No manual cache updates needed**
+✅ **Development:** Cache disabled by default
+✅ **Production:** Cache rebuilds on app restart
+✅ **Migrations:** Just restart after running them
+✅ **Schema changes:** Detected automatically
+
+The caching is designed to be **zero-maintenance** - it handles cache invalidation automatically based on your Rails environment and application lifecycle.
+
 ## Future Enhancements
 
 Potential further optimizations:

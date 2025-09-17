@@ -119,14 +119,43 @@ module ActiveRecord
         @loaded_models[model_name] = ActiveRecord::Base.get_model_columns_hash(model)
       end
 
+      def []=(model_name, value)
+        @loaded_models[model_name] = value
+      end
+
+      def key?(model_name)
+        @models_by_name.key?(model_name)
+      end
+
       def keys
         @models_by_name.keys
       end
+
+      def values
+        keys.map { |key| self[key] }
+      end
+
+      def empty?
+        @models_by_name.empty?
+      end
+
+      def size
+        @models_by_name.size
+      end
+      alias_method :length, :size
 
       def each(&block)
         @models_by_name.keys.each do |key|
           yield(key, self[key])
         end
+      end
+
+      def each_key(&block)
+        @models_by_name.keys.each(&block)
+      end
+
+      def each_value(&block)
+        keys.each { |key| yield(self[key]) }
       end
 
       def to_h
@@ -139,6 +168,22 @@ module ActiveRecord
 
       def as_json(options = nil)
         to_h.as_json(options)
+      end
+
+      def inspect
+        "#<#{self.class.name}:#{object_id} #{to_h.inspect}>"
+      end
+
+      def respond_to_missing?(method_name, include_private = false)
+        {}.respond_to?(method_name, include_private) || super
+      end
+
+      def method_missing(method_name, *args, &block)
+        if {}.respond_to?(method_name)
+          to_h.send(method_name, *args, &block)
+        else
+          super
+        end
       end
     end
 
