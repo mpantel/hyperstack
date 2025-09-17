@@ -117,6 +117,10 @@ module ActiveRecord
         return nil unless model
 
         @loaded_models[model_name] = ActiveRecord::Base.get_model_columns_hash(model)
+      rescue => e
+        # If there's an error loading columns, return nil so || {} fallback works
+        Rails.logger.warn "[Hyperstack] Failed to load columns for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        nil
       end
 
       def []=(model_name, value)

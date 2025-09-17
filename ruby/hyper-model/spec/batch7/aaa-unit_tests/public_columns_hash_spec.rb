@@ -3,9 +3,22 @@ require 'spec_helper'
 # This spec tests the LazyColumnsHash in an isolated way that should work in CI
 describe "ActiveRecord::Base.public_columns_hash optimization" do
 
-  # Skip these tests if LazyColumnsHash is not available (avoiding loading issues in CI)
+  # Load the actual LazyColumnsHash implementation - it should be available through spec_helper
+  # If not available, skip the tests
   before(:all) do
-    skip "LazyColumnsHash not available" unless defined?(ActiveRecord::Base::LazyColumnsHash)
+    begin
+      # Try to load the actual implementation
+      require_relative '../../../lib/reactive_record/active_record/public_columns_hash' unless defined?(ActiveRecord::Base::LazyColumnsHash)
+    rescue => e
+      skip "LazyColumnsHash not available: #{e.message}"
+    end
+
+    # Override get_model_columns_hash to work with test models that don't have database connections
+    if defined?(ActiveRecord::Base::LazyColumnsHash)
+      ActiveRecord::Base.define_singleton_method(:get_model_columns_hash) do |model|
+        model.columns_hash
+      end
+    end
   end
 
   describe "LazyColumnsHash isolated behavior" do

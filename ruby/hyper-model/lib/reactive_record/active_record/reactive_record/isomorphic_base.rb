@@ -75,7 +75,15 @@ module ReactiveRecord
     end
 
     def self.define_attribute_methods
-      public_columns_hash.keys.each do |model|
+      pch = public_columns_hash
+      pch.keys.each do |model|
+        # Force column loading by accessing the hash entry if it's a LazyColumnsHash
+        if pch.respond_to?(:key?) && pch.key?(model)
+          columns = pch[model]
+          if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+            Rails.logger.debug "[Hyperstack] Defining attribute methods for #{model} with #{columns&.keys&.size || 0} columns"
+          end
+        end
         Object.const_get(model).define_attribute_methods rescue nil
       end
     end
