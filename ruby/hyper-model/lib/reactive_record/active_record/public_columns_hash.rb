@@ -114,8 +114,19 @@ module ActiveRecord
         begin
           if Object.const_defined?(model_name)
             model_class = Object.const_get(model_name)
-            if model_class.respond_to?(:define_attribute_methods)
-              model_class.define_attribute_methods
+            # Only call define_attribute_methods if we're not already in the middle of defining them
+            # This prevents infinite recursion
+            if model_class.respond_to?(:define_attribute_methods) &&
+               !model_class.instance_variable_get(:@defining_attribute_methods)
+              puts "        Calling define_attribute_methods for #{model_name}" if defined?(Rails) && Rails.logger
+              model_class.instance_variable_set(:@defining_attribute_methods, true)
+              begin
+                model_class.define_attribute_methods
+              ensure
+                model_class.instance_variable_set(:@defining_attribute_methods, false)
+              end
+            else
+              puts "        Skipping define_attribute_methods for #{model_name} (already defining: #{model_class.instance_variable_get(:@defining_attribute_methods)})" if defined?(Rails) && Rails.logger
             end
           end
         rescue => e
@@ -155,8 +166,16 @@ module ActiveRecord
         begin
           if Object.const_defined?(model_name)
             model_class = Object.const_get(model_name)
-            if model_class.respond_to?(:define_attribute_methods)
-              model_class.define_attribute_methods
+            # Only call define_attribute_methods if we're not already in the middle of defining them
+            # This prevents infinite recursion
+            if model_class.respond_to?(:define_attribute_methods) &&
+               !model_class.instance_variable_get(:@defining_attribute_methods)
+              model_class.instance_variable_set(:@defining_attribute_methods, true)
+              begin
+                model_class.define_attribute_methods
+              ensure
+                model_class.instance_variable_set(:@defining_attribute_methods, false)
+              end
             end
           end
         rescue => e
