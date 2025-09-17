@@ -439,6 +439,32 @@ hash.extend(PublicColumnsHashExtension)
 
 This ensures that dynamically added models (particularly in tests) have their required internal methods properly defined, regardless of whether lazy loading is enabled or disabled.
 
+#### Additional Client-Side Safety Net
+
+To handle cases where the client-side doesn't have the updated `public_columns_hash` or models are added after the initial `define_attribute_methods` call, a safety mechanism was added to the `method_missing` handler:
+
+```ruby
+def method_missing(name, *args, &block)
+  # Handle missing _hyperstack_internal_setter_ methods by trying to define attribute methods
+  if name.to_s.start_with?("_hyperstack_internal_setter_")
+    begin
+      # Try to call define_attribute_methods to ensure all internal setters are defined
+      define_attribute_methods
+      # After defining methods, try calling the method again if it now exists
+      if respond_to?(name)
+        return send(name, *args, &block)
+      end
+    rescue => e
+      Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{self.name}: #{e.message}"
+    end
+  end
+
+  # ... rest of method_missing logic
+end
+```
+
+This provides a last-resort mechanism that automatically calls `define_attribute_methods` when a missing `_hyperstack_internal_setter_*` method is accessed, ensuring maximum compatibility across different scenarios.
+
 ## Future Enhancements
 
 Potential further optimizations:

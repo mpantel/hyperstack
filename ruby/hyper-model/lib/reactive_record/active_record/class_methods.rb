@@ -201,6 +201,21 @@ module ActiveRecord
       #   but currently in Opal we do, so we will mimic MRI Ruby and throw a TypeError.
       raise TypeError, "nil is not a symbol nor a string" if name.nil?
 
+      # Handle missing _hyperstack_internal_setter_ methods by trying to define attribute methods
+      if name.to_s.start_with?("_hyperstack_internal_setter_")
+        begin
+          # Try to call define_attribute_methods to ensure all internal setters are defined
+          define_attribute_methods
+          # After defining methods, try calling the method again if it now exists
+          if respond_to?(name)
+            return send(name, *args, &block)
+          end
+        rescue => e
+          # If define_attribute_methods fails, log and continue with normal method_missing
+          Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{self.name}: #{e.message}" if defined?(Rails) && Rails.logger
+        end
+      end
+
       if name == "human_attribute_name"
         opts = args[1] || {}
         opts[:default] || args[0]
