@@ -26,18 +26,7 @@ RSpec::Steps.steps "class inheritance", js: true do
 
     TodoItem # force TodoItem to load
 
-    class ActiveRecord::Base
-      class << self
-        def public_columns_hash
-          unless @public_columns_hash
-            @public_columns_hash = {}
-            # Apply the extension to handle dynamic model additions
-            @public_columns_hash.extend(PublicColumnsHashExtension) if defined?(PublicColumnsHashExtension)
-          end
-          @public_columns_hash
-        end
-      end
-    end
+    # Using real public_columns_hash implementation
   end
 
   before(:each) do

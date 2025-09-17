@@ -168,18 +168,7 @@ describe "reactive-record edge cases", js: true do
   end
 
   it "will reload scopes when data arrives too late" do
-    class ActiveRecord::Base
-      class << self
-        def public_columns_hash
-          unless @public_columns_hash
-            @public_columns_hash = {}
-            # Apply the extension to handle dynamic model additions
-            @public_columns_hash.extend(PublicColumnsHashExtension) if defined?(PublicColumnsHashExtension)
-          end
-          @public_columns_hash
-        end
-      end
-    end
+    # Using real public_columns_hash implementation
 
     class BelongsToModel < ActiveRecord::Base
       def self.build_tables

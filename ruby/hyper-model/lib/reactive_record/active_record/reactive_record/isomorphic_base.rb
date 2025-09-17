@@ -10,6 +10,13 @@ module ReactiveRecord
       else
         Hyperstack::Internal::State::Variable.set(WhileLoading, :quiet, true)
         @public_columns_hash = get_public_columns_hash
+
+        # Apply the extension to handle dynamic model additions on the client side
+        # This prevents the "undefined method `_hyperstack_internal_setter_*`" errors
+        if defined?(ActiveRecord::Base::PublicColumnsHashExtension) && @public_columns_hash.respond_to?(:extend)
+          @public_columns_hash.extend(ActiveRecord::Base::PublicColumnsHashExtension)
+        end
+
         define_attribute_methods
         @outer_scopes = Set.new
         @fetch_scheduled = nil

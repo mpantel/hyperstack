@@ -17,18 +17,7 @@ describe "self referencing belongs_to", js: true do
   end
 
   before(:all) do
-    class ActiveRecord::Base
-      class << self
-        def public_columns_hash
-          unless @public_columns_hash
-            @public_columns_hash = {}
-            # Apply the extension to handle dynamic model additions
-            @public_columns_hash.extend(PublicColumnsHashExtension) if defined?(PublicColumnsHashExtension)
-          end
-          @public_columns_hash
-        end
-      end
-    end
+    # Using real public_columns_hash implementation
 
     class SelfRefModel < ActiveRecord::Base
       def self.build_tables

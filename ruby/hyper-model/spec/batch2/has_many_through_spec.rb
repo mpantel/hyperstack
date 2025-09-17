@@ -18,18 +18,7 @@ RSpec::Steps.steps "has_many through relationships", js: true do
       config.opts = {app_id: Pusher.app_id, key: Pusher.key, secret: Pusher.secret, use_tls: false}.merge(PusherFake.configuration.web_options)
     end
 
-    class ActiveRecord::Base
-      class << self
-        def public_columns_hash
-          unless @public_columns_hash
-            @public_columns_hash = {}
-            # Apply the extension to handle dynamic model additions
-            @public_columns_hash.extend(PublicColumnsHashExtension) if defined?(PublicColumnsHashExtension)
-          end
-          @public_columns_hash
-        end
-      end
-    end
+    # Using real public_columns_hash implementation
 
     class Physician < ActiveRecord::Base
       def self.build_tables
