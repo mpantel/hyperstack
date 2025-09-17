@@ -89,7 +89,8 @@ module ActiveRecord
           Rails.logger.warn "[Hyperstack] Failed to load columns for #{model.name}: #{e.message}" if Hyperstack.public_columns_hash_performance_logging
         end
       end
-      hash
+      # Extend the hash with our custom []= method to handle dynamic model additions
+      hash.extend(PublicColumnsHashExtension)
     end
 
     def self.get_model_columns_hash(model)
@@ -101,6 +102,29 @@ module ActiveRecord
       end
     rescue
       {}
+    end
+
+    # Extension module to add dynamic model handling to regular Hash objects
+    module PublicColumnsHashExtension
+      def []=(model_name, value)
+        result = super(model_name, value)
+
+        # When a model is manually added (e.g., in tests), ensure its attribute methods are defined
+        # This prevents the "undefined method `_hyperstack_internal_setter_*`" errors
+        begin
+          if Object.const_defined?(model_name)
+            model_class = Object.const_get(model_name)
+            if model_class.respond_to?(:define_attribute_methods)
+              model_class.define_attribute_methods
+            end
+          end
+        rescue => e
+          # Log the error but don't break the assignment
+          Rails.logger.warn "[Hyperstack] Failed to define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        end
+
+        result
+      end
     end
 
     # Lazy-loading hash implementation
