@@ -6,3 +6,6 @@
 /node_modules/node_modules
 /local_gems/
 .DS_Store
+/yarn.lock
+/node_modules/
+/ruby/rails-hyperstack/spec/test_app/

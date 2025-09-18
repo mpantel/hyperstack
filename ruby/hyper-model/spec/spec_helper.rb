@@ -16,6 +16,48 @@ require "rspec/wait"
 
 Dir["./spec/support/**/*.rb"].sort.each { |f| require f }
 
+# Fix for signal trap bug where previous_trap can be a string instead of a callable
+# This affects multiple gems including pusher-fake and selenium-webdriver
+module Signal
+  class << self
+    alias_method :original_trap, :trap
+
+    def trap(signal, command = nil, &block)
+      previous_trap = if block_given?
+        original_trap(signal, &block)
+      else
+        original_trap(signal, command)
+      end
+
+      # Return the previous trap handler, ensuring it's properly wrapped
+      if previous_trap.is_a?(String)
+        previous_trap
+      elsif previous_trap.respond_to?(:call)
+        previous_trap
+      else
+        "DEFAULT"
+      end
+    end
+  end
+end
+
+# Additional fix for pusher-fake specifically
+class Object
+  def self.monkey_patch_pusher_fake!
+    return unless defined?(PusherFake::Server::ChainTrapHandlers)
+
+    PusherFake::Server::ChainTrapHandlers.module_eval do
+      def trap(*arguments)
+        previous_trap = super do
+          yield
+          # Only call previous_trap if it's callable (not "DEFAULT" or "IGNORE" strings)
+          previous_trap.call if previous_trap.respond_to?(:call)
+        end
+      end
+    end
+  end
+end
+
 RSpec.configure do |config|
 
   if config.formatters.empty?

@@ -19,6 +19,9 @@ describe "has_and_belongs_to_many", js: true do
       config.opts = {app_id: Pusher.app_id, key: Pusher.key, secret: Pusher.secret, use_tls: false}.merge(PusherFake.configuration.web_options)
     end
 
+    # Apply the pusher-fake fix
+    Object.monkey_patch_pusher_fake!
+
     # Using real public_columns_hash implementation
 
     class Physician < ActiveRecord::Base

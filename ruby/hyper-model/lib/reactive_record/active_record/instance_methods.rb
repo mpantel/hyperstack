@@ -29,7 +29,9 @@ module ActiveRecord
 
     def method_missing(missing, *args, &block)
       missing ||= `Opal.__name_of_super`
-      column = self.class.columns_hash.detect { |name, *| missing =~ /^#{name}/ }
+      columns_hash = self.class.columns_hash
+      column = columns_hash.detect { |name, *| missing =~ /^#{name}/ }
+
       if column
         name = column[0]
         case missing
@@ -39,6 +41,38 @@ module ActiveRecord
         when /\?/ then @backing_record.get_attr_value(name, nil).present?
         else @backing_record.get_attr_value(name, nil)
         end
+      elsif (columns_hash.empty? || missing.to_s.match(/^_hyperstack_internal_setter_/) ||
+             (missing.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && missing.to_s != 'class'))
+        # If columns_hash is empty OR if this looks like a hyperstack internal method OR
+        # if it looks like an attribute method, try to define attribute methods and retry
+        begin
+          # Force columns_hash to be loaded first if it's a LazyColumnsHash
+          forced_columns = self.class.columns_hash
+          # Only try to define attribute methods if the class responds to it and we haven't already tried
+          if self.class.respond_to?(:define_attribute_methods) && !self.class.instance_variable_get(:@defining_attribute_methods)
+            self.class.instance_variable_set(:@defining_attribute_methods, true)
+            begin
+              self.class.define_attribute_methods
+            ensure
+              self.class.instance_variable_set(:@defining_attribute_methods, false)
+            end
+            # After defining methods, try calling the method again if it now exists
+            if respond_to?(missing)
+              return send(missing, *args, &block)
+            end
+          end
+        rescue => e
+          # If define_attribute_methods fails, continue with normal method_missing
+          if defined?(Rails) && Rails.logger
+            Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{self.class.name}.#{missing}: #{e.message}"
+          else
+            puts "Failed to auto-define attribute methods for #{self.class.name}.#{missing}: #{e.message}"
+          end
+        ensure
+          # Make sure we clear the flag even if an exception occurs
+          self.class.instance_variable_set(:@defining_attribute_methods, false) if self.class.instance_variable_get(:@defining_attribute_methods)
+        end
+        super
       else
         super
       end

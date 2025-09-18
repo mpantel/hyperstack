@@ -16,6 +16,9 @@ describe 'defaultValue special handling', js: true do
     Pusher.secret = "MY_TEST_SECRET"
     require "pusher-fake/support/base"
 
+    # Apply the pusher-fake fix
+    Object.monkey_patch_pusher_fake!
+
     Hyperstack.configuration do |config|
       config.transport = :pusher
       config.channel_prefix = "synchromesh"

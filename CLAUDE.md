@@ -84,4 +84,8 @@ This prevents Spring from trying to preload multiple Rails applications simultan
 - Operations use Railway pattern for server-side logic
 - State management through observable patterns
 - Event handling through React synthetic events
+
+## Local Development and Testing
+
 - set OPAL_VERSION=1.5.1 before running specs
+- run specs locally in sqlite
