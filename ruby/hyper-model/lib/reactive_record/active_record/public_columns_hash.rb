@@ -162,12 +162,9 @@ module ActiveRecord
             model.instance_variable_set(:@defining_attribute_methods, true)
             begin
               model.define_attribute_methods
-              puts "[DEBUG] Successfully defined attribute methods for #{model_name}"
             ensure
               model.instance_variable_set(:@defining_attribute_methods, false)
             end
-          else
-            puts "[DEBUG] Skipping attribute method definition for #{model_name} - respond_to: #{model.respond_to?(:define_attribute_methods)}, already defining: #{!!model.instance_variable_get(:@defining_attribute_methods)}"
           end
         rescue => e
           Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
