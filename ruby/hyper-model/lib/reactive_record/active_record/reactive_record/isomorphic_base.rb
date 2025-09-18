@@ -145,7 +145,8 @@ module ReactiveRecord
     def get_columns_info_for_vector(vector)
       method_name = vector.last
       method_name = method_name.first if method_name.is_a? Array
-      model.columns_hash[method_name] || model.server_methods[method_name]
+      ch = model.columns_hash
+      (ch && ch[method_name]) || model.server_methods[method_name]
     end
 
     class << self

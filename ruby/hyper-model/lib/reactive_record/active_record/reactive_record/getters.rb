@@ -27,7 +27,8 @@ module ReactiveRecord
 
     def get_attr_value(attr, reload = nil)
       non_relationship_getter_common(attr, reload) do
-        column_info = model.columns_hash[attr]
+        ch = model.columns_hash
+        column_info = ch && ch[attr]
         default_value = column_info && column_info[:default]
         sync_attribute attr, convert(attr, default_value)
       end

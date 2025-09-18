@@ -12,6 +12,9 @@ RSpec::Steps.steps "class inheritance", js: true do
     Pusher.secret = "MY_TEST_SECRET"
     require "pusher-fake/support/base"
 
+    # Apply the pusher-fake fix
+    Object.monkey_patch_pusher_fake!
+
     Hyperstack.configuration do |config|
       config.transport = :pusher
       config.channel_prefix = "synchromesh"
@@ -67,6 +70,7 @@ RSpec::Steps.steps "class inheritance", js: true do
               t.timestamps
             end
             ActiveRecord::Base.public_columns_hash[name] = columns_hash
+            define_attribute_methods if respond_to?(:define_attribute_methods)
           end
           scope :a_scope, -> () {}, regulate: :always_allow
           scope :is_subclass1, -> () { where(type: 'Sti::SubClass1') }, regulate: :always_allow, client: -> { type == 'Base::SubClass1' }

@@ -29,17 +29,17 @@ module ReactiveRecord
       end
 
       def build_default_value_for_nil
-        @column_hash[:default] || nil
+        @column_hash && @column_hash[:default] || nil
       end
 
       def build_default_value_for_json
-        ::JSON.parse(@column_hash[:default]) if @column_hash[:default]
+        ::JSON.parse(@column_hash[:default]) if @column_hash && @column_hash[:default]
       end
 
       alias build_default_value_for_jsonb build_default_value_for_json
 
       def build_default_value_for_datetime
-        if @column_hash[:default]
+        if @column_hash && @column_hash[:default]
           ::Time.parse(@column_hash[:default].gsub(' ','T')+'+00:00')
         else
           ::ReactiveRecord::Base::DummyValue.dummy_time
@@ -50,7 +50,7 @@ module ReactiveRecord
       alias build_default_value_for_timestamp build_default_value_for_datetime
 
       def build_default_value_for_date
-        if @column_hash[:default]
+        if @column_hash && @column_hash[:default]
           ::Date.parse(@column_hash[:default])
         else
           ::ReactiveRecord::Base::DummyValue.dummy_date
@@ -60,24 +60,24 @@ module ReactiveRecord
       FALSY_VALUES = [false, nil, 0, "0", "f", "F", "false", "FALSE", "off", "OFF"]
 
       def build_default_value_for_boolean
-        !FALSY_VALUES.include?(@column_hash[:default])
+        !FALSY_VALUES.include?(@column_hash && @column_hash[:default])
       end
 
       def build_default_value_for_float
-        @column_hash[:default]&.to_f || Float(0.0)
+        (@column_hash && @column_hash[:default])&.to_f || Float(0.0)
       end
 
       alias build_default_value_for_decimal build_default_value_for_float
 
       def build_default_value_for_integer
-        @column_hash[:default]&.to_i || Integer(0)
+        (@column_hash && @column_hash[:default])&.to_i || Integer(0)
       end
 
       alias build_default_value_for_bigint build_default_value_for_integer
 
       def build_default_value_for_string
-        return @column_hash[:default] if @column_hash[:serialized?]
-        @column_hash[:default] || ''
+        return @column_hash[:default] if @column_hash && @column_hash[:serialized?]
+        (@column_hash && @column_hash[:default]) || ''
       end
 
       alias build_default_value_for_text build_default_value_for_string

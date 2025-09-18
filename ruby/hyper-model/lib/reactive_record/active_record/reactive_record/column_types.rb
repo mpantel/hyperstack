@@ -6,11 +6,14 @@ module ReactiveRecord
     end
 
     def self.column_type(column_hash)
-      column_hash && column_hash[:sql_type_metadata] && column_hash[:sql_type_metadata][:type]
+      return nil unless column_hash
+      sql_type_metadata = column_hash[:sql_type_metadata]
+      sql_type_metadata && sql_type_metadata[:type]
     end
 
     def column_type(attr)
-      Base.column_type(columns_hash[attr])
+      ch = columns_hash
+      Base.column_type(ch && ch[attr])
     end
 
     def convert_datetime(val)
@@ -64,7 +67,8 @@ module ReactiveRecord
 
     def convert(attr, val)
       column_type = column_type(attr)
-      return val if self.class.serialized?[model][attr] ||
+      serialized_attrs = model && self.class.serialized?[model]
+      return val if (serialized_attrs && serialized_attrs[attr]) ||
                     !column_type || val.loading? ||
                     (!val && column_type != :boolean)
       conversion_method = "convert_#{column_type}"
