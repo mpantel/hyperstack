@@ -205,17 +205,45 @@ module ActiveRecord
       # This covers both basic attribute accessors (name, name=) and internal hyperstack methods
       if name.to_s.start_with?("_hyperstack_internal_setter_") ||
          (respond_to?(:columns_hash) && columns_hash &&
-          (columns_hash.key?(name.to_s) || columns_hash.key?(name.to_s.chomp("="))))
+          (columns_hash.key?(name.to_s) || columns_hash.key?(name.to_s.chomp("=")))) ||
+         (name.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && name.to_s != 'class')
+
+        # Special handling for _hyperstack_internal_setter_ methods - define them immediately if possible
+        if name.to_s.match(/^_hyperstack_internal_setter_(.+)$/)
+          attr_name = $1
+          begin
+            # Define the missing internal setter method directly on the class
+            define_method("_hyperstack_internal_setter_#{attr_name}") do |val|
+              @backing_record.set_attr_value(attr_name, val)
+            end
+            return send(name, *args, &block) if respond_to?(name)
+          rescue => e
+            # If direct definition fails, continue with normal handling
+            if defined?(Rails) && Rails.logger
+              Rails.logger.warn "[Hyperstack] Failed to directly define class internal setter #{self.name}.#{name}: #{e.message}"
+            else
+              puts "Failed to directly define class internal setter #{self.name}.#{name}: #{e.message}"
+            end
+          end
+        end
+
         begin
-          # Try to call define_attribute_methods to ensure all attribute methods are defined
-          define_attribute_methods
-          # After defining methods, try calling the method again if it now exists
-          if respond_to?(name)
-            return send(name, *args, &block)
+          # Only try to define if we haven't already tried and failed for this class
+          unless instance_variable_get(:@hyperstack_tried_define_methods)
+            instance_variable_set(:@hyperstack_tried_define_methods, true)
+            define_attribute_methods
+            # After defining methods, try calling the method again if it now exists
+            if respond_to?(name)
+              return send(name, *args, &block)
+            end
           end
         rescue => e
           # If define_attribute_methods fails, log and continue with normal method_missing
-          Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{self.name}: #{e.message}" if defined?(Rails) && Rails.logger
+          if defined?(Rails) && Rails.logger
+            Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{self.name}.#{name}: #{e.message}"
+          else
+            puts "Failed to auto-define attribute methods for #{self.name}.#{name}: #{e.message}"
+          end
         end
       end
 

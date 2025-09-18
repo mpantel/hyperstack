@@ -45,6 +45,55 @@ module ActiveRecord
              (missing.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && missing.to_s != 'class'))
         # If columns_hash is empty OR if this looks like a hyperstack internal method OR
         # if it looks like an attribute method, try to define attribute methods and retry
+
+        # Special handling for _hyperstack_internal_setter_ methods - define them immediately if possible
+        if missing.to_s.match(/^_hyperstack_internal_setter_(.+)$/)
+          attr_name = $1
+          begin
+            # Define the missing internal setter method directly
+            self.class.define_method("_hyperstack_internal_setter_#{attr_name}") do |val|
+              @backing_record.set_attr_value(attr_name, val)
+            end
+            # Also define the standard setter alias
+            unless self.class.method_defined?("#{attr_name}=")
+              self.class.alias_method "#{attr_name}=", "_hyperstack_internal_setter_#{attr_name}"
+            end
+            return send(missing, *args, &block)
+          rescue => e
+            # If direct definition fails, continue with normal handling
+            if defined?(Rails) && Rails.logger
+              Rails.logger.warn "[Hyperstack] Failed to directly define internal setter #{self.class.name}.#{missing}: #{e.message}"
+            else
+              puts "Failed to directly define internal setter #{self.class.name}.#{missing}: #{e.message}"
+            end
+          end
+        end
+
+        # Special handling for basic setter methods (attr=) - define them immediately if possible
+        if missing.to_s.match(/^([a-zA-Z_][a-zA-Z0-9_]*)=$/)
+          attr_name = $1
+          begin
+            # Define the missing internal setter method if it doesn't exist
+            unless self.class.method_defined?("_hyperstack_internal_setter_#{attr_name}")
+              self.class.define_method("_hyperstack_internal_setter_#{attr_name}") do |val|
+                @backing_record.set_attr_value(attr_name, val)
+              end
+            end
+            # Define the setter alias
+            unless self.class.method_defined?("#{attr_name}=")
+              self.class.alias_method "#{attr_name}=", "_hyperstack_internal_setter_#{attr_name}"
+            end
+            return send(missing, *args, &block)
+          rescue => e
+            # If direct definition fails, continue with normal handling
+            if defined?(Rails) && Rails.logger
+              Rails.logger.warn "[Hyperstack] Failed to directly define setter #{self.class.name}.#{missing}: #{e.message}"
+            else
+              puts "Failed to directly define setter #{self.class.name}.#{missing}: #{e.message}"
+            end
+          end
+        end
+
         begin
           # Force columns_hash to be loaded first if it's a LazyColumnsHash
           forced_columns = self.class.columns_hash
