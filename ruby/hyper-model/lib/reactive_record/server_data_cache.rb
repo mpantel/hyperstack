@@ -461,8 +461,12 @@ keys:
           end
           if loaded_collection[0] && target.scope_description&.name == '___hyperstack_internal_scoped_find_by'
             primary_key = target.proxy_association.klass.primary_key
-            attrs = target.vector[-1][1].reject { |key, _| key == primary_key }
-            loaded_collection[0].backing_record.sync_attributes(attrs)
+            last_vector_element = target.vector && target.vector[-1]
+            attrs = last_vector_element && last_vector_element[1]
+            if attrs
+              attrs = attrs.reject { |key, _| key == primary_key }
+              loaded_collection[0].backing_record.sync_attributes(attrs)
+            end
           end
           target.replace loaded_collection
           # we need to notify any observers of the collection.  collection#replace
