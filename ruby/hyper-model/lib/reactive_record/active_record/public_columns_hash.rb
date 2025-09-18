@@ -141,12 +141,15 @@ module ActiveRecord
     # Lazy-loading hash implementation
     class LazyColumnsHash
       def initialize(models)
-        @models_by_name = models.index_by(&:name)
+        @models_by_name = models ? models.index_by(&:name) : {}
         @loaded_models = {}
       end
 
       def [](model_name)
         return @loaded_models[model_name] if @loaded_models.key?(model_name)
+
+        # Defensive check to prevent nil reference errors
+        return nil unless @models_by_name
 
         model = @models_by_name[model_name]
         return nil unless model
