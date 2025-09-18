@@ -392,7 +392,26 @@ module ActiveRecord
     end
 
     def columns_hash
-      ReactiveRecord::Base.public_columns_hash[name] || {}
+      result = ReactiveRecord::Base.public_columns_hash[name] || {}
+
+      # Ensure attribute methods are defined when columns_hash is accessed
+      # This is critical for client-side models that receive data from the server
+      if !result.empty? && respond_to?(:define_attribute_methods) &&
+         !instance_variable_get(:@defining_attribute_methods) &&
+         !instance_variable_get(:@hyperstack_methods_defined)
+        begin
+          instance_variable_set(:@defining_attribute_methods, true)
+          define_attribute_methods
+          instance_variable_set(:@hyperstack_methods_defined, true)
+          Rails.logger.info "[Hyperstack] Auto-defined attribute methods for #{name} via columns_hash access" if defined?(Rails) && Rails.logger
+        rescue => e
+          Rails.logger.warn "[Hyperstack] Failed to auto-define methods for #{name}: #{e.message}" if defined?(Rails) && Rails.logger
+        ensure
+          instance_variable_set(:@defining_attribute_methods, false)
+        end
+      end
+
+      result
     end
 
     def server_methods

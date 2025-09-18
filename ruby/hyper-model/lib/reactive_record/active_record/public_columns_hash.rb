@@ -118,7 +118,7 @@ module ActiveRecord
             # This prevents infinite recursion
             if model_class.respond_to?(:define_attribute_methods) &&
                !model_class.instance_variable_get(:@defining_attribute_methods)
-              puts "        Calling define_attribute_methods for #{model_name}" if defined?(Rails) && Rails.logger
+              Rails.logger.info "[Hyperstack] Calling define_attribute_methods for #{model_name}" if defined?(Rails) && Rails.logger
               model_class.instance_variable_set(:@defining_attribute_methods, true)
               begin
                 model_class.define_attribute_methods
@@ -126,7 +126,7 @@ module ActiveRecord
                 model_class.instance_variable_set(:@defining_attribute_methods, false)
               end
             else
-              puts "        Skipping define_attribute_methods for #{model_name} (already defining: #{model_class.instance_variable_get(:@defining_attribute_methods)})" if defined?(Rails) && Rails.logger
+              Rails.logger.info "[Hyperstack] Skipping define_attribute_methods for #{model_name} (already defining: #{model_class.instance_variable_get(:@defining_attribute_methods)})" if defined?(Rails) && Rails.logger
             end
           end
         rescue => e
@@ -153,6 +153,22 @@ module ActiveRecord
 
         model = @models_by_name[model_name]
         return nil unless model
+
+        # Ensure attribute methods are defined when we load a model's columns
+        begin
+          if model.respond_to?(:define_attribute_methods) &&
+             !model.instance_variable_get(:@defining_attribute_methods)
+            Rails.logger.info "[Hyperstack] Auto-defining attribute methods for #{model_name} during lazy load" if defined?(Rails) && Rails.logger
+            model.instance_variable_set(:@defining_attribute_methods, true)
+            begin
+              model.define_attribute_methods
+            ensure
+              model.instance_variable_set(:@defining_attribute_methods, false)
+            end
+          end
+        rescue => e
+          Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        end
 
         @loaded_models[model_name] = ActiveRecord::Base.get_model_columns_hash(model)
       rescue => e

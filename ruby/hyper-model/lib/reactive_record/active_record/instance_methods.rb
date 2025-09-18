@@ -94,6 +94,43 @@ module ActiveRecord
           end
         end
 
+        # Special handling for basic attribute getters - define them immediately if possible
+        if missing.to_s.match(/^([a-zA-Z_][a-zA-Z0-9_]*)$/) && !['class'].include?(missing.to_s)
+          attr_name = missing.to_s
+          begin
+            # Define the missing getter method directly
+            unless self.class.method_defined?(attr_name)
+              self.class.define_method(attr_name) do
+                @backing_record.get_attr_value(attr_name, nil)
+              end
+            end
+            # Also define the ! version for forced reload
+            unless self.class.method_defined?("#{attr_name}!")
+              self.class.define_method("#{attr_name}!") do
+                @backing_record.get_attr_value(attr_name, true)
+              end
+            end
+            # Define the internal setter if it doesn't exist
+            unless self.class.method_defined?("_hyperstack_internal_setter_#{attr_name}")
+              self.class.define_method("_hyperstack_internal_setter_#{attr_name}") do |val|
+                @backing_record.set_attr_value(attr_name, val)
+              end
+            end
+            # Define the setter alias if it doesn't exist
+            unless self.class.method_defined?("#{attr_name}=")
+              self.class.alias_method "#{attr_name}=", "_hyperstack_internal_setter_#{attr_name}"
+            end
+            return send(missing, *args, &block)
+          rescue => e
+            # If direct definition fails, continue with normal handling
+            if defined?(Rails) && Rails.logger
+              Rails.logger.warn "[Hyperstack] Failed to directly define getter #{self.class.name}.#{missing}: #{e.message}"
+            else
+              puts "Failed to directly define getter #{self.class.name}.#{missing}: #{e.message}"
+            end
+          end
+        end
+
         begin
           # Force columns_hash to be loaded first if it's a LazyColumnsHash
           forced_columns = self.class.columns_hash
@@ -102,6 +139,8 @@ module ActiveRecord
             self.class.instance_variable_set(:@defining_attribute_methods, true)
             begin
               self.class.define_attribute_methods
+              # Mark that we've successfully defined methods to avoid repeated attempts
+              self.class.instance_variable_set(:@hyperstack_methods_defined, true) unless forced_columns.empty?
             ensure
               self.class.instance_variable_set(:@defining_attribute_methods, false)
             end
