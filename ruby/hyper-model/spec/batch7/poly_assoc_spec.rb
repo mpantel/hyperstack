@@ -43,7 +43,9 @@ describe "polymorphic relationships", js: true do
             t.string :imageable_type
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         belongs_to :imageable, polymorphic: true
@@ -56,7 +58,9 @@ describe "polymorphic relationships", js: true do
             t.string :ss
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
         has_many :pictures, as: :imageable
       end
@@ -68,7 +72,9 @@ describe "polymorphic relationships", js: true do
             t.string :description
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
         has_many :pictures, as: :imageable
       end
@@ -80,7 +86,9 @@ describe "polymorphic relationships", js: true do
             t.string :description
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
         has_one :picture, as: :imageable
       end
@@ -93,7 +101,9 @@ describe "polymorphic relationships", js: true do
             t.string  :memerable_type
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         belongs_to :uzer
@@ -107,7 +117,9 @@ describe "polymorphic relationships", js: true do
             t.string :project_data
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         has_many :memberships, as: :memerable, dependent: :destroy
@@ -121,7 +133,9 @@ describe "polymorphic relationships", js: true do
             t.string :group_data
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         has_many :memberships, as: :memerable, dependent: :destroy
@@ -135,7 +149,9 @@ describe "polymorphic relationships", js: true do
             t.string :uzer_data
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         has_many :memberships

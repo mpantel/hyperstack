@@ -45,7 +45,9 @@ describe "one to one relationships", js: true do
             t.string :name
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
 
         has_one :child
@@ -58,7 +60,9 @@ describe "one to one relationships", js: true do
             t.integer :parent_id
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
         belongs_to :parent
       end

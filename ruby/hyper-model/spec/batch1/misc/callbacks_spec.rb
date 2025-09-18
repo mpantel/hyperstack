@@ -18,7 +18,9 @@ describe 'callbacks', js: true do
               t.integer :call_count, default: 0
               t.timestamps
             end
-            ActiveRecord::Base.public_columns_hash[name] = columns_hash
+            # Ensure public_columns_hash is initialized before assignment
+            pch = ActiveRecord::Base.public_columns_hash
+            pch[name] = columns_hash if pch
           end
 
           before_validation :callback_method, on: :create

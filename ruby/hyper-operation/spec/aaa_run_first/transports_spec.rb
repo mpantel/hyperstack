@@ -133,7 +133,10 @@ end
         ApplicationController.acting_user = true
         mount 'TestComponent'
         evaluate_ruby 'Hyperstack.go_ahead_and_connect'
-        Timecop.travel(Time.now + Hyperstack::Connection.transport.refresh_channels_every)
+        refresh_interval = Hyperstack::Connection.transport.refresh_channels_every
+        if refresh_interval != :never
+          Timecop.travel(Time.now + refresh_interval)
+        end
         wait_for { Hyperstack::Connection.active }.to eq([])
       end
 
@@ -211,6 +214,10 @@ end
         ApplicationController.acting_user = true
         mount 'TestComponent'
         evaluate_ruby 'Hyperstack.go_ahead_and_connect'
+        refresh_interval = Hyperstack::Connection.transport.refresh_channels_every
+        if refresh_interval != :never
+          Timecop.travel(Time.now + refresh_interval)
+        end
         wait_for { Hyperstack::Connection.active }.to eq([])
       end
 

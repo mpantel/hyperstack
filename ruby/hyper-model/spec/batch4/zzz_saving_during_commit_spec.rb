@@ -29,7 +29,9 @@ describe "saving during commit", js: true do
           t.string :name
           t.timestamps
         end
-        ActiveRecord::Base.public_columns_hash[name] = columns_hash
+        # Ensure public_columns_hash is initialized before assignment
+        pch = ActiveRecord::Base.public_columns_hash
+        pch[name] = columns_hash if pch
       end
     end
 

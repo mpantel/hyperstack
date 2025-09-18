@@ -47,7 +47,9 @@ RSpec::Steps.steps "class inheritance", js: true do
             t.string :xxx
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
       end
 
@@ -57,7 +59,9 @@ RSpec::Steps.steps "class inheritance", js: true do
             t.string :xxx
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
       end
 
@@ -69,7 +73,9 @@ RSpec::Steps.steps "class inheritance", js: true do
               t.string :data
               t.timestamps
             end
-            ActiveRecord::Base.public_columns_hash[name] = columns_hash
+            # Ensure public_columns_hash is initialized before assignment
+            pch = ActiveRecord::Base.public_columns_hash
+            pch[name] = columns_hash if pch
             define_attribute_methods if respond_to?(:define_attribute_methods)
           end
           scope :a_scope, -> () {}, regulate: :always_allow
@@ -99,7 +105,9 @@ RSpec::Steps.steps "class inheritance", js: true do
             t.string :funky_type
             t.timestamps
           end
-          ActiveRecord::Base.public_columns_hash[name] = columns_hash
+          # Ensure public_columns_hash is initialized before assignment
+          pch = ActiveRecord::Base.public_columns_hash
+          pch[name] = columns_hash if pch
         end
       end
 

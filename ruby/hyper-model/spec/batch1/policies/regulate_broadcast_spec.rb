@@ -77,7 +77,7 @@ describe "regulate_broadcast" do
     end
     model = TestModel1.new(id: 1, attr1: 1, attr2: 2, attr3: 3, attr4: 4, attr5: 5)
     expect { |b| Hyperstack::InternalPolicy.regulate_broadcast(model, &b) }.
-    not_to raise_error("TestModel1 instance broadcast policy not sent to any channel")
+    not_to raise_error
   end
 
 

@@ -27,7 +27,9 @@ describe "self referencing belongs_to", js: true do
           t.belongs_to :parent
           t.timestamps
         end
-        ActiveRecord::Base.public_columns_hash[name] = columns_hash
+        # Ensure public_columns_hash is initialized before assignment
+        pch = ActiveRecord::Base.public_columns_hash
+        pch[name] = columns_hash if pch
       end
     end
 

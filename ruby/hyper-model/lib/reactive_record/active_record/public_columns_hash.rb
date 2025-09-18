@@ -118,13 +118,24 @@ module ActiveRecord
             # Only call define_attribute_methods if we're not already in the middle of defining them
             # This prevents infinite recursion
             if model_class.respond_to?(:define_attribute_methods) &&
+               model_class.respond_to?(:table_exists?) &&
                !model_class.instance_variable_get(:@defining_attribute_methods)
-              Rails.logger.info "[Hyperstack] Calling define_attribute_methods for #{model_name}" if defined?(Rails) && Rails.logger
-              model_class.instance_variable_set(:@defining_attribute_methods, true)
-              begin
-                model_class.define_attribute_methods
-              ensure
-                model_class.instance_variable_set(:@defining_attribute_methods, false)
+              # Only define attribute methods if the model has a proper table
+              has_table = begin
+                model_class.table_exists?
+              rescue
+                false
+              end
+              if has_table
+                Rails.logger.info "[Hyperstack] Calling define_attribute_methods for #{model_name}" if defined?(Rails) && Rails.logger
+                model_class.instance_variable_set(:@defining_attribute_methods, true)
+                begin
+                  model_class.define_attribute_methods
+                ensure
+                  model_class.instance_variable_set(:@defining_attribute_methods, false)
+                end
+              else
+                Rails.logger.warn "[Hyperstack] Skipping define_attribute_methods for #{model_name} - table does not exist" if defined?(Rails) && Rails.logger
               end
             else
               Rails.logger.info "[Hyperstack] Skipping define_attribute_methods for #{model_name} (already defining: #{model_class.instance_variable_get(:@defining_attribute_methods)})" if defined?(Rails) && Rails.logger
@@ -158,13 +169,24 @@ module ActiveRecord
         # Ensure attribute methods are defined when we load a model's columns
         begin
           if model.respond_to?(:define_attribute_methods) &&
+             model.respond_to?(:table_exists?) &&
              !model.instance_variable_get(:@defining_attribute_methods)
-            Rails.logger.info "[Hyperstack] Auto-defining attribute methods for #{model_name} during lazy load" if defined?(Rails) && Rails.logger
-            model.instance_variable_set(:@defining_attribute_methods, true)
-            begin
-              model.define_attribute_methods
-            ensure
-              model.instance_variable_set(:@defining_attribute_methods, false)
+            # Only define attribute methods if the model has a proper table
+            has_table = begin
+              model.table_exists?
+            rescue
+              false
+            end
+            if has_table
+              Rails.logger.info "[Hyperstack] Auto-defining attribute methods for #{model_name} during lazy load" if defined?(Rails) && Rails.logger
+              model.instance_variable_set(:@defining_attribute_methods, true)
+              begin
+                model.define_attribute_methods
+              ensure
+                model.instance_variable_set(:@defining_attribute_methods, false)
+              end
+            else
+              Rails.logger.warn "[Hyperstack] Skipping define_attribute_methods for #{model_name} - table does not exist" if defined?(Rails) && Rails.logger
             end
           end
         rescue => e
@@ -189,12 +211,21 @@ module ActiveRecord
             # Only call define_attribute_methods if we're not already in the middle of defining them
             # This prevents infinite recursion
             if model_class.respond_to?(:define_attribute_methods) &&
+               model_class.respond_to?(:table_exists?) &&
                !model_class.instance_variable_get(:@defining_attribute_methods)
-              model_class.instance_variable_set(:@defining_attribute_methods, true)
-              begin
-                model_class.define_attribute_methods
-              ensure
-                model_class.instance_variable_set(:@defining_attribute_methods, false)
+              # Only define attribute methods if the model has a proper table
+              has_table = begin
+                model_class.table_exists?
+              rescue
+                false
+              end
+              if has_table
+                model_class.instance_variable_set(:@defining_attribute_methods, true)
+                begin
+                  model_class.define_attribute_methods
+                ensure
+                  model_class.instance_variable_set(:@defining_attribute_methods, false)
+                end
               end
             end
           end
@@ -226,22 +257,30 @@ module ActiveRecord
       alias_method :length, :size
 
       def each(&block)
-        @models_by_name.keys.each do |key|
+        @models_by_name.keys.compact.each do |key|
+          next if key.nil? || key.to_s.empty?
           yield(key, self[key])
         end
       end
 
       def each_key(&block)
-        @models_by_name.keys.each(&block)
+        @models_by_name.keys.compact.each do |key|
+          next if key.nil? || key.to_s.empty?
+          yield(key)
+        end
       end
 
       def each_value(&block)
-        keys.each { |key| yield(self[key]) }
+        @models_by_name.keys.compact.each do |key|
+          next if key.nil? || key.to_s.empty?
+          yield(self[key])
+        end
       end
 
       def to_h
         result = {}
-        @models_by_name.keys.each do |key|
+        @models_by_name.keys.compact.each do |key|
+          next if key.nil? || key.to_s.empty?
           result[key] = self[key]
         end
         result
