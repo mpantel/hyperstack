@@ -393,12 +393,24 @@ module ActiveRecord
 
     def columns_hash
       result = ReactiveRecord::Base.public_columns_hash[name] || {}
+      inherited_columns = false
+
+      # For STI classes, if no columns found, check parent classes
+      if result.empty? && superclass != ActiveRecord::Base
+        current_class = superclass
+        while current_class && current_class != ActiveRecord::Base && result.empty?
+          result = ReactiveRecord::Base.public_columns_hash[current_class.name] || {}
+          inherited_columns = true if !result.empty?
+          current_class = current_class.superclass
+        end
+      end
 
       # Ensure attribute methods are defined when columns_hash is accessed
       # This is critical for client-side models that receive data from the server
+      # For STI subclasses, always define methods if we inherited columns from parent
       if !result.empty? && respond_to?(:define_attribute_methods) &&
          !instance_variable_get(:@defining_attribute_methods) &&
-         !instance_variable_get(:@hyperstack_methods_defined)
+         (!instance_variable_get(:@hyperstack_methods_defined) || inherited_columns)
         begin
           instance_variable_set(:@defining_attribute_methods, true)
           define_attribute_methods
@@ -452,13 +464,18 @@ module ActiveRecord
     # does not want to be overriden.
 
     def define_attribute_methods
-      columns_hash.each do |name, column_hash|
+      Rails.logger.debug "[Hyperstack] Defining attribute methods for #{name}" if defined?(Rails) && Rails.logger
+      ch = columns_hash
+      Rails.logger.debug "[Hyperstack] #{name} columns_hash: #{ch.keys}" if defined?(Rails) && Rails.logger
+
+      ch.each do |name, column_hash|
         next if name == :id
         # only add serialized key if its serialized.  This just makes testing a bit
         # easier by keeping the columns_hash the same if there are no seralized strings
         # see rspec ./spec/batch1/column_types/column_type_spec.rb:100
         column_hash[:serialized?] = true if ReactiveRecord::Base.serialized?[self][name]
 
+        Rails.logger.debug "[Hyperstack] Defining #{name}! method for #{self.name}" if defined?(Rails) && Rails.logger && name.to_s == 'type'
         define_method(name) { @backing_record.get_attr_value(name, nil) } unless method_defined?(name)
         define_method("#{name}!") { @backing_record.get_attr_value(name, true) } unless method_defined?("#{name}!")
         define_method("_hyperstack_internal_setter_#{name}") { |val| @backing_record.set_attr_value(name, val) }
@@ -466,7 +483,11 @@ module ActiveRecord
         define_method("#{name}_changed?") { @backing_record.changed?(name) } unless method_defined?("#{name}_changed?")
         define_method("#{name}?") { @backing_record.get_attr_value(name, nil).present? } unless method_defined?("#{name}?")
       end
-      self.inheritance_column = nil if inheritance_column && !columns_hash.key?(inheritance_column)
+      # For STI classes, check inheritance column more carefully
+      if inheritance_column
+        ic = inheritance_column.to_s
+        self.inheritance_column = nil unless ch.key?(ic) || ch.key?(ic.to_sym)
+      end
     end
 
     def _react_param_conversion(param, opt = nil)

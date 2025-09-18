@@ -343,17 +343,17 @@ describe "relationship permissions" do#, dont_override_default_scope_permissions
         isomorphic do
           TodoItem.regulate_relationship comments: true
         end
-        todo_item = TodoItem.create
-        Comment.create(todo_item: todo_item)
-        mount 'TestComponentZ' do
-          class TestComponentZ < HyperComponent
+        TodoItem.create
+        Comment.create(todo_item: TodoItem.first)
+        mount 'TestComponentRel1' do
+          class TestComponentRel1 < HyperComponent
             render do
               DIV { "There is #{TodoItem.find(1).comments.count} comments on the first TodoItem" }
             end
           end
         end
         expect(page).to have_content("There is 1 comments on the first TodoItem")
-        Comment.create(todo_item: todo_item)
+        Comment.create(todo_item: TodoItem.first)
         expect(page).to have_content("There is 2 comments on the first TodoItem")
       end
 
@@ -381,8 +381,8 @@ describe "relationship permissions" do#, dont_override_default_scope_permissions
         end
         todo_item = TodoItem.create
         2.times { Comment.create(todo_item: todo_item) }
-        mount 'TestComponentZ' do
-          class TestComponentZ < HyperComponent
+        mount 'TestComponentRel2' do
+          class TestComponentRel2 < HyperComponent
             render do
               DIV { "There are #{TodoItem.find(1).comments.count} comments on the first TodoItem" }
             end
@@ -398,8 +398,8 @@ describe "relationship permissions" do#, dont_override_default_scope_permissions
         end
         todo_item = TodoItem.create
         2.times { Comment.create(todo_item: todo_item) }
-        mount 'TestComponentZ' do
-          class TestComponentZ < HyperComponent
+        mount 'TestComponentRel3' do
+          class TestComponentRel3 < HyperComponent
             render do
               DIV { "There are #{TodoItem.find(1).comments.all.count} comments on the first TodoItem" }
             end
