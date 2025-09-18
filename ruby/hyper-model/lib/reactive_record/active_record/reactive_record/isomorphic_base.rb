@@ -361,7 +361,7 @@ module ReactiveRecord
                 object.send(:"__secure_remote_access_to_#{method[0]}", object, acting_user, *method[1..-1])
               end
             elsif method.is_a?(String) && method[0] == '*'
-              object[method.gsub(/^\*/,'').to_i]
+              object&.[](method.gsub(/^\*/,'').to_i)
             else
               object.send(:"__secure_remote_access_to_#{method}", object, acting_user)
             end
