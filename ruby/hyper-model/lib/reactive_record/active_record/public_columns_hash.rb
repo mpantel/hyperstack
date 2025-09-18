@@ -52,7 +52,8 @@ module ActiveRecord
     end
 
     def self.filtered_descendants(files)
-      descendants.select do |model|
+      descendants.compact.select do |model|
+        next false unless model && model.respond_to?(:name) && model.name
         next false unless files.include?(model.name.underscore)
         next false if model.name.underscore == 'application_record'
         next false if excluded_model?(model)
@@ -141,7 +142,7 @@ module ActiveRecord
     # Lazy-loading hash implementation
     class LazyColumnsHash
       def initialize(models)
-        @models_by_name = models ? models.index_by(&:name) : {}
+        @models_by_name = models ? models.compact.select { |m| m.respond_to?(:name) }.index_by(&:name) : {}
         @loaded_models = {}
       end
 
