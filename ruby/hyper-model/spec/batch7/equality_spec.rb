@@ -24,7 +24,13 @@ RSpec::Steps.steps "record equality", js: true do
       allow_change(to: :all, on: [:create, :update, :destroy]) { true }
     end
 
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
   end
 
   before(:each) do
@@ -38,9 +44,7 @@ RSpec::Steps.steps "record equality", js: true do
               t.string :data
               t.timestamps
             end
-            # Ensure public_columns_hash is initialized before assignment
-            pch = ActiveRecord::Base.public_columns_hash
-            pch[name] = columns_hash if pch
+            ActiveRecord::Base.public_columns_hash[name] = columns_hash
           end
           scope :a_scope, -> () {}, regulate: :always_allow
           scope :is_subclass1, -> () { where(type: 'Sti::SubClass1') }, regulate: :always_allow, client: -> { type == 'Base::SubClass1' }

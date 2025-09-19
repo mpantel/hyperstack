@@ -17,7 +17,13 @@ describe "self referencing belongs_to", js: true do
   end
 
   before(:all) do
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
 
     class SelfRefModel < ActiveRecord::Base
       def self.build_tables
@@ -27,9 +33,7 @@ describe "self referencing belongs_to", js: true do
           t.belongs_to :parent
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 

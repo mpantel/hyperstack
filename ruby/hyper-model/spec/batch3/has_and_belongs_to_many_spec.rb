@@ -18,11 +18,16 @@ describe "has_and_belongs_to_many", js: true do
       config.channel_prefix = "synchromesh"
       config.opts = {app_id: Pusher.app_id, key: Pusher.key, secret: Pusher.secret, use_tls: false}.merge(PusherFake.configuration.web_options)
     end
-
     # Apply the pusher-fake fix
     Object.monkey_patch_pusher_fake!
 
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
 
     class Physician < ActiveRecord::Base
       def self.build_tables
@@ -30,9 +35,7 @@ describe "has_and_belongs_to_many", js: true do
           t.string :name
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 
@@ -42,9 +45,7 @@ describe "has_and_belongs_to_many", js: true do
           t.string :name
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 

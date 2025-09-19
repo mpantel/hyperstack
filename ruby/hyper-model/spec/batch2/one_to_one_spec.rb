@@ -21,7 +21,13 @@ describe "one to one relationships", js: true do
       config.opts = {app_id: Pusher.app_id, key: Pusher.key, secret: Pusher.secret, use_tls: false}.merge(PusherFake.configuration.web_options)
     end
 
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
   end
 
   before(:each) do
@@ -45,9 +51,7 @@ describe "one to one relationships", js: true do
             t.string :name
             t.timestamps
           end
-          # Ensure public_columns_hash is initialized before assignment
-          pch = ActiveRecord::Base.public_columns_hash
-          pch[name] = columns_hash if pch
+          ActiveRecord::Base.public_columns_hash[name] = columns_hash
         end
 
         has_one :child
@@ -60,9 +64,7 @@ describe "one to one relationships", js: true do
             t.integer :parent_id
             t.timestamps
           end
-          # Ensure public_columns_hash is initialized before assignment
-          pch = ActiveRecord::Base.public_columns_hash
-          pch[name] = columns_hash if pch
+          ActiveRecord::Base.public_columns_hash[name] = columns_hash
         end
         belongs_to :parent
       end

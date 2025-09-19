@@ -21,7 +21,13 @@ RSpec::Steps.steps "has_many through relationships", js: true do
       config.opts = {app_id: Pusher.app_id, key: Pusher.key, secret: Pusher.secret, use_tls: false}.merge(PusherFake.configuration.web_options)
     end
 
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
 
     class Physician < ActiveRecord::Base
       def self.build_tables
@@ -29,9 +35,7 @@ RSpec::Steps.steps "has_many through relationships", js: true do
           t.string :name
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 
@@ -41,9 +45,7 @@ RSpec::Steps.steps "has_many through relationships", js: true do
           t.string :name
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 
@@ -55,9 +57,7 @@ RSpec::Steps.steps "has_many through relationships", js: true do
           t.datetime :appointment_date
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 

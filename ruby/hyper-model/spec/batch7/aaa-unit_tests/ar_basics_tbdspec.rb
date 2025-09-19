@@ -7,7 +7,13 @@ require 'spec_helper'
 describe 'ActiveRecord client side basics', js: true do
 
   before(:all) do
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
 
     class BaseClass < ActiveRecord::Base
     end

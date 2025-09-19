@@ -3,7 +3,13 @@ require 'test_components'
 
 describe 'callbacks', js: true do
   before(:all) do
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
   end
 
   describe 'before_validation :callback_method on create', js: true do
@@ -18,9 +24,7 @@ describe 'callbacks', js: true do
               t.integer :call_count, default: 0
               t.timestamps
             end
-            # Ensure public_columns_hash is initialized before assignment
-            pch = ActiveRecord::Base.public_columns_hash
-            pch[name] = columns_hash if pch
+            ActiveRecord::Base.public_columns_hash[name] = columns_hash
           end
 
           before_validation :callback_method, on: :create

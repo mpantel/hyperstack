@@ -171,7 +171,13 @@ describe "reactive-record edge cases", js: true do
   end
 
   it "will reload scopes when data arrives too late" do
-    # Using real public_columns_hash implementation
+    class ActiveRecord::Base
+      class << self
+        def public_columns_hash
+          @public_columns_hash ||= {}
+        end
+      end
+    end
 
     class BelongsToModel < ActiveRecord::Base
       def self.build_tables
@@ -180,9 +186,7 @@ describe "reactive-record edge cases", js: true do
           t.belongs_to :has_many_model
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 
@@ -192,9 +196,7 @@ describe "reactive-record edge cases", js: true do
           t.string :name
           t.timestamps
         end
-        # Ensure public_columns_hash is initialized before assignment
-        pch = ActiveRecord::Base.public_columns_hash
-        pch[name] = columns_hash if pch
+        ActiveRecord::Base.public_columns_hash[name] = columns_hash
       end
     end
 
