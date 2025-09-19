@@ -24,7 +24,7 @@ task :publish do
       puts "Bundling..."
       sh ['bundle','install']
       sh 'gem' ,'build', "#{gem}.gemspec"
-      sh 'gem' ,'push' ,"#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'--host' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
+      sh 'curl', '-F', "file=@#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem", "https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr/upload"
     end
   end
 end
