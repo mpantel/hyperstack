@@ -346,13 +346,13 @@ describe "relationship permissions" do#, dont_override_default_scope_permissions
         TodoItem.create
         Comment.create(todo_item: TodoItem.first)
 
-        class TestComponentRel1 < HyperComponent
-          render do
-            DIV { "There is #{TodoItem.find(1).comments.count} comments on the first TodoItem" }
+        mount 'TestComponentRel1' do
+          class TestComponentRel1 < HyperComponent
+            render do
+              DIV { "There is #{TodoItem.find(1).comments.count} comments on the first TodoItem" }
+            end
           end
         end
-
-        mount 'TestComponentRel1'
         expect(page).to have_content("There is 1 comments on the first TodoItem")
         Comment.create(todo_item: TodoItem.first)
         expect(page).to have_content("There is 2 comments on the first TodoItem")
