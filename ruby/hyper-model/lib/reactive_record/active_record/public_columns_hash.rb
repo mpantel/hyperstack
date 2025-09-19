@@ -5,6 +5,35 @@ module Hyperstack
   define_setting :public_columns_hash_performance_logging, Rails.env.development?
 end
 
+# Ensure critical base classes are loaded before lazy-loading initialization
+# This prevents "uninitialized constant" errors during JavaScript compilation
+if RUBY_ENGINE == 'opal'
+  begin
+    # Pre-load commonly used base classes to prevent loading order issues
+    require 'hyperstack/component' if defined?(Hyperstack) && !defined?(Hyperstack::Component)
+
+    # Ensure these paths exist and can be loaded if they're available
+    base_classes_paths = [
+      'components/base_classes',
+      'app/hyperstack/components/base_classes',
+      'app/hyperstack/components/hyper_component'
+    ]
+
+    base_classes_paths.each do |path|
+      begin
+        require path
+      rescue LoadError
+        # It's okay if these don't exist, just continue
+        next
+      rescue => e
+        Rails.logger.warn "[Hyperstack] Failed to pre-load #{path}: #{e.message}" if defined?(Rails) && Rails.logger
+      end
+    end
+  rescue => e
+    Rails.logger.warn "[Hyperstack] Failed to pre-load base classes: #{e.message}" if defined?(Rails) && Rails.logger
+  end
+end
+
 module ActiveRecord
   # adds method to get the HyperMesh public column types
   # this works because the public folder is currently required to be eager loaded.
@@ -18,6 +47,21 @@ module ActiveRecord
 
         start_time = Time.current if Hyperstack.public_columns_hash_performance_logging
 
+        # Ensure basic requirements are loaded before attempting to build the hash
+        begin
+          # Pre-load critical classes to prevent loading order issues
+          require 'active_record' unless defined?(ActiveRecord)
+
+          # Ensure ActiveRecord::Base is available
+          unless defined?(ActiveRecord::Base)
+            Rails.logger.warn "[Hyperstack] ActiveRecord::Base not available during public_columns_hash initialization" if defined?(Rails) && Rails.logger
+            return {}
+          end
+        rescue => e
+          Rails.logger.error "[Hyperstack] Failed to ensure ActiveRecord availability: #{e.message}" if defined?(Rails) && Rails.logger
+          return {}
+        end
+
         files = get_public_model_files
 
         if Hyperstack.public_columns_hash_lazy_loading
@@ -25,6 +69,9 @@ module ActiveRecord
         else
           @public_columns_hash = build_eager_columns_hash(files)
         end
+
+        # Ensure we return something valid even if initialization partially fails
+        @public_columns_hash ||= {}
 
         if Hyperstack.public_columns_hash_performance_logging
           total_time = Time.current - start_time
@@ -153,17 +200,41 @@ module ActiveRecord
     # Lazy-loading hash implementation
     class LazyColumnsHash
       def initialize(models)
-        @models_by_name = models ? models.compact.select { |m| m.respond_to?(:name) }.index_by(&:name) : {}
+        # More defensive initialization with better error handling
+        begin
+          if models.nil?
+            @models_by_name = {}
+            Rails.logger.warn "[Hyperstack] LazyColumnsHash initialized with nil models" if defined?(Rails) && Rails.logger
+          else
+            valid_models = models.compact.select do |m|
+              m && m.respond_to?(:name) && m.name && !m.name.empty?
+            end
+            @models_by_name = valid_models.index_by(&:name)
+            Rails.logger.info "[Hyperstack] LazyColumnsHash initialized with #{@models_by_name.size} models" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+          end
+        rescue => e
+          Rails.logger.error "[Hyperstack] Failed to initialize LazyColumnsHash: #{e.message}" if defined?(Rails) && Rails.logger
+          @models_by_name = {}
+        end
         @loaded_models = {}
+        @initialization_complete = true
       end
 
       def [](model_name)
+        # Return immediately if already loaded
         return @loaded_models[model_name] if @loaded_models.key?(model_name)
+
+        # Ensure we're properly initialized before proceeding
+        unless @initialization_complete
+          Rails.logger.warn "[Hyperstack] LazyColumnsHash accessed before initialization complete" if defined?(Rails) && Rails.logger
+          return nil
+        end
 
         # Defensive check to prevent nil reference errors
         return nil unless @models_by_name
+        return nil if model_name.nil? || model_name.to_s.empty?
 
-        model = @models_by_name[model_name]
+        model = @models_by_name[model_name.to_s]
         return nil unless model
 
         # Ensure attribute methods are defined when we load a model's columns

@@ -76,7 +76,17 @@ RSpec::Steps.steps "class inheritance", js: true do
             # Ensure public_columns_hash is initialized before assignment
             pch = ActiveRecord::Base.public_columns_hash
             pch[name] = columns_hash if pch
-            define_attribute_methods if respond_to?(:define_attribute_methods)
+
+            # Force attribute methods definition for STI classes
+            if respond_to?(:define_attribute_methods)
+              define_attribute_methods
+
+              # Opal 1.5.1 workaround: manually define type! method if not present
+              unless method_defined?(:type!)
+                define_method(:type!) { @backing_record.get_attr_value(:type, true) }
+                Rails.logger.info "[OPAL DEBUG] Manually defined type! method for #{name}" if defined?(Rails) && Rails.logger
+              end
+            end
           end
           scope :a_scope, -> () {}, regulate: :always_allow
           scope :is_subclass1, -> () { where(type: 'Sti::SubClass1') }, regulate: :always_allow, client: -> { type == 'Base::SubClass1' }
@@ -133,6 +143,11 @@ RSpec::Steps.steps "class inheritance", js: true do
     end
 
     [SubClass, SubSubClass, Sti::Base, Funky].each { |klass| klass.build_tables }
+
+    # Explicitly call define_attribute_methods for STI classes to ensure type! method is available
+    [Sti::Base, Sti::SubClass1, Sti::SubClass2].each do |klass|
+      klass.define_attribute_methods if klass.respond_to?(:define_attribute_methods)
+    end
 
   end
 

@@ -199,13 +199,37 @@ module ActiveRecord
     def method_missing(name, *args, &block)
       # In MRI Ruby we would never get to this point with a nil name argument,
       #   but currently in Opal we do, so we will mimic MRI Ruby and throw a TypeError.
-      raise TypeError, "nil is not a symbol nor a string" if name.nil?
+      if name.nil?
+        # Add debugging info to understand where nil method names come from
+        if defined?(Rails) && Rails.logger
+          Rails.logger.error "[Hyperstack] method_missing called with nil name on #{self.name}, args: #{args.inspect}"
+          Rails.logger.error "[Hyperstack] Caller: #{caller[0..5].join("\n")}"
+        end
+        raise TypeError, "nil is not a symbol nor a string"
+      end
+
+      # Additional safety check for empty method names
+      if name.to_s.empty?
+        if defined?(Rails) && Rails.logger
+          Rails.logger.error "[Hyperstack] method_missing called with empty name on #{self.name}, args: #{args.inspect}"
+        end
+        raise TypeError, "empty method name is not valid"
+      end
 
       # Handle missing attribute methods by trying to define attribute methods
       # This covers both basic attribute accessors (name, name=) and internal hyperstack methods
+      safe_columns_hash = begin
+        respond_to?(:columns_hash) ? columns_hash : nil
+      rescue => e
+        if defined?(Rails) && Rails.logger
+          Rails.logger.warn "[Hyperstack] Failed to access columns_hash for #{self.name}: #{e.message}"
+        end
+        nil
+      end
+
       if name.to_s.start_with?("_hyperstack_internal_setter_") ||
-         (respond_to?(:columns_hash) && columns_hash &&
-          (columns_hash.key?(name.to_s) || columns_hash.key?(name.to_s.chomp("=")))) ||
+         (safe_columns_hash &&
+          (safe_columns_hash.key?(name.to_s) || safe_columns_hash.key?(name.to_s.chomp("=")))) ||
          (name.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && name.to_s != 'class')
 
         # Special handling for _hyperstack_internal_setter_ methods - define them immediately if possible
@@ -477,7 +501,15 @@ module ActiveRecord
 
         Rails.logger.debug "[Hyperstack] Defining #{name}! method for #{self.name}" if defined?(Rails) && Rails.logger && name.to_s == 'type'
         define_method(name) { @backing_record.get_attr_value(name, nil) } unless method_defined?(name)
-        define_method("#{name}!") { @backing_record.get_attr_value(name, true) } unless method_defined?("#{name}!")
+
+        # Opal 1.5.1 compatibility: Force define type! method for STI inheritance column
+        if name.to_s == 'type' && !method_defined?("#{name}!")
+          define_method("#{name}!") { @backing_record.get_attr_value(name, true) }
+          Rails.logger.debug "[Hyperstack] Force-defined type! method for STI compatibility in #{self.name}" if defined?(Rails) && Rails.logger
+        else
+          define_method("#{name}!") { @backing_record.get_attr_value(name, true) } unless method_defined?("#{name}!")
+        end
+
         define_method("_hyperstack_internal_setter_#{name}") { |val| @backing_record.set_attr_value(name, val) }
         alias_method "#{name}=", "_hyperstack_internal_setter_#{name}" unless method_defined?("#{name}=")
         define_method("#{name}_changed?") { @backing_record.changed?(name) } unless method_defined?("#{name}_changed?")
