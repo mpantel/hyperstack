@@ -251,10 +251,13 @@ module Hyperstack
 
             elsif key == :defaultValue || key == 'defaultValue' || key == :defaultChecked || key == 'defaultChecked'
               # Handle defaultValue/defaultChecked for uncontrolled inputs
-              # These should only be set on first render, not on updates
+              # These should only be set once when data is loaded, not while loading or on updates
               if RUBY_ENGINE == 'opal'
                 element_id = properties[:id] || properties['id']
                 tracking_key = "#{type}_#{element_id}_#{key}"
+
+                # Check if we're waiting on resources (data loading)
+                is_waiting = RenderingContext.waiting_on_resources
 
                 %x{
                   if (!window.__hyperstack_defaults_initialized) {
@@ -262,16 +265,14 @@ module Hyperstack
                   }
 
                   var isInitialized = window.__hyperstack_defaults_initialized[#{tracking_key}];
+                  var isWaiting = #{is_waiting};
 
-                  if (!isInitialized && #{value} != null && #{value} != undefined) {
-                    // First time - set the defaultValue and mark as initialized
+                  if (!isInitialized && !isWaiting) {
+                    // First time with loaded data - set defaultValue and mark as initialized
                     #{props[key] = value};
                     window.__hyperstack_defaults_initialized[#{tracking_key}] = true;
-                  } else if (!isInitialized) {
-                    // First time but value is null/undefined - set it anyway
-                    #{props[key] = value};
                   }
-                  // If already initialized, don't set defaultValue again (skip it)
+                  // If waiting on resources or already initialized, skip setting defaultValue
                 }
               else
                 # Server-side - just set it normally
@@ -280,7 +281,7 @@ module Hyperstack
 
             elsif key == :init
               # Convert :init to defaultValue/defaultChecked
-              # For uncontrolled inputs, this should only be set on first render
+              # For uncontrolled inputs, this should only be set once when data is loaded
               default_key = if %w[select textarea].include? type
                              :defaultValue
                            elsif type == :input
@@ -296,24 +297,24 @@ module Hyperstack
                 element_id = properties[:id] || properties['id']
                 tracking_key = "#{type}_#{element_id}_#{default_key}"
 
-                # Only set defaultValue if not already initialized
-                # This prevents updates to defaultValue on subsequent renders
+                # Check if we're waiting on resources (data loading)
+                is_waiting = RenderingContext.waiting_on_resources
+
+                # Only set defaultValue if not already initialized and not waiting on resources
                 %x{
                   if (!window.__hyperstack_defaults_initialized) {
                     window.__hyperstack_defaults_initialized = {};
                   }
 
                   var isInitialized = window.__hyperstack_defaults_initialized[#{tracking_key}];
+                  var isWaiting = #{is_waiting};
 
-                  if (!isInitialized && #{value} != null && #{value} != undefined) {
-                    // First time - set the defaultValue and mark as initialized
+                  if (!isInitialized && !isWaiting) {
+                    // First time with loaded data - set defaultValue and mark as initialized
                     #{props[default_key] = value};
                     window.__hyperstack_defaults_initialized[#{tracking_key}] = true;
-                  } else if (!isInitialized) {
-                    // First time but value is null/undefined - set it anyway
-                    #{props[default_key] = value};
                   }
-                  // If already initialized, don't set defaultValue again (skip it)
+                  // If waiting on resources or already initialized, skip setting defaultValue
                 }
               elsif default_key
                 # Server-side or non-Opal environment - just set it normally

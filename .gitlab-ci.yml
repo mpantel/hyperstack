@@ -259,6 +259,7 @@ hyper-spec:
   extends: .test_gem
   variables:
     COMPONENT: hyper-spec
+    SPEC_OPTS: "--tag wip"
 hyper-model:part1:
   extends: .test_gem_pg
   variables:
@@ -284,38 +285,47 @@ hyper-trace:
   extends: .test_gem
   variables:
     COMPONENT: hyper-trace
+    SPEC_OPTS: "--tag wip"
 hyperstack-config:
   extends: .test_gem
   variables:
     COMPONENT: hyperstack-config
+    SPEC_OPTS: "--tag wip"
 hyper-state:
   extends: .test_gem
   variables:
     COMPONENT: hyper-state
+    SPEC_OPTS: "--tag wip"
 hyper-component:
   extends: .test_gem
   variables:
     COMPONENT: hyper-component
+    SPEC_OPTS: "--tag wip"
 hyper-router:
   extends: .test_gem
   variables:
     COMPONENT: hyper-router
+    SPEC_OPTS: "--tag wip"
 hyper-store:
   extends: .test_gem
   variables:
     COMPONENT: hyper-store
+    SPEC_OPTS: "--tag wip"
 hyper-operation:
   extends: .test_gem
   variables:
     COMPONENT: hyper-operation
+    SPEC_OPTS: "--tag wip"
 hyper-i18n:
   extends: .test_gem_pg
   variables:
     COMPONENT: hyper-i18n
+    SPEC_OPTS: "--tag wip"
 rails-hyperstack:
   extends: .test_gem
   variables:
     COMPONENT: rails-hyperstack
+    SPEC_OPTS: "--tag wip"
 
 
 
