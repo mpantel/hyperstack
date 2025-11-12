@@ -1,7 +1,7 @@
 module Hyperstack
   module Legacy
     module Store
-      VERSION = '1.0.alpha1.8.0032.4.8'
+      VERSION = '1.0.alpha1.8.0032.7.0'
     end
   end
 end
