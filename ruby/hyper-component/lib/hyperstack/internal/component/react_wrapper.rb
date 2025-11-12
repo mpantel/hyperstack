@@ -250,38 +250,17 @@ module Hyperstack
               props[:key] = value.to_key
 
             elsif key == :defaultValue || key == 'defaultValue' || key == :defaultChecked || key == 'defaultChecked'
-              # Handle defaultValue/defaultChecked for uncontrolled inputs
-              # These should only be set once when data is loaded, not while loading or on updates
-              if RUBY_ENGINE == 'opal'
-                element_id = properties[:id] || properties['id']
-                tracking_key = "#{type}_#{element_id}_#{key}"
+              # For uncontrolled inputs, React only uses defaultValue on initial mount
+              # To support reactive data loading with defaultValue, we need to force a remount
+              # when data transitions from loading to loaded by changing the key prop
+              props[key] = value
 
-                # Check if we're waiting on resources (data loading)
-                is_waiting = RenderingContext.waiting_on_resources
-
-                %x{
-                  if (!window.__hyperstack_defaults_initialized) {
-                    window.__hyperstack_defaults_initialized = {};
-                  }
-
-                  var isInitialized = window.__hyperstack_defaults_initialized[#{tracking_key}];
-                  var isWaiting = #{is_waiting};
-
-                  if (!isInitialized && !isWaiting) {
-                    // First time with loaded data - set defaultValue and mark as initialized
-                    #{props[key] = value};
-                    window.__hyperstack_defaults_initialized[#{tracking_key}] = true;
-                  }
-                  // If waiting on resources or already initialized, skip setting defaultValue
-                }
-              else
-                # Server-side - just set it normally
-                props[key] = value
-              end
+              # Track that this element has a default value for key generation below
+              properties[:__has_default_value] = true
 
             elsif key == :init
               # Convert :init to defaultValue/defaultChecked
-              # For uncontrolled inputs, this should only be set once when data is loaded
+              # For uncontrolled inputs with reactive data
               default_key = if %w[select textarea].include? type
                              :defaultValue
                            elsif type == :input
@@ -292,33 +271,10 @@ module Hyperstack
                              end
                            end
 
-              if default_key && RUBY_ENGINE == 'opal'
-                # Track element by its ID or generate a unique key
-                element_id = properties[:id] || properties['id']
-                tracking_key = "#{type}_#{element_id}_#{default_key}"
-
-                # Check if we're waiting on resources (data loading)
-                is_waiting = RenderingContext.waiting_on_resources
-
-                # Only set defaultValue if not already initialized and not waiting on resources
-                %x{
-                  if (!window.__hyperstack_defaults_initialized) {
-                    window.__hyperstack_defaults_initialized = {};
-                  }
-
-                  var isInitialized = window.__hyperstack_defaults_initialized[#{tracking_key}];
-                  var isWaiting = #{is_waiting};
-
-                  if (!isInitialized && !isWaiting) {
-                    // First time with loaded data - set defaultValue and mark as initialized
-                    #{props[default_key] = value};
-                    window.__hyperstack_defaults_initialized[#{tracking_key}] = true;
-                  }
-                  // If waiting on resources or already initialized, skip setting defaultValue
-                }
-              elsif default_key
-                # Server-side or non-Opal environment - just set it normally
+              if default_key
                 props[default_key] = value
+                # Track that this element has a default value for key generation
+                properties[:__has_default_value] = true
               end
 
             elsif key == 'ref'
@@ -375,6 +331,31 @@ module Hyperstack
               props[Hyperstack::Component::ReactAPI.html_attr?(lower_camelize(key)) ? lower_camelize(key) : key] = value
             end
           end
+
+          # For uncontrolled inputs with defaultValue/defaultChecked, automatically add a dynamic key
+          # based on loading state if no explicit key was provided. This forces React to remount
+          # when transitioning from loading -> loaded, allowing defaultValue to take effect.
+          if RUBY_ENGINE == 'opal' && properties[:__has_default_value] && !props.key?(:key)
+            # Check if this is an uncontrolled input (has defaultValue but not value)
+            is_uncontrolled = (props.key?(:defaultValue) && !props.key?(:value)) ||
+                              (props.key?(:defaultChecked) && !props.key?(:checked))
+
+            # Check the value to see if it's a loading indicator (DummyValue returns '')
+            default_value = props[:defaultValue] || props[:defaultChecked]
+            is_loading = default_value.respond_to?(:loading?) && default_value.loading?
+            is_empty = default_value.nil? || default_value == ''
+
+            if is_uncontrolled && (is_loading || is_empty)
+              # Use element ID + loading state as key to force remount when data loads
+              element_id = properties[:id] || properties['id'] || 'default'
+              props[:key] = "#{element_id}_loading"
+            elsif is_uncontrolled
+              # Data is loaded, use stable key
+              element_id = properties[:id] || properties['id'] || 'default'
+              props[:key] = "#{element_id}_loaded"
+            end
+          end
+
           props
         end
 
