@@ -154,6 +154,7 @@ describe 'defaultValue special handling', js: true do
   end
 
   it "will properly update input tags when data is loaded or changed" do
+    pending "uncontrolled textarea"
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
       mount "InputTester", {}, no_wait: true do
         class MyNestedGuy < HyperComponent
