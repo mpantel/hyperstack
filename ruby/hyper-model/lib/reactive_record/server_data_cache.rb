@@ -116,14 +116,22 @@ module ReactiveRecord
           # We don't want to open a security hole by allowing some client side string to
           # autoload a class, which would happen if we did a simple str.constantize.
           #
-          # Because all AR models are loaded at boot time on the server to define the
-          # ActiveRecord::Base.public_columns_hash method any model which the client has
-          # access to should already be loaded.
+          # With TRUE lazy loading enabled, models are not loaded at boot time but on-demand.
+          # Check if the model is in public_columns_hash (which includes models available
+          # for lazy loading) rather than checking if it's already loaded as a constant.
           #
-          # If str is not already loaded then we have an access violation.
-          unless const_defined? str
+          # If str is not in public_columns_hash, we have an access violation.
+          public_columns = ActiveRecord::Base.public_columns_hash
+
+          # Check if model is available (either loaded or available for lazy loading)
+          unless const_defined?(str) || public_columns.key?(str)
             Hyperstack::InternalPolicy.raise_operation_access_violation(:undefined_const, "#{str} is not a loaded constant")
           end
+
+          # Trigger lazy loading by accessing public_columns_hash if needed
+          # This ensures the model is loaded before we try to constantize it
+          public_columns[str] if public_columns.respond_to?(:key?) && public_columns.key?(str) && !const_defined?(str)
+
           str.constantize
         end
 
