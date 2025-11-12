@@ -24,18 +24,7 @@ describe 'Hyperstack Webpack Bundle Control' do
 
   describe 'handle_webpack' do
     let(:mock_manifest) do
-      double('manifest',
-        lookup: ->(name) do
-          case name
-          when 'client_only.js'
-            '/packs/client_only-abc123.js'
-          when 'client_and_server.js'
-            '/packs/client_and_server-def456.js'
-          else
-            nil
-          end
-        end
-      )
+      double('manifest')
     end
 
     before(:each) do
@@ -48,6 +37,9 @@ describe 'Hyperstack Webpack Bundle Control' do
         end)
       end
 
+      # Setup manifest lookup to return appropriate values
+      allow(mock_manifest).to receive(:lookup).with('client_only.js').and_return('/packs/client_only-abc123.js')
+      allow(mock_manifest).to receive(:lookup).with('client_and_server.js').and_return('/packs/client_and_server-def456.js')
       allow(Webpacker).to receive(:manifest).and_return(mock_manifest)
 
       # Clear import list
