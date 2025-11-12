@@ -37,6 +37,7 @@ namespace :spec do
   (1..7).each do |batch|
     RSpec::Core::RakeTask.new(:"batch#{batch}") do |t|
       t.pattern = "spec/batch#{batch}/**/*_spec.rb"
+      t.rspec_opts = ENV['SPEC_OPTS'] if ENV['SPEC_OPTS']
     end
   end
 end
