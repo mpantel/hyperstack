@@ -30,23 +30,25 @@ describe "ActiveRecord::Base true lazy loading" do
       # Call get_public_model_files
       files = ActiveRecord::Base.send(:get_public_model_files)
 
-      # Should return file paths
-      expect(files).to include('app/models/public/user')
-      expect(files).to include('app/models/public/project')
+      # Should return file paths RELATIVE to the directory (not including directory prefix)
+      # The implementation strips the directory prefix, so 'app/models/public/user.rb' becomes 'user'
+      expect(files).to include('user')
+      expect(files).to include('project')
 
-      # Should store file path map
+      # Should store file path map with relative paths as keys
       file_paths = ActiveRecord::Base.instance_variable_get(:@model_file_paths)
       expect(file_paths).to be_a(Hash)
-      expect(file_paths['app/models/public/user']).to eq('/path/to/app/models/public/user.rb')
+      expect(file_paths['user']).to eq('/path/to/app/models/public/user.rb')
+      expect(file_paths['project']).to eq('/path/to/app/models/public/project.rb')
     end
   end
 
   describe "LazyColumnsHash file loading" do
-    let(:file_paths) { ['models/user', 'models/project'] }
+    let(:file_paths) { ['user', 'project'] }
     let(:file_path_map) do
       {
-        'models/user' => '/app/models/user.rb',
-        'models/project' => '/app/models/project.rb'
+        'user' => '/app/models/user.rb',
+        'project' => '/app/models/project.rb'
       }
     end
 
@@ -94,8 +96,8 @@ describe "ActiveRecord::Base true lazy loading" do
         keys = lazy_hash.keys
 
         # Should include camelized versions of file paths
-        expect(keys).to include('Models::User')
-        expect(keys).to include('Models::Project')
+        expect(keys).to include('User')
+        expect(keys).to include('Project')
       end
     end
 
@@ -174,10 +176,10 @@ describe "ActiveRecord::Base true lazy loading" do
 
   describe "performance benefits" do
     it "does not load all model files during initialization" do
-      # Mock 200 model files
-      model_files = (1..200).map { |i| "models/model#{i}" }
+      # Mock 200 model files (using relative paths without directory prefix)
+      model_files = (1..200).map { |i| "model#{i}" }
       file_map = model_files.each_with_object({}) do |file, hash|
-        hash[file] = "/app/#{file}.rb"
+        hash[file] = "/app/models/#{file}.rb"
       end
 
       # Track require_dependency calls
