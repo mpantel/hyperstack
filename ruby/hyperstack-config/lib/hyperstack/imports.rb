@@ -56,10 +56,15 @@ module Hyperstack
 
     def handle_webpack
       return unless defined? Webpacker
-      client_only_manifest = Webpacker.manifest.lookup("client_only.js")
-      client_and_server_manifest = Webpacker.manifest.lookup("client_and_server.js")
+      client_only_manifest = Webpacker.manifest.lookup("client_only.js") rescue nil
+      client_and_server_manifest = Webpacker.manifest.lookup("client_and_server.js") rescue nil
       return unless client_only_manifest || client_and_server_manifest
       cancel_webpack_imports
+
+      # Skip auto-importing webpack bundles if disabled
+      # When disabled, bundles should be loaded via javascript_pack_tag in layouts
+      return unless Hyperstack.auto_import_webpack_bundles
+
       import client_only_manifest.split("/").last, client_only: true, at_head: true if client_only_manifest
       import client_and_server_manifest.split("/").last, at_head: true if client_and_server_manifest
     end
@@ -138,5 +143,11 @@ module Hyperstack
     Hyperstack.define_setting(:compress_system_assets, true) do
        puts "INFO: The configuration option 'compress_system_assets' is no longer used."
     end
+
+    # Controls whether webpack bundles (client_only.js, client_and_server.js) are automatically
+    # imported into the asset pipeline. When true (default), bundles are embedded in Sprockets.
+    # When false, bundles should be loaded via javascript_pack_tag in layouts.
+    # Disable this to prevent duplicate loading when using webpack pack tags directly.
+    Hyperstack.define_setting(:auto_import_webpack_bundles, true)
   end
 end
