@@ -135,7 +135,34 @@ module ActiveRecord
     def self.build_lazy_columns_hash(files)
       # Return a lazy-loading hash that only loads columns when accessed
       # Pass file paths for on-demand loading of models
+
+      # Load policies for all models (even those not yet loaded)
+      # Policies control access and must be loaded upfront for security
+      load_policies_for_files(files)
+
       LazyColumnsHash.new(filtered_descendants(files), files, @model_file_paths)
+    end
+
+    def self.load_policies_for_files(files)
+      # For each model file, try to load its corresponding policy
+      # This ensures policies are loaded even with lazy model loading
+      files.each do |file_path|
+        # Convert file path to model name (e.g., "user" => "User", "calls/project" => "Calls::Project")
+        model_name = file_path.camelize
+        policy_name = "#{model_name}Policy"
+
+        begin
+          # Try to load the policy if it exists
+          # This uses Rails autoloading which will search in app/policies
+          policy_name.constantize
+        rescue NameError, LoadError => e
+          # Policy doesn't exist, which is fine - not all models need policies
+          # Only log if it's an actual error (not just "uninitialized constant")
+          unless e.message.include?("uninitialized constant") || e.message.include?("Unable to autoload constant")
+            Rails.logger.debug "[Hyperstack] Could not load policy #{policy_name}: #{e.message}" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+          end
+        end
+      end
     end
 
     def self.build_eager_columns_hash(files)
