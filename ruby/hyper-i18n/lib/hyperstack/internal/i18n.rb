@@ -34,6 +34,46 @@ module Hyperstack
         end
       end
 
+      # Promise-based translation loading for preloading scenarios
+      # Returns a promise that resolves when the translation is loaded
+      # Usage:
+      #   Hyperstack::Internal::I18n.t_async('key').then { |translation| puts translation }
+      def self.t_async(attribute, opts = {})
+        if RUBY_ENGINE == 'opal'
+          # If already cached, return resolved promise
+          if Store.translations[attribute]
+            Promise.resolve(Store.translations[attribute])
+          else
+            # Return the promise from Translate operation
+            Translate
+              .run(attribute: attribute, opts: opts)
+              .then do |translation|
+                Store.translations[attribute] = translation
+                Store.mutate.translations(Store.translations)
+                translation
+              end
+          end
+        else
+          # On server, return synchronous value wrapped in resolved promise
+          Promise.resolve(::I18n.t(attribute, **opts.symbolize_keys))
+        end
+      end
+
+      # Preload multiple translations and return promise that resolves when all are loaded
+      # Usage:
+      #   Hyperstack::Internal::I18n.preload(['key1', 'key2']).then { puts "All loaded!" }
+      def self.preload(keys, opts = {})
+        return Promise.resolve([]) if keys.blank?
+
+        if RUBY_ENGINE == 'opal'
+          promises = keys.map { |key| t_async(key, opts) }
+          Promise.when(*promises)
+        else
+          # On server, return resolved promise immediately
+          Promise.resolve(keys.map { |key| ::I18n.t(key, **opts.symbolize_keys) })
+        end
+      end
+
       isomorphic_method(:l) do |f, date_or_time, format = :default, opts = {}|
         format = formatted_format(format)
         date_or_time = formatted_date_or_time(date_or_time)
