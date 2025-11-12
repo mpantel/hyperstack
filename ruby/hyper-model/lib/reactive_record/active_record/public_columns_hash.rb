@@ -87,14 +87,23 @@ module ActiveRecord
 
     def self.get_public_model_files
       files = []
+      file_paths = {}
+
       Hyperstack.public_model_directories.each do |dir|
         next unless Dir.exist?(Rails.root.join(dir))
         dir_length = Rails.root.join(dir).to_s.length + 1
         Dir.glob(Rails.root.join(dir, '**', '*.rb')).each do |file|
-          require_dependency(file) # still the file is loaded to make sure for development and test env
-          files << file[dir_length..-4]
+          # TRUE LAZY LOADING: Don't require_dependency here
+          # Let files be loaded on-demand when first accessed
+          relative_path = file[dir_length..-4]
+          files << relative_path
+          file_paths[relative_path] = file
         end
       end
+
+      # Store file paths for lazy loading
+      @model_file_paths = file_paths
+
       files
     end
 
@@ -125,7 +134,8 @@ module ActiveRecord
 
     def self.build_lazy_columns_hash(files)
       # Return a lazy-loading hash that only loads columns when accessed
-      LazyColumnsHash.new(filtered_descendants(files))
+      # Pass file paths for on-demand loading of models
+      LazyColumnsHash.new(filtered_descendants(files), files, @model_file_paths)
     end
 
     def self.build_eager_columns_hash(files)
@@ -197,9 +207,9 @@ module ActiveRecord
       end
     end
 
-    # Lazy-loading hash implementation
+    # Lazy-loading hash implementation with on-demand file loading
     class LazyColumnsHash
-      def initialize(models)
+      def initialize(models, file_paths = [], file_path_map = {})
         # More defensive initialization with better error handling
         begin
           if models.nil?
@@ -210,14 +220,20 @@ module ActiveRecord
               m && m.respond_to?(:name) && m.name && !m.name.empty?
             end
             @models_by_name = valid_models.index_by(&:name)
-            Rails.logger.info "[Hyperstack] LazyColumnsHash initialized with #{@models_by_name.size} models" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+            Rails.logger.info "[Hyperstack] LazyColumnsHash initialized with #{@models_by_name.size} loaded models" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
           end
         rescue => e
           Rails.logger.error "[Hyperstack] Failed to initialize LazyColumnsHash: #{e.message}" if defined?(Rails) && Rails.logger
           @models_by_name = {}
         end
+
+        # Store file paths for on-demand loading
+        @file_paths = file_paths || []
+        @file_path_map = file_path_map || {}
         @loaded_models = {}
         @initialization_complete = true
+
+        Rails.logger.info "[Hyperstack] LazyColumnsHash: #{@models_by_name.size} models loaded, #{@file_paths.size - @models_by_name.size} available for lazy loading" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
       end
 
       def [](model_name)
@@ -231,40 +247,22 @@ module ActiveRecord
         end
 
         # Defensive check to prevent nil reference errors
-        return nil unless @models_by_name
         return nil if model_name.nil? || model_name.to_s.empty?
 
+        # Try to get model from already-loaded models first
         model = @models_by_name[model_name.to_s]
-        return nil unless model
 
-        # Ensure attribute methods are defined when we load a model's columns
-        begin
-          if model.respond_to?(:define_attribute_methods) &&
-             model.respond_to?(:table_exists?) &&
-             !model.instance_variable_get(:@defining_attribute_methods)
-            # Only define attribute methods if the model has a proper table
-            has_table = begin
-              model.table_exists?
-            rescue
-              false
-            end
-            if has_table
-              Rails.logger.info "[Hyperstack] Auto-defining attribute methods for #{model_name} during lazy load" if defined?(Rails) && Rails.logger
-              model.instance_variable_set(:@defining_attribute_methods, true)
-              begin
-                model.define_attribute_methods
-              ensure
-                model.instance_variable_set(:@defining_attribute_methods, false)
-              end
-            else
-              Rails.logger.warn "[Hyperstack] Skipping define_attribute_methods for #{model_name} - table does not exist" if defined?(Rails) && Rails.logger
-            end
-          end
-        rescue => e
-          Rails.logger.warn "[Hyperstack] Failed to auto-define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        # If model not loaded yet, try to load it from file
+        if model.nil? && @file_path_map
+          model = get_or_load_model(model_name.to_s)
+          # Cache the loaded model
+          @models_by_name[model_name.to_s] = model if model
         end
 
-        @loaded_models[model_name] = ActiveRecord::Base.get_model_columns_hash(model)
+        return nil unless model
+
+        # Load and cache the columns hash
+        @loaded_models[model_name] = load_columns_for_model(model, model_name)
       rescue => e
         # If there's an error loading columns, return nil so || {} fallback works
         Rails.logger.warn "[Hyperstack] Failed to load columns for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
@@ -307,11 +305,21 @@ module ActiveRecord
       end
 
       def key?(model_name)
-        @models_by_name.key?(model_name)
+        # Check if model is loaded OR if file exists for it
+        model_name_str = model_name.to_s
+        return true if @models_by_name.key?(model_name_str)
+
+        # Check if file exists for this model
+        @file_paths.any? { |fp| fp == model_name_str.underscore } ||
+          Object.const_defined?(model_name_str)
       end
 
       def keys
-        @models_by_name.keys
+        # Return all possible model names (from files + already loaded)
+        file_model_names = @file_paths.map { |fp| fp.camelize }
+        loaded_model_names = @models_by_name.keys
+
+        (file_model_names + loaded_model_names).uniq
       end
 
       def values
@@ -375,6 +383,91 @@ module ActiveRecord
         else
           super
         end
+      end
+
+      private
+
+      # Get model constant, loading file if necessary
+      def get_or_load_model(model_name)
+        model_name_str = model_name.to_s
+
+        # Check if constant already defined
+        if Object.const_defined?(model_name_str)
+          model = Object.const_get(model_name_str)
+          return model if model < ActiveRecord::Base
+        end
+
+        # Try to load the model file
+        file_path = find_file_path_for_model(model_name_str)
+        if file_path
+          Rails.logger.info "[Hyperstack] Loading model file for #{model_name_str}: #{file_path}" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+
+          begin
+            require_dependency(file_path)
+
+            # Check if constant is now defined
+            if Object.const_defined?(model_name_str)
+              model = Object.const_get(model_name_str)
+              return model if model < ActiveRecord::Base
+            end
+          rescue => e
+            Rails.logger.warn "[Hyperstack] Failed to load model #{model_name_str}: #{e.message}" if defined?(Rails) && Rails.logger
+            return nil
+          end
+        end
+
+        nil
+      end
+
+      # Find file path for a model name
+      def find_file_path_for_model(model_name)
+        return nil unless @file_path_map
+
+        # Try exact match first
+        underscore_name = model_name.underscore
+        return @file_path_map[underscore_name] if @file_path_map[underscore_name]
+
+        # Try namespace variations (e.g., Rescom::User -> rescom/user)
+        @file_path_map.each do |relative_path, full_path|
+          if relative_path.camelize == model_name || relative_path.classify == model_name
+            return full_path
+          end
+        end
+
+        nil
+      end
+
+      # Load columns hash for a model
+      def load_columns_for_model(model, model_name)
+        # Ensure attribute methods are defined
+        begin
+          if model.respond_to?(:define_attribute_methods) &&
+             model.respond_to?(:table_exists?) &&
+             !model.instance_variable_get(:@defining_attribute_methods)
+            # Only define attribute methods if the model has a proper table
+            has_table = begin
+              model.table_exists?
+            rescue
+              false
+            end
+            if has_table
+              Rails.logger.info "[Hyperstack] Defining attribute methods for #{model_name}" if defined?(Rails) && Rails.logger && Hyperstack.public_columns_hash_performance_logging
+              model.instance_variable_set(:@defining_attribute_methods, true)
+              begin
+                model.define_attribute_methods
+              ensure
+                model.instance_variable_set(:@defining_attribute_methods, false)
+              end
+            else
+              Rails.logger.warn "[Hyperstack] Skipping define_attribute_methods for #{model_name} - table does not exist" if defined?(Rails) && Rails.logger
+            end
+          end
+        rescue => e
+          Rails.logger.warn "[Hyperstack] Failed to define attribute methods for #{model_name}: #{e.message}" if defined?(Rails) && Rails.logger
+        end
+
+        # Get columns hash
+        ActiveRecord::Base.get_model_columns_hash(model)
       end
     end
 
