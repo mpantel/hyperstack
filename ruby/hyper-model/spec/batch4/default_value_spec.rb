@@ -153,7 +153,7 @@ describe 'defaultValue special handling', js: true do
     expect(find('#controlled-textarea').value).to eq('text box set by the user')
   end
 
-  it "will properly update input tags when data is loaded or changed", wip: true do
+  it "will properly update input tags when data is loaded or changed" do
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
       mount "InputTester", {}, no_wait: true do
         class MyNestedGuy < HyperComponent

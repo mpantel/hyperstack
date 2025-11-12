@@ -37,7 +37,8 @@ describe 'defaultValue special handling', js: true do
     FactoryBot.create(:test_model, test_attribute: 'I have been loaded', completed: true)
   end
 
-  it 'will not use the defaultValue param until data is loaded - unit test', wip: true do
+  it 'will not use the defaultValue param until data is loaded - unit test' do
+    pending "uncontrolled textarea"
     mount 'Tester' do
       class LoadableString
         include Hyperstack::State::Observable
@@ -151,7 +152,8 @@ describe 'defaultValue special handling', js: true do
     expect(find('#controlled-textarea').value).to eq('text box set by the user')
   end
 
-  it "will properly update input tags when data is loaded or changed", wip: true do
+  it "will properly update input tags when data is loaded or changed" do
+    pending "uncontrolled textarea"
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
       mount "InputTester", {}, no_wait: true do
         class MyNestedGuy < HyperComponent
