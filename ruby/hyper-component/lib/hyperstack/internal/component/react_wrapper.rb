@@ -249,33 +249,17 @@ module Hyperstack
             elsif key == :key
               props[:key] = value.to_key
 
-            elsif key == :defaultValue || key == 'defaultValue' || key == :defaultChecked || key == 'defaultChecked'
-              # For uncontrolled inputs, React only uses defaultValue on initial mount
-              # To support reactive data loading with defaultValue, we need to force a remount
-              # when data transitions from loading to loaded by changing the key prop
-              props[key] = value
-
-              # Track that this element has a default value for key generation below
-              properties[:__has_default_value] = true
-
             elsif key == :init
-              # Convert :init to defaultValue/defaultChecked
-              # For uncontrolled inputs with reactive data
-              default_key = if %w[select textarea].include? type
-                             :defaultValue
-                           elsif type == :input
-                             if %w[radio checkbox].include? properties[:type]
-                               :defaultChecked
-                             else
-                               :defaultValue
-                             end
-                           end
-
-              if default_key
-                props[default_key] = value
-                # Track that this element has a default value for key generation
-                properties[:__has_default_value] = true
+              if %w[select textarea].include? type
+                key = :defaultValue
+              elsif type == :input
+                key = if %w[radio checkbox].include? properties[:type]
+                        :defaultChecked
+                      else
+                        :defaultValue
+                      end
               end
+              props[key] = value
 
             elsif key == 'ref'
               next unless value
@@ -331,31 +315,6 @@ module Hyperstack
               props[Hyperstack::Component::ReactAPI.html_attr?(lower_camelize(key)) ? lower_camelize(key) : key] = value
             end
           end
-
-          # For uncontrolled inputs with defaultValue/defaultChecked, automatically add a dynamic key
-          # based on loading state if no explicit key was provided. This forces React to remount
-          # when transitioning from loading -> loaded, allowing defaultValue to take effect.
-          if RUBY_ENGINE == 'opal' && properties[:__has_default_value] && !props.key?(:key)
-            # Check if this is an uncontrolled input (has defaultValue but not value)
-            is_uncontrolled = (props.key?(:defaultValue) && !props.key?(:value)) ||
-                              (props.key?(:defaultChecked) && !props.key?(:checked))
-
-            # Check the value to see if it's a loading indicator (DummyValue returns '')
-            default_value = props[:defaultValue] || props[:defaultChecked]
-            is_loading = default_value.respond_to?(:loading?) && default_value.loading?
-            is_empty = default_value.nil? || default_value == ''
-
-            if is_uncontrolled && (is_loading || is_empty)
-              # Use element ID + loading state as key to force remount when data loads
-              element_id = properties[:id] || properties['id'] || 'default'
-              props[:key] = "#{element_id}_loading"
-            elsif is_uncontrolled
-              # Data is loaded, use stable key
-              element_id = properties[:id] || properties['id'] || 'default'
-              props[:key] = "#{element_id}_loaded"
-            end
-          end
-
           props
         end
 
