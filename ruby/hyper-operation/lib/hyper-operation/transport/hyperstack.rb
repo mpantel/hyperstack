@@ -136,6 +136,15 @@ module Hyperstack
     end
   end
 
+  def self.disconnect_channel(channel)
+    if transport == :action_cable
+      # Remove the channel from the subscriptions hash to mark it as inactive
+      Hyperstack::ActionCableChannel.subscriptions.delete(channel)
+      # Optionally broadcast a disconnect message to all clients on this channel
+      ActionCable.server.broadcast("hyperstack-#{channel}", { message: :disconnect })
+    end
+  end
+
   def self.on_server?
     return defined? Rails::Server
   end
