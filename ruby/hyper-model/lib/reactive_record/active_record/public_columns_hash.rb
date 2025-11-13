@@ -140,7 +140,9 @@ module ActiveRecord
       # Policies control access and must be loaded upfront for security
       load_policies_for_files(files)
 
-      LazyColumnsHash.new(filtered_descendants(files), files, @model_file_paths)
+      # TRUE LAZY LOADING FIX: Don't call filtered_descendants which loads all models upfront
+      # Pass empty array - models will be loaded on-demand when accessed
+      LazyColumnsHash.new([], files, @model_file_paths)
     end
 
     def self.load_policies_for_files(files)
@@ -342,52 +344,62 @@ module ActiveRecord
       end
 
       def keys
-        # Return all possible model names (from files + already loaded)
+        # Return all possible model names (from files + already loaded + pre-initialized)
         file_model_names = @file_paths.map { |fp| fp.camelize }
-        loaded_model_names = @models_by_name.keys
+        # Use ObjectSpace to find ALL loaded ActiveRecord models (not just pre-initialized ones)
+        # This ensures models loaded at runtime (e.g., by tests, seeds) are included
+        loaded_model_names = ObjectSpace.each_object(Class)
+          .select { |c| c < ActiveRecord::Base }
+          .map(&:name)
+          .compact
+        # Also include pre-loaded models from initialization (for backward compatibility)
+        preloaded_model_names = @models_by_name.keys
 
-        (file_model_names + loaded_model_names).uniq
+        (file_model_names + loaded_model_names + preloaded_model_names).uniq
       end
 
       def values
-        keys.map { |key| self[key] }
+        keys.map { |key| self[key] }.compact
       end
 
       def empty?
-        @models_by_name.empty?
+        # TRUE LAZY LOADING FIX: Check file paths, not just pre-loaded models
+        @file_paths.empty?
       end
 
       def size
-        @models_by_name.size
+        # TRUE LAZY LOADING FIX: Count available model files, not just pre-loaded models
+        @file_paths.size
       end
       alias_method :length, :size
 
       def each(&block)
-        @models_by_name.keys.compact.each do |key|
-          next if key.nil? || key.to_s.empty?
-          yield(key, self[key])
+        # TRUE LAZY LOADING FIX: Iterate over all available models (from files), not just pre-loaded
+        keys.each do |key|
+          value = self[key]
+          yield(key, value) if value
         end
       end
 
       def each_key(&block)
-        @models_by_name.keys.compact.each do |key|
-          next if key.nil? || key.to_s.empty?
-          yield(key)
-        end
+        # TRUE LAZY LOADING FIX: Iterate over all available models (from files), not just pre-loaded
+        keys.each(&block)
       end
 
       def each_value(&block)
-        @models_by_name.keys.compact.each do |key|
-          next if key.nil? || key.to_s.empty?
-          yield(self[key])
+        # TRUE LAZY LOADING FIX: Iterate over all available models (from files), not just pre-loaded
+        keys.each do |key|
+          value = self[key]
+          yield(value) if value
         end
       end
 
       def to_h
+        # TRUE LAZY LOADING FIX: Include all available models (from files), not just pre-loaded
         result = {}
-        @models_by_name.keys.compact.each do |key|
-          next if key.nil? || key.to_s.empty?
-          result[key] = self[key]
+        keys.each do |key|
+          value = self[key]
+          result[key] = value if value
         end
         result
       end
