@@ -178,5 +178,69 @@ describe 'Hyperstack::Internal::I18n unit tests' do
     it 'Localize inherits from Hyperstack::ServerOp' do
       expect(Hyperstack::Internal::I18n::Localize.ancestors).to include(Hyperstack::ServerOp)
     end
+
+    describe 'Translate ServerOp locale handling' do
+      before(:each) do
+        # Setup translations in different locales
+        I18n.backend.store_translations(:en, { locale_test: { key: 'English value' } })
+        I18n.backend.store_translations(:el, { locale_test: { key: 'Greek value' } })
+        I18n.backend.store_translations(:fr, { locale_test: { key: 'French value' } })
+
+        # Configure available locales before setting default
+        I18n.available_locales = [:en, :el, :fr]
+        @original_default_locale = I18n.default_locale
+      end
+
+      after(:each) do
+        I18n.default_locale = @original_default_locale
+      end
+
+      # The Translate ServerOp now extracts locale from acting_user.locale or session[:locale]
+      # and uses I18n.with_locale() to ensure translations are fetched in the correct locale.
+      #
+      # For comprehensive end-to-end testing of this feature, see the integration tests
+      # in the consuming application (e.g., invoicing/spec/components/base/i18n_inheritance_spec.rb)
+      # which test real user authentication and session management.
+      #
+      # These unit tests verify the core I18n.with_locale mechanism that the ServerOp relies on.
+
+      it 'I18n.with_locale correctly switches locale context' do
+        I18n.default_locale = :el
+
+        # Without with_locale, uses default
+        expect(::I18n.t('locale_test.key')).to eq('Greek value')
+
+        # With with_locale, uses specified locale
+        ::I18n.with_locale(:en) do
+          expect(::I18n.t('locale_test.key')).to eq('English value')
+        end
+
+        ::I18n.with_locale(:fr) do
+          expect(::I18n.t('locale_test.key')).to eq('French value')
+        end
+
+        # After block, back to default
+        expect(::I18n.t('locale_test.key')).to eq('Greek value')
+      end
+
+      it 'I18n.with_locale handles nested contexts correctly' do
+        I18n.default_locale = :el
+
+        ::I18n.with_locale(:en) do
+          expect(::I18n.t('locale_test.key')).to eq('English value')
+
+          # Nested locale context
+          ::I18n.with_locale(:fr) do
+            expect(::I18n.t('locale_test.key')).to eq('French value')
+          end
+
+          # Returns to outer context
+          expect(::I18n.t('locale_test.key')).to eq('English value')
+        end
+
+        # Returns to default
+        expect(::I18n.t('locale_test.key')).to eq('Greek value')
+      end
+    end
   end
 end
