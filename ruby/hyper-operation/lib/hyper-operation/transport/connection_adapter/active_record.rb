@@ -130,8 +130,12 @@ module Hyperstack
           begin
             Hyperstack::InternalPolicy.regulate_connection(acting_user, channel)
             true
-          rescue
+          rescue Hyperstack::AccessViolation
+            # Explicitly denied by policy
             false
+          rescue => e
+            # Channel not part of policy system or other error - allow by default
+            true
           end
         end
       end
