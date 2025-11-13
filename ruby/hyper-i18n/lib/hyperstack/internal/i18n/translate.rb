@@ -15,12 +15,21 @@ module Hyperstack
           # Extract locale from acting_user or session to ensure translations
           # are fetched in the correct user locale, not the default locale.
           # Priority:
-          # 1. acting_user.locale (most reliable when user is logged in)
+          # 1. acting_user.locale (if user responds to :locale)
           # 2. session[:locale] (fallback for guest users or when acting_user is nil)
           # 3. opts[:locale] (if explicitly passed)
           # 4. I18n.default_locale (last resort)
 
-          user_locale = params.acting_user&.locale
+          # Safely get user locale - check if acting_user responds to :locale
+          user_locale = if params.acting_user&.respond_to?(:locale)
+                          begin
+                            params.acting_user.locale
+                          rescue => e
+                            Rails.logger.warn "Translate ServerOp: Failed to get locale from acting_user: #{e.message}"
+                            nil
+                          end
+                        end
+
           session_locale = respond_to?(:session) ? session[:locale] : nil
           target_locale = user_locale || session_locale || opts[:locale] || ::I18n.default_locale
 
