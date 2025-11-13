@@ -1,5 +1,5 @@
 module Hyperstack
   module State
-    VERSION = File.read(File.expand_path("../../../../../HYPERSTACK_VERSION", __dir__)).strip.delete("'")
+    VERSION = '1.0.alpha1.8.0032.7.10'
   end
 end
