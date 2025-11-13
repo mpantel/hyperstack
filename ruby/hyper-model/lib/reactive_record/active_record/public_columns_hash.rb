@@ -43,7 +43,10 @@ module ActiveRecord
 
     def self.public_columns_hash
       @@hyper_stack_public_columns_hash_mutex.synchronize do
-        return @public_columns_hash if @public_columns_hash && Rails.env.production?
+        # CRITICAL FIX: Cache in test/dev too, not just production
+        # Rebuilding on every call loses @models_by_name cache in LazyColumnsHash
+        # causing repeated Object.const_get() calls and timing issues
+        return @public_columns_hash if @public_columns_hash
 
         start_time = Time.current if Hyperstack.public_columns_hash_performance_logging
 
@@ -278,16 +281,9 @@ module ActiveRecord
         # Defensive check to prevent nil reference errors
         return nil if model_name.nil? || model_name.to_s.empty?
 
-        # Try to get model from already-loaded models first
-        model = @models_by_name[model_name.to_s]
-
-        # If model not loaded yet, try to load it from file
-        if model.nil? && @file_path_map
-          model = get_or_load_model(model_name.to_s)
-          # Cache the loaded model
-          @models_by_name[model_name.to_s] = model if model
-        end
-
+        # SIMPLIFIED: Call get_or_load_model directly (it has its own cache check)
+        # This matches the patch's simpler approach
+        model = get_or_load_model(model_name)
         return nil unless model
 
         # Load and cache the columns hash
@@ -430,10 +426,15 @@ module ActiveRecord
       def get_or_load_model(model_name)
         model_name_str = model_name.to_s
 
+        # CRITICAL: Check cache first to avoid repeated const lookups
+        return @models_by_name[model_name_str] if @models_by_name[model_name_str]
+
         # Check if constant already defined
         if Object.const_defined?(model_name_str)
           model = Object.const_get(model_name_str)
-          return model if model < ActiveRecord::Base
+          # Cache it immediately to avoid repeated lookups
+          @models_by_name[model_name_str] = model if model < ActiveRecord::Base
+          return @models_by_name[model_name_str]
         end
 
         # Try to load the model file
@@ -447,7 +448,11 @@ module ActiveRecord
             # Check if constant is now defined
             if Object.const_defined?(model_name_str)
               model = Object.const_get(model_name_str)
-              return model if model < ActiveRecord::Base
+              if model < ActiveRecord::Base
+                # Cache the loaded model to avoid repeated const lookups
+                @models_by_name[model_name_str] = model
+                return model
+              end
             end
           rescue => e
             Rails.logger.warn "[Hyperstack] Failed to load model #{model_name_str}: #{e.message}" if defined?(Rails) && Rails.logger

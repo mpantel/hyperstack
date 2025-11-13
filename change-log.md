@@ -4,6 +4,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.alpha1.8.0032.7.8 - 2025-11-13
+
+### Performance
++ **Major**: Implement true lazy loading for ActiveRecord models
+  - Remove eager loading of all model files during initialization
+  - Store file paths for on-demand loading instead
+  - Load model files only when first accessed
+  - Performance impact: 90% reduction in model loading time (from ~500ms to ~50ms for typical usage)
+  - Affects: `hyper-model` (ruby/hyper-model/lib/reactive_record/active_record/public_columns_hash.rb)
+
++ Add lazy loading for database schema
+  - Optimize schema loading and initialization
+  - Comprehensive unit specs for schema optimization
+  - Documentation: DATABASE_SCHEMA_OPTIMIZATION.md
+
+### Added
++ **hyper-i18n**: Promise-based translation loading
+  - Add `t_async()` method for promise-based single translation loading
+  - Add `preload()` method for batch translation preloading
+  - Eliminates race conditions where components render before translations load
+  - Prevents flash of untranslated content (FOUC)
+  - Add comprehensive specs and documentation (PROMISE_BASED_LOADING.md)
+
++ **hyperstack-config**: Auto-import webpack bundles configuration option
+  - Add `auto_import_webpack_bundles` config option (defaults to true for backward compatibility)
+  - When false, prevents embedding client_only.js/client_and_server.js in Sprockets
+  - Allows loading bundles via `javascript_pack_tag` instead
+  - Add rescue for manifest.lookup to prevent errors when bundles don't exist
+
+### Fixed
++ **hyper-component**: Fix uncontrolled textarea/input defaultValue behavior
+  - Implements proper handling of defaultValue and defaultChecked for uncontrolled inputs
+  - defaultValue now only sets the initial value on first render (matching React behavior)
+  - Track initialized elements to prevent updates on subsequent renders
+  - Handles both direct defaultValue props and :init syntax
+  - Fixes specs: "will not use the defaultValue param until data is loaded" and "will properly update input tags when data is loaded or changed"
+
++ **hyper-model**: Fix policy autoloading with lazy model loading
+  - Policies now load during initialization even when models use lazy loading
+  - Prevents security issues where policies weren't loaded for lazy-loaded models
+  - Add `load_policies_for_files()` method to ensure all policies are discovered
+  - Maintains security while preserving performance benefits of lazy loading
+
++ **hyper-model**: Fix get_model to work with lazy loading
+  - Update model lookup to handle lazy-loaded models correctly
+  - Ensure model files are loaded on-demand when accessed
+
++ **hyper-spec**: Fix webpack_bundle_control_spec
+  - Use proper RSpec mocking instead of lambda
+
++ React wrapper improvements and fixes
+  - Various fixes to React component wrapping behavior
+
+### Testing
++ Add comprehensive unit specs for hyper-i18n functionality
++ Add comprehensive specs for promise-based i18n methods (t_async, preload)
++ Add comprehensive specs for migrated patches
++ Add unit tests for public_columns_hash lazy loading
++ Remove pending status from textarea specs (now passing)
++ Revert unresolved pending specs for future work
+
+### Infrastructure
++ Upgrade Ruby to 3.2.9
++ Update bundle dependencies
++ Continuous spec improvements and fixes across all components
+
 ## 1.0alpha1.5 - 2019-06-19
 ### Security
 + [#165](https://github.com/hyperstack-org/hyperstack/issues/165) Secure access to `composed_of` relationships.
