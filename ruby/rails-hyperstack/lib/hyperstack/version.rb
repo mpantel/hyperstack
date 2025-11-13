@@ -1,3 +1,3 @@
 module Hyperstack
-  ROUTERVERSION = VERSION = File.read(File.expand_path("../../../../HYPERSTACK_VERSION", __dir__)).strip
+  ROUTERVERSION = VERSION = File.read(File.expand_path("../../../../HYPERSTACK_VERSION", __dir__)).strip.delete("'")
 end
