@@ -44,18 +44,20 @@ describe "ActiveRecord::Base true lazy loading" do
   end
 
   describe "LazyColumnsHash file loading" do
-    let(:file_paths) { ['user', 'project'] }
+    # Use a model name that doesn't exist in the test environment
+    # to ensure require_dependency is actually called
+    let(:file_paths) { ['lazy_test_model', 'project'] }
     let(:file_path_map) do
       {
-        'user' => '/app/models/user.rb',
+        'lazy_test_model' => '/app/models/lazy_test_model.rb',
         'project' => '/app/models/project.rb'
       }
     end
 
     # Mock models that simulate ActiveRecord::Base descendants
-    let(:mock_user_model) do
+    let(:mock_lazy_test_model) do
       model = Class.new
-      model.define_singleton_method(:name) { 'User' }
+      model.define_singleton_method(:name) { 'LazyTestModel' }
       model.define_singleton_method(:<) { |klass| klass == ActiveRecord::Base }
       model.define_singleton_method(:columns_hash) { { 'id' => :integer, 'name' => :string } }
       model.define_singleton_method(:respond_to?) { |method| [:define_attribute_methods, :table_exists?].include?(method) }
@@ -82,8 +84,8 @@ describe "ActiveRecord::Base true lazy loading" do
 
     describe "key? with file paths" do
       it "returns true if model file exists" do
-        # User model file exists in file_paths
-        expect(lazy_hash.key?('User')).to be_truthy
+        # LazyTestModel file exists in file_paths
+        expect(lazy_hash.key?('LazyTestModel')).to be_truthy
       end
 
       it "returns false if model file doesn't exist" do
@@ -96,7 +98,7 @@ describe "ActiveRecord::Base true lazy loading" do
         keys = lazy_hash.keys
 
         # Should include camelized versions of file paths
-        expect(keys).to include('User')
+        expect(keys).to include('LazyTestModel')
         expect(keys).to include('Project')
       end
     end
@@ -104,13 +106,17 @@ describe "ActiveRecord::Base true lazy loading" do
     describe "on-demand model loading" do
       before(:each) do
         # Mock require_dependency to track calls
+        # Note: require_dependency is called as a method, not on an object
         @require_calls = []
-        allow(lazy_hash).to receive(:require_dependency) do |path|
+
+        # We need to mock it on the lazy_hash instance
+        # because require_dependency is called within the context of get_or_load_model
+        allow_any_instance_of(ActiveRecord::Base::LazyColumnsHash).to receive(:require_dependency) do |instance, path|
           @require_calls << path
 
-          # Simulate loading the User constant after require
-          if path == '/app/models/user.rb'
-            stub_const('User', mock_user_model)
+          # Simulate loading the LazyTestModel constant after require
+          if path == '/app/models/lazy_test_model.rb'
+            stub_const('LazyTestModel', mock_lazy_test_model)
           end
         end
 
@@ -122,19 +128,19 @@ describe "ActiveRecord::Base true lazy loading" do
 
       it "loads model file on first access" do
         # Access a model that hasn't been loaded yet
-        result = lazy_hash['User']
+        result = lazy_hash['LazyTestModel']
 
         # Should have called require_dependency
-        expect(@require_calls).to include('/app/models/user.rb')
+        expect(@require_calls).to include('/app/models/lazy_test_model.rb')
       end
 
       it "doesn't reload model file on subsequent access" do
         # First access
-        lazy_hash['User']
+        lazy_hash['LazyTestModel']
         first_call_count = @require_calls.size
 
         # Second access
-        lazy_hash['User']
+        lazy_hash['LazyTestModel']
         second_call_count = @require_calls.size
 
         # Should not have called require_dependency again
@@ -143,10 +149,10 @@ describe "ActiveRecord::Base true lazy loading" do
 
       it "caches loaded columns" do
         # First access loads and caches
-        result1 = lazy_hash['User']
+        result1 = lazy_hash['LazyTestModel']
 
         # Second access returns cached value
-        result2 = lazy_hash['User']
+        result2 = lazy_hash['LazyTestModel']
 
         expect(result1).to eq(result2)
       end
@@ -154,8 +160,8 @@ describe "ActiveRecord::Base true lazy loading" do
 
     describe "find_file_path_for_model" do
       it "finds exact match" do
-        path = lazy_hash.send(:find_file_path_for_model, 'User')
-        expect(path).to eq('/app/models/user.rb')
+        path = lazy_hash.send(:find_file_path_for_model, 'LazyTestModel')
+        expect(path).to eq('/app/models/lazy_test_model.rb')
       end
 
       it "handles namespace variations" do

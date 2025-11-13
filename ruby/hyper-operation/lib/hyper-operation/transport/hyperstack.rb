@@ -48,7 +48,6 @@ module Hyperstack
   define_setting(:transport, :none) do |transport|
     if transport == :action_cable
       require 'hyper-operation/transport/action_cable'
-      opts[:refresh_channels_every] = :never
       import 'action_cable', client_only: true if Rails.configuration.hyperstack.auto_config
     elsif transport == :pusher
       require 'pusher'
@@ -116,8 +115,14 @@ module Hyperstack
   end
 
   def self.refresh_channels
-    new_channels = pusher.channels[:channels].collect do |channel, _etc|
-      channel.gsub(/^#{Regexp.quote(Hyperstack.channel)}\-/, '').gsub('==', '::')
+    if transport == :action_cable
+      Hyperstack::ActionCableChannel.subscriptions.keys.select do |channel|
+        Hyperstack::ActionCableChannel.subscriptions[channel] > 0
+      end
+    else
+      new_channels = pusher.channels[:channels].collect do |channel, _etc|
+        channel.gsub(/^#{Regexp.quote(Hyperstack.channel)}\-/, '').gsub('==', '::')
+      end
     end
   end
 
