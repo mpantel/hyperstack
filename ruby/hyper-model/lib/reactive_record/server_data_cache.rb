@@ -342,6 +342,15 @@ module ReactiveRecord
           end
 
           def apply_star
+            # PERFORMANCE FIX (Nov 20, 2025):
+            # Don't iterate through collections during transport connection initialization.
+            # When @value is a class (ActiveRecord model class), we should NOT iterate.
+            # This was causing 20-second delays with 6,730 GuestUser records.
+            #
+            # The iteration should only happen when explicitly requesting collection data,
+            # not during initial connection setup which only needs column metadata.
+            return build_new_cache_item([], "*", "*") if @value.is_a?(Class)
+
             if @value && @value.__secure_collection_check(self) && @value.length > 0
               i = -1
               @value.inject(nil) do |representative, current_value|
