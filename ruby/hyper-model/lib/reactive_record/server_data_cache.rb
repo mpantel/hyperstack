@@ -372,55 +372,9 @@ module ReactiveRecord
 
           def apply_star
             # PERFORMANCE FIX (Nov 20, 2025):
-            # Don't iterate through collections during transport connection initialization.
-            # When @value is a class (ActiveRecord model class), we should NOT iterate.
-            # This was causing 20-second delays with 6,730 GuestUser records.
-            #
-            # The iteration should only happen when explicitly requesting collection data,
-            # not during initial connection setup which only needs column metadata.
-
-            # ENHANCED FIX (Nov 20, 2025 - v2):
-            # The original fix only checked for Class, but @value can also be an unfiltered
-            # ActiveRecord::Relation (like GuestUser.all) during connection init.
-            # These relations should also return empty immediately without iteration.
-
-            # DEBUG LOGGING (temporary)
-            if @value.respond_to?(:where_clause)
-              Rails.logger.debug "[APPLY_STAR] @value: #{@value.class.name}, is_a?(Class): #{@value.is_a?(Class)}, " \
-                   "is_a?(Relation): #{@value.is_a?(ActiveRecord::Relation)}, " \
-                   "where_empty: #{@value.where_clause.empty? rescue 'N/A'}, " \
-                   "limit_value: #{@value.limit_value.inspect rescue 'N/A'}"
-            else
-              Rails.logger.debug "[APPLY_STAR] @value: #{@value.class.name}, is_a?(Class): #{@value.is_a?(Class)}"
-            end
-
-            # Return empty if @value is a Class (model class itself)
-            return build_new_cache_item([], "*", "*") if @value.is_a?(Class)
-
-            # Return empty if @value is an unfiltered ActiveRecord::Relation
-            # An unfiltered relation during connection init means we're asking for metadata, not data
-            if @value.is_a?(ActiveRecord::Relation)
-              # Check if this is an unfiltered relation (no where, no limit, no offset)
-              # These represent "all records" and shouldn't be iterated during transport init
-              is_unfiltered = begin
-                @value.where_clause.empty? &&
-                @value.limit_value.nil? &&
-                @value.offset_value.nil? &&
-                @value.group_values.empty? &&
-                @value.having_clause.empty?
-              rescue => e
-                # If we can't check, log and assume it might be unfiltered
-                Rails.logger.error "[APPLY_STAR] ERROR checking relation filters: #{e.message}"
-                false
-              end
-
-              if is_unfiltered
-                Rails.logger.info "[APPLY_STAR] EARLY RETURN: Unfiltered relation detected, skipping iteration"
-                return build_new_cache_item([], "*", "*")
-              end
-            end
-
-            if @value && @value.__secure_collection_check(self) && @value.length > 0
+            # When @value is a Class, avoid calling .length which triggers loading ALL records.
+            # Check for Class type first, before the expensive @value.length > 0 check.
+            if @value && !@value.is_a?(Class) && @value.__secure_collection_check(self) && @value.length > 0
               i = -1
               @value.inject(nil) do |representative, current_value|
                 i += 1
