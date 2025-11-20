@@ -132,7 +132,7 @@ describe 'Hyperstack::Internal::I18n unit tests' do
     end
   end
 
-  describe 'Promise-based methods exist but are client-only' do
+  describe 'Promise-based methods (isomorphic)' do
     it 'has t_async class method' do
       expect(Hyperstack::Internal::I18n).to respond_to(:t_async)
     end
@@ -141,14 +141,17 @@ describe 'Hyperstack::Internal::I18n unit tests' do
       expect(Hyperstack::Internal::I18n).to respond_to(:preload)
     end
 
-    it 't_async raises error on server due to Promise.resolve not existing' do
-      # These methods are meant for Opal/client-side only
-      # On server they try to call Promise.resolve which doesn't exist
-      expect { Hyperstack::Internal::I18n.t_async('test.greeting') }.to raise_error(NoMethodError, /resolve/)
+    it 't_async works on server and returns a Promise' do
+      # These methods are isomorphic - they work on both client and server
+      # On server they wrap ::I18n.t result in a resolved promise
+      result = Hyperstack::Internal::I18n.t_async('test.greeting')
+      expect(result).to be_a(Promise)
     end
 
-    it 'preload raises error on server due to Promise.resolve not existing' do
-      expect { Hyperstack::Internal::I18n.preload(['test.greeting']) }.to raise_error(NoMethodError, /resolve/)
+    it 'preload works on server and returns a Promise' do
+      # On server it wraps multiple ::I18n.t results in a resolved promise
+      result = Hyperstack::Internal::I18n.preload(['test.greeting'])
+      expect(result).to be_a(Promise)
     end
   end
 

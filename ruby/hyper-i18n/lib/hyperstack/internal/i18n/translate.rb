@@ -34,15 +34,22 @@ module Hyperstack
           target_locale = user_locale || session_locale || opts[:locale] || ::I18n.default_locale
 
           # Fetch translation in the correct locale context
-          if target_locale && target_locale.to_s != ::I18n.default_locale.to_s
+          translation_result = if target_locale && target_locale.to_s != ::I18n.default_locale.to_s
             ::I18n.with_locale(target_locale) do
-              Rails.logger.debug "Translate ServerOp: attribute=#{params.attribute}, locale=#{target_locale} (from #{user_locale ? 'acting_user' : session_locale ? 'session' : 'opts/default'})"
-              params.translation = ::I18n.t(params.attribute, **opts)
+              Rails.logger.info "Translate ServerOp: attribute=#{params.attribute}, locale=#{target_locale} (from #{user_locale ? 'acting_user' : session_locale ? 'session' : 'opts/default'})"
+              result = ::I18n.t(params.attribute, **opts)
+              Rails.logger.info "Translate ServerOp: result=#{result}"
+              result
             end
           else
-            Rails.logger.debug "Translate ServerOp: attribute=#{params.attribute}, locale=#{target_locale} (default)"
-            params.translation = ::I18n.t(params.attribute, **opts)
+            Rails.logger.info "Translate ServerOp: attribute=#{params.attribute}, locale=#{target_locale} (default)"
+            result = ::I18n.t(params.attribute, **opts)
+            Rails.logger.info "Translate ServerOp: result=#{result}"
+            result
           end
+
+          params.translation = translation_result
+          translation_result  # Explicitly return the translation string
         end
       end
     end

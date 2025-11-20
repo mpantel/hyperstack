@@ -8,6 +8,13 @@ if Hyperstack::Component::IsomorphicHelpers.on_opal_client?
 end
 require 'hyper-model'
 require '_react_public_models'
+
+# Define HyperComponent base class before loading components
+class HyperComponent
+  include Hyperstack::Component
+  include Hyperstack::State::Observable
+end
+
 require_tree './components'
 
 

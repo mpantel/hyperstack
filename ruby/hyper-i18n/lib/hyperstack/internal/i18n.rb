@@ -42,7 +42,8 @@ module Hyperstack
         if RUBY_ENGINE == 'opal'
           # If already cached, return resolved promise
           if Store.translations[attribute]
-            Promise.resolve(Store.translations[attribute])
+            # In Opal, use Promise.value() instead of Promise.resolve()
+            Promise.value(Store.translations[attribute])
           else
             # Return the promise from Translate operation
             Translate
@@ -55,7 +56,7 @@ module Hyperstack
           end
         else
           # On server, return synchronous value wrapped in resolved promise
-          Promise.resolve(::I18n.t(attribute, **opts.symbolize_keys))
+          Promise.new.tap { |p| p.resolve(::I18n.t(attribute, **opts.symbolize_keys)) }
         end
       end
 
@@ -63,14 +64,15 @@ module Hyperstack
       # Usage:
       #   Hyperstack::Internal::I18n.preload(['key1', 'key2']).then { puts "All loaded!" }
       def self.preload(keys, opts = {})
-        return Promise.resolve([]) if keys.blank?
-
         if RUBY_ENGINE == 'opal'
+          return Promise.value([]) if keys.blank?
+
           promises = keys.map { |key| t_async(key, opts) }
           Promise.when(*promises)
         else
           # On server, return resolved promise immediately
-          Promise.resolve(keys.map { |key| ::I18n.t(key, **opts.symbolize_keys) })
+          result = keys.blank? ? [] : keys.map { |key| ::I18n.t(key, **opts.symbolize_keys) }
+          Promise.new.tap { |p| p.resolve(result) }
         end
       end
 
