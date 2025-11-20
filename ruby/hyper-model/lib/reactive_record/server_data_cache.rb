@@ -349,6 +349,15 @@ module ReactiveRecord
             #
             # The iteration should only happen when explicitly requesting collection data,
             # not during initial connection setup which only needs column metadata.
+
+            # DEBUG LOGGING (temporary)
+            if ENV['ENABLE_HYPERSTACK_PROFILING']
+              Rails.logger.info "[APPLY_STAR DEBUG] @value class: #{@value.class.name}"
+              Rails.logger.info "[APPLY_STAR DEBUG] @value.is_a?(Class): #{@value.is_a?(Class)}"
+              Rails.logger.info "[APPLY_STAR DEBUG] @vector: #{@vector.inspect}"
+              Rails.logger.info "[APPLY_STAR DEBUG] @absolute_vector: #{@absolute_vector.inspect}"
+            end
+
             return build_new_cache_item([], "*", "*") if @value.is_a?(Class)
 
             if @value && @value.__secure_collection_check(self) && @value.length > 0
