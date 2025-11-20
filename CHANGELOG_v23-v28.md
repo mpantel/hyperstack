@@ -595,3 +595,48 @@ This is acceptable cost for the benefits:
 ## Date
 
 November 19-20, 2025
+
+---
+
+## Version 1.0.alpha1.8.0032.7.27 (2025-11-20)
+
+### Version Bump for Publication
+
+**Purpose:** Intermediate version bump to prepare for gem publication to gems.ru.aegean.gr
+
+**Changes:**
+- No code changes from v.26
+- Updated version numbers across all 14 gem version files
+- Prepared for publication to private gem server
+
+**Status:** Intermediate release
+
+---
+
+## Version 1.0.alpha1.8.0032.7.28 (2025-11-20)
+
+### Published Release
+
+**Purpose:** Official published version available on gems.ru.aegean.gr
+
+**Changes:**
+- No code changes from v.26
+- Updated version numbers across all 14 gem version files
+- Published to private gem server
+
+**Status:** Current stable release
+
+**Installation:**
+```ruby
+# Gemfile
+gem 'rails-hyperstack', '1.0.alpha1.8.0032.7.28'
+gem 'hyper-spec', '1.0.alpha1.8.0032.7.28', group: [:development, :test]
+gem 'hyper-i18n', '1.0.alpha1.8.0032.7.28'
+```
+
+**All Features from v.23-v.26 Included:**
+- ✅ Production logging improvements (v.23)
+- ✅ Redis adapter profiling (v.24)
+- ✅ Redis cleanup rake tasks (v.25)
+- ✅ Conditional profiling toggle (v.26)
+
