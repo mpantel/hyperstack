@@ -1,8 +1,8 @@
-# Hyperstack Versions 1.0.alpha1.8.0032.7.23 → 1.0.alpha1.8.0032.7.26
+# Hyperstack Versions 1.0.alpha1.8.0032.7.23 → 1.0.alpha1.8.0032.7.28
 
 ## Overview
 
-Four consecutive releases addressing critical production performance issues related to Redis connection management. The issue manifested as 60-150 second delays when establishing Hyperstack WebSocket connections, particularly for GuestUser sessions.
+Six consecutive releases addressing critical production performance issues related to Redis connection management. The issue manifested as 60-150 second delays when establishing Hyperstack WebSocket connections, particularly for GuestUser sessions.
 
 ## Root Cause
 
