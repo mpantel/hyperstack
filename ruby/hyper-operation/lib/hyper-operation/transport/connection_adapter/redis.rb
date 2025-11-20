@@ -48,16 +48,39 @@ module Hyperstack
         end
 
         def connect_to_transport(channel, session, root_path)
-          self.root_path = root_path
+          # PERFORMANCE DEBUGGING (enabled via ENABLE_HYPERSTACK_PROFILING env var)
+          profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
+          overall_start = Time.current if profiling_enabled
+          Rails.logger.info "[REDIS_ADAPTER] connect_to_transport called for channel: #{channel}, session: #{session[0..20]}..." if profiling_enabled
 
-          if (connection = Connection.find_by(channel: channel, session: session))
+          step_start = Time.current if profiling_enabled
+          self.root_path = root_path
+          Rails.logger.info "[REDIS_ADAPTER]   set root_path took #{((Time.current - step_start) * 1000).round(2)}ms" if profiling_enabled
+
+          step_start = Time.current if profiling_enabled
+          connection = Connection.find_by(channel: channel, session: session)
+          Rails.logger.info "[REDIS_ADAPTER]   Connection.find_by took #{((Time.current - step_start) * 1000).round(2)}ms, found: #{!connection.nil?}" if profiling_enabled
+
+          if connection
+            step_start = Time.current if profiling_enabled
             messages = connection.messages.map(&:data)
+            Rails.logger.info "[REDIS_ADAPTER]   connection.messages.map took #{((Time.current - step_start) * 1000).round(2)}ms, count: #{messages.size}" if profiling_enabled
+
+            step_start = Time.current if profiling_enabled
             connection.destroy
+            Rails.logger.info "[REDIS_ADAPTER]   connection.destroy took #{((Time.current - step_start) * 1000).round(2)}ms" if profiling_enabled
           else
             messages = []
           end
 
+          step_start = Time.current if profiling_enabled
           open(channel)
+          Rails.logger.info "[REDIS_ADAPTER]   open(channel) took #{((Time.current - step_start) * 1000).round(2)}ms" if profiling_enabled
+
+          if profiling_enabled
+            overall_time = ((Time.current - overall_start) * 1000).round(2)
+            Rails.logger.info "[REDIS_ADAPTER] Total connect_to_transport: #{overall_time}ms"
+          end
 
           messages
         end

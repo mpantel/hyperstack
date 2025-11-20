@@ -274,11 +274,30 @@ module Hyperstack
 
     def connectable_to(acting_user, auto_connections_only)
       return [] if auto_connections_only && auto_connect_disabled?
-      regulate_for(acting_user).entries.compact.flatten(1) rescue []
+
+      # PERFORMANCE DEBUGGING (enabled via ENABLE_HYPERSTACK_PROFILING env var)
+      profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
+      start_time = Time.current if profiling_enabled
+      result = regulate_for(acting_user).entries.compact.flatten(1) rescue []
+      if profiling_enabled
+        elapsed_ms = ((Time.current - start_time) * 1000).round(2)
+        if elapsed_ms > 100
+          Rails.logger.info "[TRANSPORT]     connectable_to for #{@klass.name} took #{elapsed_ms}ms, returned #{result.size} objects"
+        end
+      end
+      result
     end
 
     def self.connect(instance, acting_user)
-      unless regulations[instance].connectable_to(acting_user, false).include? instance
+      profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
+      start_time = Time.current if profiling_enabled
+      connectable = regulations[instance].connectable_to(acting_user, false)
+      if profiling_enabled
+        connectable_time = ((Time.current - start_time) * 1000).round(2)
+        Rails.logger.info "[TRANSPORT]     connectable_to check took #{connectable_time}ms"
+      end
+
+      unless connectable.include? instance
         raise "connection failed"
       end
     end
@@ -374,8 +393,30 @@ module Hyperstack
         unless Hyperstack::InternalClassPolicy.regulated_klasses.include?(channel[0])
           Hyperstack::InternalPolicy.raise_operation_access_violation(:not_a_channel, "#{channel[0]} is not regulated channel class")
         end
+
+        # PERFORMANCE DEBUGGING (enabled via ENABLE_HYPERSTACK_PROFILING env var)
+        profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
+        start_time = Time.current if profiling_enabled
+        Rails.logger.info "[TRANSPORT] Instance connection to #{channel[0]}-#{id[0..8]}... for #{acting_user.class.name}" if profiling_enabled
+
+        find_start = Time.current if profiling_enabled
         object = Object.const_get(channel[0]).find(id)
+        if profiling_enabled
+          find_time = ((Time.current - find_start) * 1000).round(2)
+          Rails.logger.info "[TRANSPORT]   .find(#{id[0..8]}...) took #{find_time}ms"
+        end
+
+        regulation_start = Time.current if profiling_enabled
         InstanceConnectionRegulation.connect(object, acting_user)
+        if profiling_enabled
+          regulation_time = ((Time.current - regulation_start) * 1000).round(2)
+          Rails.logger.info "[TRANSPORT]   InstanceConnectionRegulation.connect took #{regulation_time}ms"
+        end
+
+        if profiling_enabled
+          total_time = ((Time.current - start_time) * 1000).round(2)
+          Rails.logger.info "[TRANSPORT] Total regulate_connection: #{total_time}ms"
+        end
       else
         ClassConnectionRegulation.connect(channel[0], acting_user)
       end

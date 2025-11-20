@@ -138,9 +138,31 @@ module Hyperstack
       end
 
       def connect_to_transport
+        # PERFORMANCE DEBUGGING (enabled via ENABLE_HYPERSTACK_PROFILING env var)
+        profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
+        start_time = Time.current if profiling_enabled
+        Rails.logger.info "[CONTROLLER] connect_to_transport called for channel: #{params[:channel]}, user: #{try(:acting_user)&.class&.name}" if profiling_enabled
+
         root_path = request.original_url.gsub(/hyperstack-connect-to-transport.*$/, '')
-        render json: Hyperstack::Connection.connect_to_transport(params[:channel], client_id, root_path)
+
+        connection_start = Time.current if profiling_enabled
+        result = Hyperstack::Connection.connect_to_transport(params[:channel], client_id, root_path)
+        if profiling_enabled
+          connection_time = ((Time.current - connection_start) * 1000).round(2)
+          Rails.logger.info "[CONTROLLER]   Connection.connect_to_transport took #{connection_time}ms"
+        end
+
+        if profiling_enabled
+          total_time = ((Time.current - start_time) * 1000).round(2)
+          Rails.logger.info "[CONTROLLER] Total connect_to_transport: #{total_time}ms"
+        end
+
+        render json: result
       rescue Exception => e
+        if profiling_enabled
+          error_time = ((Time.current - start_time) * 1000).round(2)
+          Rails.logger.error "[CONTROLLER] connect_to_transport FAILED after #{error_time}ms: #{e.message}"
+        end
         render status: :service_unavailable, json: {error: e}
       end
 
