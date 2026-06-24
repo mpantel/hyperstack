@@ -2,4 +2,10 @@ source 'https://rubygems.org'
 gem 'hyper-spec',       path: '../hyper-spec'
 gem 'hyperstack-config', path: '../hyperstack-config'
 gem 'hyper-component',  path: '../hyper-component'
+
+# CI/test harness: pin transitive deps to versions compatible with react-rails
+# (< 2.7.0). sprockets >= 4.2 raises "can't modify immutable cached environment";
+# connection_pool >= 3.0 breaks react-rails' server-renderer pool.
+gem 'sprockets', '~> 4.0', '< 4.2'
+gem 'connection_pool', '< 3.0'
 gemspec

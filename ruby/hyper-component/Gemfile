@@ -10,4 +10,10 @@ gem 'hyper-state',       path: '../hyper-state'
 gem 'hyper-trace',       path: '../hyper-trace'
 
 #gem 'puma', '~> 3.11.0' # As of adding, version 3.12.0 isn't working so we are locking
+
+# CI/test harness: pin transitive deps to versions compatible with react-rails
+# (< 2.7.0). sprockets >= 4.2 raises "can't modify immutable cached environment";
+# connection_pool >= 3.0 breaks react-rails' server-renderer pool.
+gem 'sprockets', '~> 4.0', '< 4.2'
+gem 'connection_pool', '< 3.0'
 gemspec

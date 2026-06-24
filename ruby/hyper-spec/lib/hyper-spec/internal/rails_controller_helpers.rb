@@ -22,8 +22,9 @@ module HyperSpec
         end
 
         def mount_component!
+          prerender = @render_on != :client_only && !HyperSpec.prerendering_disabled?
           @page << '<%= react_component @component_name, @component_params, '\
-                   "{ prerender: #{@render_on != :client_only} } %>"
+                   "{ prerender: #{prerender} } %>"
         end
 
         def application!(file)

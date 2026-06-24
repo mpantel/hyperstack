@@ -17,16 +17,20 @@ module HyperI18n
 
     isomorphic_method(:t) do |f, attribute, opts = {}|
       f.when_on_client do
-        return I18nStore.translations[attribute] if I18nStore.translations[attribute]
+        # NB: no `return` inside this block — under Opal 1.6+ a return from a
+        # block invoked outside its defining method raises "unexpected return".
+        if I18nStore.translations[attribute]
+          I18nStore.translations[attribute]
+        else
+          Translate
+            .run(attribute: attribute, opts: opts)
+            .then do |translation|
+              I18nStore.translations[attribute] = translation
+              I18nStore.mutate.translations(I18nStore.translations)
+            end
 
-        Translate
-          .run(attribute: attribute, opts: opts)
-          .then do |translation|
-            I18nStore.translations[attribute] = translation
-            I18nStore.mutate.translations(I18nStore.translations)
-          end
-
-        opts[:default] || ''
+          opts[:default] || ''
+        end
       end
 
       f.when_on_server do
@@ -39,21 +43,22 @@ module HyperI18n
       date_or_time = formatted_date_or_time(date_or_time)
 
       f.when_on_client do
+        # NB: no `return` inside this block (see note on :t above).
         if I18nStore.localizations[date_or_time.to_s] &&
            I18nStore.localizations[date_or_time.to_s][format]
-          return I18nStore.localizations[date_or_time.to_s][format]
+          I18nStore.localizations[date_or_time.to_s][format]
+        else
+          Localize
+            .run(date_or_time: date_or_time, format: format, opts: {})
+            .then do |localization|
+              I18nStore.localizations[date_or_time.to_s] ||= {}
+              I18nStore.localizations[date_or_time.to_s][format] = localization
+
+              I18nStore.mutate.localizations(I18nStore.localizations)
+            end
+
+          opts[:default] || ''
         end
-
-        Localize
-          .run(date_or_time: date_or_time, format: format, opts: {})
-          .then do |localization|
-            I18nStore.localizations[date_or_time.to_s] ||= {}
-            I18nStore.localizations[date_or_time.to_s][format] = localization
-
-            I18nStore.mutate.localizations(I18nStore.localizations)
-          end
-
-        opts[:default] || ''
       end
 
       f.when_on_server do

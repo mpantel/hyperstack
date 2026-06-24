@@ -697,24 +697,24 @@ describe 'React::Component', js: true do
 
     it "returns false if new and old params are the same" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
-        @foo.instance_eval { @native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo = Foo.new(`{}`)
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({ value2: 2, value1: 1 }, {})
       end.to be_falsy
     end
 
     it "returns true if new and old params are have different values" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
-        @foo.instance_eval { @native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo = Foo.new(`{}`)
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({value2: 2, value1: 2}, {})
       end.to be_truthy
     end
 
     it "returns true if new and old params are have different keys" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
-        @foo.instance_eval { @native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo = Foo.new(`{}`)
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({value2: 2, value1: 1, value3: 3}, {})
       end.to be_truthy
     end
@@ -736,7 +736,7 @@ describe 'React::Component', js: true do
 
     it "returns false if both new and old states are empty" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.length.times do |i|
           EMPTIES.length.times do |j|
@@ -745,7 +745,7 @@ describe 'React::Component', js: true do
               # semantically check if we are using Opal 1.0 or better
               # if so we need to stringify e1
               e1 = `JSON.stringify(e1)` if 24 == `12+12`
-              @native.JS[:state] =
+              @__hyperstack_component_native.JS[:state] =
                 JS.call(:eval, "function bla(){return #{e1};}bla();")
             end
             return_values << @foo.should_component_update?({}, Hash.new(EMPTIES[j]))
@@ -758,7 +758,7 @@ describe 'React::Component', js: true do
     it "returns true if old state is empty, but new state is not" do
 
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.length.times do |i|
           empty = EMPTIES[i]
@@ -766,7 +766,7 @@ describe 'React::Component', js: true do
             # semantically check if we are using Opal 1.0 or better
             # if so we need to stringify e1
             empty = `JSON.stringify(empty)` if 24 == `12+12`
-            @native.JS[:state] =
+            @__hyperstack_component_native.JS[:state] =
               JS.call(:eval, "function bla(){return #{empty};}bla();")
           end
           return_values << @foo.should_component_update?({}, {foo: 12})
@@ -777,10 +777,10 @@ describe 'React::Component', js: true do
 
     it "returns true if new state is empty, but old state is not" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @native.JS[:state] = JS.call(:eval, "function bla(){return {foo: 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {foo: 12};}bla();") }
           return_values << @foo.should_component_update?({}, Hash.new(empty))
         end
         return_values
@@ -789,10 +789,10 @@ describe 'React::Component', js: true do
 
     it "returns true if new state and old state have different time stamps" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'***_state_updated_at-***' => 13})
         end
         return_values
@@ -801,10 +801,10 @@ describe 'React::Component', js: true do
 
     it "returns false if new state and old state have the same time stamps" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'***_state_updated_at-***' => 12})
         end
         return_values
@@ -813,10 +813,10 @@ describe 'React::Component', js: true do
 
     it "returns true if new state without timestamp is different from old state" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'my-state' => 13})
         end
         return_values
@@ -825,10 +825,10 @@ describe 'React::Component', js: true do
 
     it "returns false if new state without timestamp is the same as old state" do
       expect_evaluate_ruby do
-        @foo = Foo.new(nil)
+        @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'my_state' => 12})
         end
         return_values

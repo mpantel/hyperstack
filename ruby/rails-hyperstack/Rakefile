@@ -28,6 +28,12 @@ namespace :spec do
           sh("echo 'gem \"opal\", \"#{opal_version}\"' >> Gemfile")
           sh("echo 'gem \"net-imap\", \"0.4.18\"' >> Gemfile")
           sh("echo 'gem \"concurrent-ruby\", \"1.3.4\"' >> Gemfile") # if rails_version < '7'
+          # react-rails (< 2.7) is incompatible with connection_pool >= 3.0
+          sh("echo 'gem \"connection_pool\", \"< 3.0\"' >> Gemfile")
+          # Rails 6.1 + Ruby 3.x: active_support/logger references ::Logger before
+          # it is required -> "uninitialized constant LoggerThreadSafeLevel::Logger".
+          # Require logger before the app boots.
+          sh(%q{ruby -e 'f="config/application.rb"; File.write(f, %Q(require "logger"\n)+File.read(f))'})
           sh("bundle update")
           sh("bundle binstubs bundler")
           sh("bundle exec rails webpacker:install")

@@ -189,7 +189,6 @@ describe 'the React DSL', js: true do
   end
 
   it 'raises a method missing error', :prerendering_on do
-    pending 'prerendering off'
     client_option render_on: :both
     client_option raise_on_js_errors: :off
     expect_evaluate_ruby do
