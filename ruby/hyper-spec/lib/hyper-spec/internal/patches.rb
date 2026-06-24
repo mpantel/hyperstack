@@ -54,13 +54,30 @@ end
 
 class Hash
   def opal_serialize
-    "{#{collect { |k, v| "#{k.opal_serialize} => #{v.opal_serialize}" }.join(', ')}}"
+    parts = map do |k, v|
+      ks = k.opal_serialize
+      vs = v.opal_serialize
+      # If any key/value can't be serialized, serialize nothing: set_local_var
+      # then emits the safe "unserializable" stub for the whole variable instead
+      # of producing invalid Opal like `{ => , => }`.
+      return nil if ks.nil? || vs.nil?
+
+      "#{ks} => #{vs}"
+    end
+    "{#{parts.join(', ')}}"
   end
 end
 
 class Array
   def opal_serialize
-    "[#{collect { |v| v.opal_serialize }.join(', ')}]"
+    parts = map(&:opal_serialize)
+    # If any element can't be serialized, serialize nothing so set_local_var
+    # emits the safe "unserializable" stub for the whole variable instead of
+    # producing invalid Opal like `[, , ,]` (which raised Opal::SyntaxError for
+    # e.g. a spec ivar holding an array of ActiveRecord objects).
+    return nil if parts.any?(&:nil?)
+
+    "[#{parts.join(', ')}]"
   end
 end
 
