@@ -39,6 +39,17 @@ rescue LoadError
   nil
 end
 
+module HyperSpec
+  # Server-side prerendering requires mini_racer (see contextual_renderer.rb).
+  # While mini_racer is disabled, prerendering is gated off so that
+  # render_on: :both/:server_only mounts fall back to client-only rendering
+  # instead of raising. Set HYPER_SPEC_PRERENDERING=off to disable.
+  # Re-enable tracked in the "restore server-side prerendering" issue.
+  def self.prerendering_disabled?
+    %w[0 off no false].include?(ENV['HYPER_SPEC_PRERENDERING'].to_s.strip.downcase)
+  end
+end
+
 # opt-in to most recent AST format:
 Parser::Builders::Default.emit_lambda              = true
 Parser::Builders::Default.emit_procarg0            = true
@@ -281,8 +292,24 @@ RSpec.configure do |config|
     Capybara::Selenium::Driver.new(app, browser: :safari)
   end
 
+  Capybara.register_driver :selenium_remote do |app|
+    options = Selenium::WebDriver::Chrome::Options.new
+    options.add_argument('--headless=new')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--window-size=1400,1400')
+    options.add_option('goog:loggingPrefs', { browser: 'ALL' })
+    Capybara::Selenium::Driver.new(
+      app,
+      browser: :remote,
+      url: ENV['SELENIUM_REMOTE_URL'] || 'http://localhost:4444/wd/hub',
+      options: options
+    )
+  end
+
   Capybara.javascript_driver =
     case ENV['DRIVER']
+    when 'remote' then :selenium_remote
     when 'beheaded' then :firefox_headless
     when 'chrome_undocked' then :chrome_undocked
     when 'chrome_docked' then :chrome_docked

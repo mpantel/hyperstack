@@ -70,7 +70,7 @@ describe 'the param macro', js: true do
       end
 
       evaluate_ruby do
-        element = Hyperstack::Component::ReactAPI.create_element(Foo).on(:foo_invoked) { return [1,2,3], 'bar' }
+        element = Hyperstack::Component::ReactAPI.create_element(Foo).on(:foo_invoked) { [[1, 2, 3], 'bar'] }
         Hyperstack::Component::ReactTestUtils.render_into_document(element)
       end
       expect(page.driver.browser.logs.get(:browser).map { |m| m.message.gsub(/\\n/, "\n") }.to_a.join("\n"))

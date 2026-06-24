@@ -81,6 +81,8 @@ module HyperSpec
       end
 
       def prerendering?(opts)
+        return false if HyperSpec.prerendering_disabled?
+
         %i[both server_only].include?(opts[:render_on])
       end
 

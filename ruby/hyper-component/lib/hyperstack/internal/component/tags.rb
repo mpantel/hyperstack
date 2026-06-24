@@ -63,6 +63,11 @@ module Hyperstack
         class << self
           def included(component)
             name, parent = find_name_and_parent(component)
+            # find_name_and_parent returns nil for anonymous classes (e.g. the
+            # FRAGMENT class below) and top-level components with no parent scope.
+            # There is no parent to install the tag method on, so skip. Under Opal
+            # 1.6+ nil is frozen, so nil.extend would raise FrozenError.
+            return unless name && parent
             tag_names_module = Module.new do
               define_method name do |*params, &children|
                 RenderingContext.render(component, *params, &children)
