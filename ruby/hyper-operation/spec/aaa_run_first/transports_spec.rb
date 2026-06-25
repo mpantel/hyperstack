@@ -77,6 +77,17 @@ end
 
     after(:each) do
       Timecop.return
+      # Clear any leftover server-side connections so they don't bleed into the
+      # next example's "active connections should be []" assertions. These examples
+      # share the Hyperstack::Connection registry; a connection left open by one
+      # example otherwise persists and fails the next one deterministically (which
+      # rspec-retry can't rescue, since it's cross-example state). Uses the public
+      # API so it's adapter-agnostic.
+      begin
+        Hyperstack::Connection.active.each { |channel| Hyperstack::Connection.disconnect(channel) }
+      rescue StandardError
+        nil
+      end
       wait_for_ajax
     end
 
