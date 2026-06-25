@@ -264,24 +264,18 @@ hyper-spec:
   extends: .test_gem
   variables:
     COMPONENT: hyper-spec
-hyper-model:part1:
+# One job runs all 7 batches in PARALLEL across a pool of PARALLEL_PROCESSES
+# databases, with the Opal bundle precompiled once (see ruby/hyper-model/Rakefile
+# spec:parallel). Set PARALLEL_SPECS: "0" to fall back to the serial path
+# (all batches in one process). part1..part7 remain as ad-hoc per-batch rake tasks.
+hyper-model:
   extends: .test_gem_pg
   variables:
     COMPONENT: hyper-model
-    TASK: part1
+    TASK: spec
     DB: hyper_mesh_test_db
-hyper-model:part2:
-  extends: .test_gem_pg
-  variables:
-    COMPONENT: hyper-model
-    TASK: part2
-    DB: hyper_mesh_test_db
-hyper-model:part3:
-  extends: .test_gem_pg
-  variables:
-    COMPONENT: hyper-model
-    TASK: part3
-    DB: hyper_mesh_test_db
+    PRECOMPILED_ASSETS: "1"
+    PARALLEL_PROCESSES: "4"
 hyper-trace:
   extends: .test_gem
   variables:
@@ -306,10 +300,22 @@ hyper-store:
   extends: .test_gem
   variables:
     COMPONENT: hyper-store
-hyper-operation:
+hyper-operation:part1:
   extends: .test_gem
   variables:
     COMPONENT: hyper-operation
+    TASK: part1
+    PRECOMPILED_ASSETS: "1"
+# part2 (the 12 independent specs) runs in PARALLEL by default across a pool of
+# PARALLEL_PROCESSES databases; set PARALLEL_SPECS: "0" to fall back to serial.
+# part1 (aaa_run_first) stays serial above.
+hyper-operation:part2:
+  extends: .test_gem
+  variables:
+    COMPONENT: hyper-operation
+    TASK: part2
+    PRECOMPILED_ASSETS: "1"
+    PARALLEL_PROCESSES: "3"
 hyper-i18n:
   extends: .test_gem_pg
   variables:

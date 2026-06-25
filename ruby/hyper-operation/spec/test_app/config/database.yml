@@ -41,7 +41,10 @@ development:
 
 test:
   <<: *default
-  database: test_hyper_operation_db
+  # Parallel specs: each process gets a TEST_ENV_NUMBER ('' for
+  # the first, '2', '3', ... for the rest) so each gets its own DB. Unset/empty
+  # -> test_hyper_operation_db, so existing single-process jobs are unchanged.
+  database: test_hyper_operation_db<%= ENV['TEST_ENV_NUMBER'] %>
 
 production:
   <<: *default

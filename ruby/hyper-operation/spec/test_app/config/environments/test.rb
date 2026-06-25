@@ -16,6 +16,12 @@ Rails.application.configure do
   config.public_file_server.enabled = true
   config.public_file_server.headers = { 'Cache-Control' => 'public, max-age=3600' }
 
+  # Parallel specs: when the job precompiles the bundle once up front (parallel
+  # runs set PRECOMPILED_ASSETS), serve it statically from public/assets and never
+  # compile at request time. With no runtime Sprockets writes there is nothing for
+  # concurrent workers/threads to race -- the FileStore compile race disappears.
+  config.assets.compile = false if ENV['PRECOMPILED_ASSETS']
+
   # Show full error reports and disable caching.
   config.consider_all_requests_local       = true
   config.action_controller.perform_caching = false

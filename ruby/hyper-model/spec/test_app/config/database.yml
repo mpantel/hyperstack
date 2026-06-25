@@ -32,7 +32,10 @@ development:
 
 test:
   <<: *default
-  database: hyper_mesh_test_db
+  # Parallel specs: the spec:parallel pool assigns each process a TEST_ENV_NUMBER
+  # ('' for the first, '2', '3', ... for the rest), giving each its own DB.
+  # Unset/empty -> hyper_mesh_test_db, so serial runs are unchanged.
+  database: hyper_mesh_test_db<%= ENV['TEST_ENV_NUMBER'] %>
 
 production:
   <<: *default

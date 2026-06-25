@@ -267,9 +267,14 @@ RSpec.configure do |config|
     end
   end
 
-  # config.before(:each) do
-  #   DatabaseCleaner.strategy = :transaction
-  # end
+  # Reset the cleaning strategy before every example. DatabaseCleaner.strategy
+  # is global state, so without this the first `js: true` example flips it to
+  # :truncation (below) and every subsequent *non-js* example keeps truncating
+  # needlessly. Non-js examples don't cross the test/Puma thread boundary, so a
+  # fast transaction rollback is sufficient and correct for them.
+  config.before(:each) do
+    DatabaseCleaner.strategy = :transaction
+  end
 
   config.before(:each) do |x|
     Hyperstack.class_eval do

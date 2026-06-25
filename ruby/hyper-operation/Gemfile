@@ -10,4 +10,8 @@ gem 'hyper-component',  path: '../hyper-component'
 # connection_pool >= 3.0 breaks react-rails' server-renderer pool.
 gem 'sprockets', '~> 4.0', '< 4.2'
 gem 'connection_pool', '< 3.0'
+
+# Parallel specs: fan part2 specs across processes, one DB per process.
+gem 'parallel_tests', group: [:development, :test]
+
 gemspec

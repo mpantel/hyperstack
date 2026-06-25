@@ -14,4 +14,8 @@ end
 # connection_pool >= 3.0 breaks react-rails' server-renderer pool.
 gem 'sprockets', '~> 4.0', '< 4.2'
 gem 'connection_pool', '< 3.0'
+
+# Parallel specs helper (TEST_ENV_NUMBER convention; operation uses parallel_rspec).
+gem 'parallel_tests', group: [:development, :test]
+
 gemspec
