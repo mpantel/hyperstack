@@ -75,7 +75,7 @@ variables:
 #  RUBYOPT: "-W0"
   RUBYOPT: "-W:deprecated"
 
-  OPAL_VERSION: 1.6.1
+  OPAL_VERSION: 1.7.4
   RBENV_VERSION: 3.3.11
 
   # mini_racer is disabled, so server-side prerendering is gated off in specs

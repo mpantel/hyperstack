@@ -4,6 +4,18 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.33.17.0 — 2026-06-26
+
+### Build & dependencies
+
+- **Bump Opal 1.6.1 → 1.7.4.** Updates `OPAL_VERSION` (CI + local-dev docs) to
+  the latest 1.7.x. The dependency ranges already permit it (`opal-rails ~> 1.0`,
+  `opal-sprockets`/`opal-browser` `< 2.0`), so no gemspec changes are needed. The
+  disruptive Opal runtime changes (frozen `nil`, strict return-in-block) landed in
+  1.6 and were already fixed in `1.0.alpha1.8.33.16.0`; 1.7 adds Ruby 3.2+ syntax
+  support, aligning with the Ruby 3.3.11 pin. Version bumped to
+  `1.0.alpha1.8.33.17.0`.
+
 ## 1.0.alpha1.8.33.16.0 — 2026-06-25 (released)
 
 ### Build & dependencies
