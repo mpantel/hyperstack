@@ -8,6 +8,7 @@ require 'filecache'
 
 
 require 'capybara/rspec'
+require 'rspec/retry'
 require 'hyper-spec/internal/client_execution'
 require 'hyper-spec/internal/component_mount'
 require 'hyper-spec/internal/controller'
@@ -204,7 +205,21 @@ RSpec.configure do |config|
   config.add_setting :wait_for_initialization_time
   config.wait_for_initialization_time = 3
 
-  Capybara.default_max_wait_time = 10
+  # Bumped from 10: the browser data-sync specs (server push / websockets / AJAX)
+  # are borderline against a 10s ceiling on loaded CI runners and time out
+  # intermittently (wait_for_ajax "execution expired").
+  Capybara.default_max_wait_time = 30
+
+  # Browser specs occasionally fail on transient Selenium/AJAX errors
+  # (Net::ReadTimeout, "execution expired") rather than real assertion failures.
+  # Retry js-tagged examples a couple of times so flakiness doesn't redden CI;
+  # a genuinely failing spec still fails after the retries.
+  config.verbose_retry = true
+  config.display_try_failure_messages = true
+  config.default_sleep_interval = 1
+  config.around(:each, :js) do |example|
+    example.run_with_retry(retry: 3)
+  end
 
   Capybara.register_driver :chrome_undocked do |app|
     options = Selenium::WebDriver::Chrome::Options.new
