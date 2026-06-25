@@ -96,17 +96,22 @@ variables:
 #   before_script:
 #     - docker info
 
-# Cache gems between pipelines, per component.
+# Cache gems between pipelines, per component and Ruby version.
 #
-# `key: gems-$COMPONENT` gives each component its own cache, so the ~13 parallel
-# jobs don't clobber a single shared key (default cache policy is pull-push).
-# part1/part2 of a component share one key. We cache only `local_gems` (the
-# bundler `--path`): node packages are baked into the image at /node_modules and
-# symlinked in (see before_script), so there is nothing useful to cache for node
-# and the path would just be a dangling symlink.
+# `key: gems-$COMPONENT-$RBENV_VERSION` gives each component its own cache, so the
+# ~13 parallel jobs don't clobber a single shared key (default cache policy is
+# pull-push); part1/part2 of a component share one key. The Ruby version is part
+# of the key because `local_gems` holds *installed* gems including compiled C
+# extensions — a cache built on one Ruby ABI must not be restored into a job on a
+# different Ruby (e.g. the 3.2 → 3.3 → 3.4 line), or native extensions mismatch.
+# This also makes the cache safe to share across runners (a shared volume / S3
+# distributed cache). We cache only `local_gems` (the bundler `--path`): node
+# packages are baked into the image at /node_modules and symlinked in (see
+# before_script), so there is nothing useful to cache for node and the path would
+# just be a dangling symlink.
 default:
   cache:
-    key: "gems-$COMPONENT"
+    key: "gems-$COMPONENT-$RBENV_VERSION"
     paths:
       - local_gems
     policy: pull-push
