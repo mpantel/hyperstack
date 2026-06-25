@@ -19,8 +19,8 @@ module Hyperstack
         f.when_on_client do
           # NB: no `return` inside this block — under Opal 1.6+ a return from a
           # block invoked outside its defining method raises "unexpected return".
-          if Store.translations[attribute]
-            Store.translations[attribute]
+          if translations_store[attribute]
+            translations_store[attribute]
           else
             Translate
               .run(attribute: attribute, opts: opts)
@@ -45,9 +45,9 @@ module Hyperstack
       def self.t_async(attribute, opts = {})
         if RUBY_ENGINE == 'opal'
           # If already cached, return resolved promise
-          if Store.translations[attribute]
+          if translations_store[attribute]
             # In Opal, use Promise.value() instead of Promise.resolve()
-            Promise.value(Store.translations[attribute])
+            Promise.value(translations_store[attribute])
           else
             # Return the promise from Translate operation
             Translate
@@ -86,9 +86,9 @@ module Hyperstack
 
         f.when_on_client do
           # NB: no `return` inside this block (see note on :t above).
-          if Store.localizations[date_or_time.to_s] &&
-             Store.localizations[date_or_time.to_s][format]
-            Store.localizations[date_or_time.to_s][format]
+          if localizations_store[date_or_time.to_s] &&
+             localizations_store[date_or_time.to_s][format]
+            localizations_store[date_or_time.to_s][format]
           else
             Localize
               .run(date_or_time: date_or_time, format: format, opts: {})
@@ -122,6 +122,23 @@ module Hyperstack
       end
 
       class << self
+        # Safe read access to the i18n stores. A preload/translation lookup can
+        # run before the Store is initialized (e.g. a before_mount preload firing
+        # before before_first_mount, or a non-default locale transient), which
+        # raised "undefined method 'translations' for nil" on the client. Degrade
+        # to an empty hash (= "no cached value") instead of raising. See #1.
+        def translations_store
+          Store.translations || {}
+        rescue StandardError
+          {}
+        end
+
+        def localizations_store
+          Store.localizations || {}
+        rescue StandardError
+          {}
+        end
+
         def no_initial_data?
           `typeof window.HyperI18nInitialData === 'undefined'`
         end
