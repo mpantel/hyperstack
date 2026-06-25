@@ -38,7 +38,8 @@ describe "regulate class connections" do
   it "can conditionally regulate the connection" do
     ApplicationPolicy.regulate_class_connection { self }
     expect { Hyperstack::InternalPolicy.regulate_connection(true, "Application") }.not_to raise_error
-    expect { Hyperstack::InternalPolicy.regulate_connection(nil, "Application") }.to raise_error('connection failed')
+    # acting_user nil -> the regulation actively rejects (connectable? == false) -> AccessViolation
+    expect { Hyperstack::InternalPolicy.regulate_connection(nil, "Application") }.to raise_error(Hyperstack::AccessViolation)
   end
 
   it "can conditionally regulate the connection by raising an error" do

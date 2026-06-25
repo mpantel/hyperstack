@@ -71,14 +71,24 @@ sequence of changes brought this down substantially.
   in-process retries). Each example now disconnects all active connections in
   `after(:each)` via the public `Connection.active`/`Connection.disconnect` API.
 - **Fix the flaky `transports_spec` "sees the connection going offline" examples**
-  (#9). The connection's `refresh_at` is stamped when the channel is first
-  established — before the test's earlier `Timecop.travel` — so on a slow CI runner
-  where mount/connect took several seconds, traveling by exactly `refresh_interval`
-  could land *before* `refresh_at`. `active` then never saw `needs_refresh?`, the
-  policy-denied channel was never swept, and the example failed all `rspec-retry`
-  attempts (`got ["ScopeIt::TestApplication"]`, expected `[]`). The examples now
-  travel a minute past the refresh deadline so the sweep fires deterministically
-  regardless of connect lag (both the Pusher-Fake and Action Cable variants).
+  (#9) — two compounding causes:
+  - *Timing.* The connection's `refresh_at` is stamped when the channel is first
+    established — before the test's earlier `Timecop.travel` — so on a slow CI
+    runner traveling by exactly `refresh_interval` could land *before* `refresh_at`,
+    and `active` never saw `needs_refresh?`. The examples now travel a minute past
+    the refresh deadline so the sweep always fires (both transport variants).
+  - *Policy (the dominant cause).* An explicitly-denied class connection raised a
+    bare `RuntimeError("connection failed")`, but the connection-refresh sweep's
+    `channel_allowed_by_policy?` only treats `Hyperstack::AccessViolation` as a
+    denial — so the `RuntimeError` fell through to "allow by default" and the
+    policy-denied channel was re-stamped and never swept (`got
+    ["ScopeIt::TestApplication"]`). `ClassConnectionRegulation.connect` now raises
+    `AccessViolation` when a regulation *actively rejects* the user
+    (`connectable? == false`), while an absent/empty regulation still raises the
+    legacy bare error so unregulated channels stay allowed-by-default (preserving
+    the `connection_spec` refresh behaviour). All real callers (subscribe /
+    `can_connect?`) rescue both alike; the one explicit-denial assertion in the
+    `regulate_class_connection` contract specs was updated to expect `AccessViolation`.
 
 ### Fixes
 
