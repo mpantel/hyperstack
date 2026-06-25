@@ -3,9 +3,63 @@ require "rspec/core/rake_task"
 
 RSpec::Core::RakeTask.new(:spec)
 
+# Split into two CI jobs (see issue #7). part1 isolates the order-sensitive
+# specs that share global Hyperstack::Connection state and must run together
+# (aaa_run_first/*); part2 runs everything else. Splitting *around* the
+# connection specs, not through them.
+# part1 is ALWAYS serial: aaa_run_first/* shares global Hyperstack::Connection
+# state and must run together in order.
+RSpec::Core::RakeTask.new(:part1) do |t|
+  t.pattern = "spec/aaa_run_first/**/*_spec.rb"
+end
+
+RSpec::Core::RakeTask.new(:part2_serial) do |t|
+  t.pattern = "spec/{hyper-operation,mutations,policies}/**/*_spec.rb"
+end
+
+# part2 (the 12 independent specs) runs in PARALLEL by default; set
+# PARALLEL_SPECS=0 to force the serial path.
+def parallel_specs?
+  ENV.fetch('PARALLEL_SPECS', '1') !~ /\A(0|false|no|off)\z/i
+end
+
+task :part2 do
+  Rake::Task[parallel_specs? ? 'spec:parallel' : 'part2_serial'].invoke
+end
+
 namespace :spec do
   task :prepare do
     sh %(cd spec/test_app; bundle exec rails db:setup)
+    # When PRECOMPILED_ASSETS is set (CI browser jobs), build the static Opal
+    # bundle once here so the specs run with compile=false (no debug-mode runtime
+    # compilation). Opt-in so local runs are unaffected.
+    sh %(cd spec/test_app; RAILS_ENV=test bundle exec rails assets:precompile) if ENV['PRECOMPILED_ASSETS']
+  end
+
+  # part2 = the 12 independent specs (hyper-operation / mutations / policies),
+  # fanned across N processes, each with its own PostgreSQL DB via TEST_ENV_NUMBER
+  # (see database.yml). aaa_run_first/* is deliberately EXCLUDED -- it shares
+  # global Hyperstack::Connection state and stays in the serial part1 job.
+  PARALLEL_PROCESSES = Integer(ENV['PARALLEL_PROCESSES'] || 3)
+
+  desc 'Create one test database per parallel process'
+  task :parallel_prepare do
+    PARALLEL_PROCESSES.times do |i|
+      env_number = i.zero? ? '' : (i + 1).to_s
+      sh %(cd spec/test_app; TEST_ENV_NUMBER='#{env_number}' RAILS_ENV=test bundle exec rails db:setup)
+    end
+  end
+
+  desc 'Run part2 specs across N processes, one DB each'
+  task parallel: :parallel_prepare do
+    # Precompile the (static) Opal bundle ONCE so workers serve it from
+    # public/assets with compile=false (no runtime compilation -> no FileStore
+    # race). Skip if a CI before_script (spec:prepare) already built it.
+    unless Dir.glob('spec/test_app/public/assets/.sprockets-manifest-*.json').any?
+      sh %(cd spec/test_app; PRECOMPILED_ASSETS=1 RAILS_ENV=test bundle exec rails assets:precompile)
+    end
+    sh %(PRECOMPILED_ASSETS=1 bundle exec parallel_rspec -n #{PARALLEL_PROCESSES} ) +
+       %(spec/hyper-operation spec/mutations spec/policies)
   end
 end
 

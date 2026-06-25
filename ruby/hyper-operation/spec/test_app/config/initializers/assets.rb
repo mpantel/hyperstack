@@ -12,4 +12,20 @@ Rails.application.config.assets.precompile += %w( time_cop.js )
 # Rails.application.config.assets.precompile += %w( search.js )
 
 Opal::Config.source_map_enabled = true # default
-Rails.application.config.assets.debug = true
+
+# Asset modes. PRECOMPILED_ASSETS (parallel jobs): bundle is precompiled
+# once and served statically (compile=false), so no runtime compilation races.
+# Otherwise keep debug mode; under parallel_tests without precompile give each
+# process its own Sprockets cache dir (TEST_ENV_NUMBER set only by parallel_tests).
+if ENV['PRECOMPILED_ASSETS']
+  Rails.application.config.assets.debug = false
+else
+  Rails.application.config.assets.debug = true
+  if ENV['TEST_ENV_NUMBER']
+    Rails.application.config.assets.configure do |env|
+      env.cache = Sprockets::Cache::FileStore.new(
+        Rails.root.join("tmp/cache/assets/proc#{ENV['TEST_ENV_NUMBER']}").to_s
+      )
+    end
+  end
+end
