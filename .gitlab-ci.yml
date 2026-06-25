@@ -96,12 +96,20 @@ variables:
 #   before_script:
 #     - docker info
 
-# Cache gems in between builds
+# Cache gems between pipelines, per component.
+#
+# `key: gems-$COMPONENT` gives each component its own cache, so the ~13 parallel
+# jobs don't clobber a single shared key (default cache policy is pull-push).
+# part1/part2 of a component share one key. We cache only `local_gems` (the
+# bundler `--path`): node packages are baked into the image at /node_modules and
+# symlinked in (see before_script), so there is nothing useful to cache for node
+# and the path would just be a dangling symlink.
 default:
   cache:
+    key: "gems-$COMPONENT"
     paths:
       - local_gems
-      - node_modules
+    policy: pull-push
 
 stages:
   #  - databases
