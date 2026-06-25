@@ -45,9 +45,32 @@ sequence of changes brought this down substantially.
   `DatabaseCleaner.strategy` is global state; the first `js: true` example flipped
   it to `:truncation` and every later non-js example kept truncating needlessly.
   Non-js examples now use a fast `:transaction` rollback again.
+- **Per-component gem cache between pipelines.** The `default` cache had no `key`,
+  so all ~13 parallel jobs shared one global cache and clobbered each other on
+  push (default policy is pull-push), leaving each pipeline to re-resolve gems
+  anyway. The cache is now keyed `gems-$COMPONENT` so every component keeps its
+  own stable `local_gems` cache (part1/part2 of a component share one key).
+  Dropped `node_modules` from the cache: node packages are baked into the image
+  at `/node_modules` and symlinked in, so the cached entry was a dangling symlink
+  with nothing to restore.
 - **Reduce CI flakiness in browser specs** — longer Capybara wait + `rspec-retry`.
+- **Harden `transports_spec` against cross-example connection leaks** (!16). The
+  Transport Tests share the server-side `Hyperstack::Connection` registry but only
+  reset Timecop in `after(:each)`, so a connection left open by one example bled
+  into the next example's "active connections should be `[]`" assertion and failed
+  it deterministically (`rspec-retry` can't help — the leak persists across
+  in-process retries). Each example now disconnects all active connections in
+  `after(:each)` via the public `Connection.active`/`Connection.disconnect` API.
 
 ### Fixes
 
 - **hyper-spec: stub unserializable collections** in `opal_serialize` instead of
   emitting invalid Opal, with specs for collection stubbing (#2).
+- **hyper-i18n: guard Store reads against an uninitialized Store** (#1, !15).
+  `t`/`t_async`/`preload`/`l` read `Store.translations`/`Store.localizations`
+  before the client-only i18n Store is guaranteed initialized, raising
+  `undefined method 'translations' for nil` during early component mount (e.g. a
+  `before_mount`-triggered preload, or a non-default-locale transient). Benign
+  today (swallowed by callers) but real ordering noise. New
+  `translations_store`/`localizations_store` helpers degrade to `{}` instead of
+  raising; writes in resolved-promise callbacks (after init) are unchanged.
