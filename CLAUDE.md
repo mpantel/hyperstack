@@ -87,6 +87,6 @@ This prevents Spring from trying to preload multiple Rails applications simultan
 
 ## Local Development and Testing
 
-- set OPAL_VERSION=1.6.1 before running specs
+- set OPAL_VERSION=1.7.4 before running specs
 - run specs locally in sqlite
 - run specs with rspec and spring disabled
