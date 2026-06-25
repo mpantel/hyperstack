@@ -61,6 +61,15 @@ sequence of changes brought this down substantially.
   it deterministically (`rspec-retry` can't help — the leak persists across
   in-process retries). Each example now disconnects all active connections in
   `after(:each)` via the public `Connection.active`/`Connection.disconnect` API.
+- **Fix the flaky `transports_spec` "sees the connection going offline" examples**
+  (#9). The connection's `refresh_at` is stamped when the channel is first
+  established — before the test's earlier `Timecop.travel` — so on a slow CI runner
+  where mount/connect took several seconds, traveling by exactly `refresh_interval`
+  could land *before* `refresh_at`. `active` then never saw `needs_refresh?`, the
+  policy-denied channel was never swept, and the example failed all `rspec-retry`
+  attempts (`got ["ScopeIt::TestApplication"]`, expected `[]`). The examples now
+  travel a minute past the refresh deadline so the sweep fires deterministically
+  regardless of connect lag (both the Pusher-Fake and Action Cable variants).
 
 ### Fixes
 

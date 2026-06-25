@@ -146,7 +146,15 @@ end
         evaluate_ruby 'Hyperstack.go_ahead_and_connect'
         refresh_interval = Hyperstack::Connection.transport.refresh_channels_every
         if refresh_interval != :never
-          Timecop.travel(Time.now + refresh_interval)
+          # Travel comfortably past the channel's refresh deadline, not just by
+          # refresh_interval. The connection's refresh_at was stamped when it was
+          # first established (before the earlier Timecop.travel), so on a slow CI
+          # runner where mounting/connecting took several seconds, traveling by
+          # exactly refresh_interval can land *before* refresh_at. Then active never
+          # sees needs_refresh? (refresh_at < now), the policy-denied channel is
+          # never swept, and this assertion flakes. The extra minute makes the
+          # sweep fire deterministically regardless of connect lag.
+          Timecop.travel(Time.now + refresh_interval + 1.minute)
         end
         wait_for { Hyperstack::Connection.active }.to eq([])
       end
@@ -227,7 +235,15 @@ end
         evaluate_ruby 'Hyperstack.go_ahead_and_connect'
         refresh_interval = Hyperstack::Connection.transport.refresh_channels_every
         if refresh_interval != :never
-          Timecop.travel(Time.now + refresh_interval)
+          # Travel comfortably past the channel's refresh deadline, not just by
+          # refresh_interval. The connection's refresh_at was stamped when it was
+          # first established (before the earlier Timecop.travel), so on a slow CI
+          # runner where mounting/connecting took several seconds, traveling by
+          # exactly refresh_interval can land *before* refresh_at. Then active never
+          # sees needs_refresh? (refresh_at < now), the policy-denied channel is
+          # never swept, and this assertion flakes. The extra minute makes the
+          # sweep fire deterministically regardless of connect lag.
+          Timecop.travel(Time.now + refresh_interval + 1.minute)
         end
         wait_for { Hyperstack::Connection.active }.to eq([])
       end
