@@ -4,7 +4,7 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
-## 2026-06-25
+## 1.0.alpha1.8.33.16.0 — 2026-06-25 (released)
 
 ### Build & dependencies
 
@@ -89,6 +89,16 @@ sequence of changes brought this down substantially.
     the `connection_spec` refresh behaviour). All real callers (subscribe /
     `can_connect?`) rescue both alike; the one explicit-denial assertion in the
     `regulate_class_connection` contract specs was updated to expect `AccessViolation`.
+
+### Security
+
+- **Enforce the connection policy on `connect-to-transport`** (#12). The
+  `connect_to_transport` controller action re-registered a channel via
+  `Connection.open` **without** a policy check — unlike `subscribe` — so a client
+  the connection policy denied could resurrect a channel the refresh sweep had
+  just dropped (and was the residual race behind the #9 offline-test flake). The
+  action now calls `regulate(params[:channel])` first (skipping the per-client
+  session channel) and returns `401 Unauthorized` on an `AccessViolation`.
 
 ### Fixes
 
