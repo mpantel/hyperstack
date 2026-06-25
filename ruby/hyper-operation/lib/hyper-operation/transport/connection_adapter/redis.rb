@@ -135,10 +135,13 @@ module Hyperstack
             Hyperstack::InternalPolicy.regulate_connection(acting_user, channel)
             true
           rescue Hyperstack::AccessViolation
-            # Explicitly denied by policy
+            # Explicit policy denial — a connection regulation actively rejected this
+            # user (or a non-AR/unknown channel class). Drop it. See #9.
             false
           rescue => e
-            # Channel not part of policy system or other error - allow by default
+            # No applicable connection regulation (raises a bare "connection failed")
+            # or an unexpected error — allow by default rather than disconnect an
+            # unregulated/possibly-legitimate channel.
             true
           end
         end

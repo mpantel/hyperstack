@@ -253,7 +253,16 @@ module Hyperstack
     end
 
     def self.connect(channel, acting_user)
-      raise "connection failed" unless regulations[channel].connectable?(acting_user)
+      connectable = regulations[channel].connectable?(acting_user)
+      return if connectable
+      # connectable? is `false` only when a connection regulation actively rejected
+      # the user; `nil` means there is no applicable regulation (empty/auto-vivified).
+      # Raise AccessViolation for a real denial so the connection-refresh sweep drops
+      # the channel (channel_allowed_by_policy? swallowed the old bare RuntimeError as
+      # "allow by default", so policy-denied channels were never swept — see #9). Keep
+      # the legacy bare raise for the nil case so unregulated channels stay allowed.
+      raise Hyperstack::AccessViolation.new(:connection_failed) if connectable == false
+      raise "connection failed"
     end
 
     def self.connections_for(acting_user, auto_connections_only)
