@@ -57,6 +57,11 @@ sequence of changes brought this down substantially.
   Dropped `node_modules` from the cache: node packages are baked into the image
   at `/node_modules` and symlinked in, so the cached entry was a dangling symlink
   with nothing to restore.
+- **Add the Ruby version to the gem cache key** (`gems-$COMPONENT-$RBENV_VERSION`).
+  `local_gems` holds installed gems including compiled C extensions, so a cache
+  built on one Ruby ABI must not be restored into a job on another (the 3.2 → 3.3
+  → 3.4 line). Also a prerequisite for safely sharing the cache across runners
+  (shared volume / S3 distributed cache).
 - **Reduce CI flakiness in browser specs** — longer Capybara wait + `rspec-retry`.
 - **Harden `transports_spec` against cross-example connection leaks** (!16). The
   Transport Tests share the server-side `Hyperstack::Connection` registry but only
