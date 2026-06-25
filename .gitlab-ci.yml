@@ -76,7 +76,7 @@ variables:
   RUBYOPT: "-W:deprecated"
 
   OPAL_VERSION: 1.6.1
-  RBENV_VERSION: 3.2.11
+  RBENV_VERSION: 3.3.11
 
   # mini_racer is disabled, so server-side prerendering is gated off in specs
   # (render_on: :both/:server_only fall back to client-only). Re-enable tracked

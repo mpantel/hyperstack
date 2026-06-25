@@ -9,6 +9,10 @@ hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 ### Build & dependencies
 
 - **Bump Opal 1.5.1 → 1.6.1 and Ruby 3.2.9 → 3.2.11** (#3).
+- **Bump Ruby 3.2.11 → 3.3.11** (#5, !11). Moves the Ruby pin (`.ruby-version` +
+  CI `RBENV_VERSION`) to the latest 3.3.x, on top of the Opal 1.6 work it depends
+  on. The full browser-spec suite passes on 3.3.11. Version bumped to
+  `1.0.alpha1.8.33.16.0`.
 
 ### Test suite & CI performance
 
