@@ -143,6 +143,13 @@ module Hyperstack
         start_time = Time.current if profiling_enabled
         Rails.logger.info "[CONTROLLER] connect_to_transport called for channel: #{params[:channel]}, user: #{try(:acting_user)&.class&.name}" if profiling_enabled
 
+        # Enforce the connection policy before (re)registering the channel. Without
+        # this, a client the policy denies could resurrect a channel that the refresh
+        # sweep just dropped, by hitting this endpoint directly — bypassing the
+        # regulate_*_connection policies that `subscribe` enforces. `regulate` skips
+        # the per-client session channel and raises AccessViolation on denial. See #12.
+        regulate(params[:channel])
+
         root_path = request.original_url.gsub(/hyperstack-connect-to-transport.*$/, '')
 
         connection_start = Time.current if profiling_enabled
@@ -158,6 +165,10 @@ module Hyperstack
         end
 
         render json: result
+      rescue Hyperstack::AccessViolation
+        # Connection policy denied this channel for the acting user — refuse to
+        # (re)register it (see #12). Distinct from the transport failure below.
+        head :unauthorized
       rescue Exception => e
         if profiling_enabled
           error_time = ((Time.current - start_time) * 1000).round(2)
