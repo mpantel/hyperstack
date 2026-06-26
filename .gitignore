@@ -1,4 +1,5 @@
 /.idea/
+*.gem
 /ruby/**/*.gem
 /ruby/**/*.lock
 /ruby/**/node_modules/
