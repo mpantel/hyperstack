@@ -4,6 +4,19 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.0 — 2026-06-26
+
+### Build & dependencies
+
+- **Bump Ruby 3.3.11 → 3.4.9** (#11). Ruby 3.3 is in security-maintenance only
+  (EOL ~March 2027); 3.4 is in full maintenance. Updates `.ruby-version` and the
+  CI `RBENV_VERSION` to 3.4.9; the version marker's Ruby segment moves `33 → 34`
+  (`1.0.alpha1.8.34.18.0`). The earlier 3.2 → 3.3 jump already cleared the hard
+  Opal/Rails-6.1 compatibility work, so this is a straightforward bump.
+  - **Prereq:** the CI base image (`base24:yjit`) must ship Ruby 3.4.9 for
+    `RBENV_VERSION` to resolve.
+  - Verification of the full green suite is pending CI runners being provisioned.
+
 ## 1.0.alpha1.8.33.18.0 — 2026-06-26
 
 ### Build & dependencies
