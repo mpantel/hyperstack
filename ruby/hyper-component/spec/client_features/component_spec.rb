@@ -698,7 +698,7 @@ describe 'React::Component', js: true do
     it "returns false if new and old params are the same" do
       expect_evaluate_ruby do
         @foo = Foo.new(`{}`)
-        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = Opal::Raw.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({ value2: 2, value1: 1 }, {})
       end.to be_falsy
     end
@@ -706,7 +706,7 @@ describe 'React::Component', js: true do
     it "returns true if new and old params are have different values" do
       expect_evaluate_ruby do
         @foo = Foo.new(`{}`)
-        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = Opal::Raw.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({value2: 2, value1: 2}, {})
       end.to be_truthy
     end
@@ -714,7 +714,7 @@ describe 'React::Component', js: true do
     it "returns true if new and old params are have different keys" do
       expect_evaluate_ruby do
         @foo = Foo.new(`{}`)
-        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = JS.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
+        @foo.instance_eval { @__hyperstack_component_native.JS[:props] = Opal::Raw.call(:eval, 'function bla(){return {value1: 1, value2: 2};}bla();') }
         @foo.should_component_update?({value2: 2, value1: 1, value3: 3}, {})
       end.to be_truthy
     end
@@ -746,7 +746,7 @@ describe 'React::Component', js: true do
               # if so we need to stringify e1
               e1 = `JSON.stringify(e1)` if 24 == `12+12`
               @__hyperstack_component_native.JS[:state] =
-                JS.call(:eval, "function bla(){return #{e1};}bla();")
+                Opal::Raw.call(:eval, "function bla(){return #{e1};}bla();")
             end
             return_values << @foo.should_component_update?({}, Hash.new(EMPTIES[j]))
           end
@@ -767,7 +767,7 @@ describe 'React::Component', js: true do
             # if so we need to stringify e1
             empty = `JSON.stringify(empty)` if 24 == `12+12`
             @__hyperstack_component_native.JS[:state] =
-              JS.call(:eval, "function bla(){return #{empty};}bla();")
+              Opal::Raw.call(:eval, "function bla(){return #{empty};}bla();")
           end
           return_values << @foo.should_component_update?({}, {foo: 12})
         end
@@ -780,7 +780,7 @@ describe 'React::Component', js: true do
         @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {foo: 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = Opal::Raw.call(:eval, "function bla(){return {foo: 12};}bla();") }
           return_values << @foo.should_component_update?({}, Hash.new(empty))
         end
         return_values
@@ -792,7 +792,7 @@ describe 'React::Component', js: true do
         @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = Opal::Raw.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'***_state_updated_at-***' => 13})
         end
         return_values
@@ -804,7 +804,7 @@ describe 'React::Component', js: true do
         @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = Opal::Raw.call(:eval, "function bla(){return {'***_state_updated_at-***': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'***_state_updated_at-***' => 12})
         end
         return_values
@@ -816,7 +816,7 @@ describe 'React::Component', js: true do
         @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = Opal::Raw.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'my-state' => 13})
         end
         return_values
@@ -828,7 +828,7 @@ describe 'React::Component', js: true do
         @foo = Foo.new(`{}`)
         return_values = []
         EMPTIES.each do |empty|
-          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = JS.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
+          @foo.instance_eval { @__hyperstack_component_native.JS[:state] = Opal::Raw.call(:eval, "function bla(){return {'my_state': 12};}bla();") }
           return_values << @foo.should_component_update?({}, {'my_state' => 12})
         end
         return_values

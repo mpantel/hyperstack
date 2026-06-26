@@ -186,7 +186,7 @@ end
 #       Foo.class_eval do
 #         define_state(:foo) { 10 }
 #       end
-#       dom_el = JS.call(:eval, "document.body.appendChild(document.createElement('div'))")
+#       dom_el = Opal::Raw.call(:eval, "document.body.appendChild(document.createElement('div'))")
 #       instance = Hyperstack::Component::ReactAPI.render(element_to_render, dom_el)
 #       instance.state.foo
 #     end.to eq(10)

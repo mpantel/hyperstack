@@ -377,7 +377,13 @@ module ReactiveRecord
       def infer_type_from_hash(klass, hash)
         klass = klass.base_class
         return klass unless hash
-        type = hash[klass.inheritance_column]
+        # No inheritance column => not STI, so the base class is the type. Guard
+        # explicitly instead of falling through to `hash[nil]`: under Opal 1.8 the
+        # Hash->Map bridging makes `native_hash[nil]` return the whole hash (not
+        # nil as under <=1.7), which then blows up Object.const_get with a Hash.
+        ic = klass.inheritance_column
+        return klass unless ic
+        type = hash[ic]
         begin
           return Object.const_get(type)
         rescue Exception => e

@@ -20,7 +20,10 @@ module Hyperstack
           val = instance_variable_get(var)
           begin
             val.unmount if val.respond_to?(:unmount)
-          rescue RUBY_ENGINE == 'opal' ? JS::Error : nil
+            # Opal 1.8 renamed JS::Error -> Opal::Raw::Error (referencing JS::Error
+            # warns at runtime). Use the new constant when present; fall back to
+            # JS::Error on Opal < 1.8 where Opal::Raw does not exist.
+          rescue RUBY_ENGINE == 'opal' ? (defined?(Opal::Raw::Error) ? Opal::Raw::Error : JS::Error) : nil
             nil
           end
         end

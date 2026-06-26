@@ -69,6 +69,36 @@ Please ask technical questions on StackOverflow as the answers help people in th
 + Please ask questions here: https://hyperstack.org/question
 + All the `hyperstack` tagged questions are here: https://hyperstack.org/questions
 
+## Running the tests locally
+
+The browser-spec suites (hyper-model, hyper-operation, hyper-component, …) need a
+database and a Chrome instance. The easiest way to run them on a dev machine is
+against two throwaway Docker containers, driven by [`run-local-docker-specs.sh`](run-local-docker-specs.sh):
+
+```bash
+# whole suite for a gem (default: hyper-model)
+./run-local-docker-specs.sh hyper-model
+
+# a single batch or one example
+./run-local-docker-specs.sh hyper-model spec/batch4
+./run-local-docker-specs.sh hyper-model spec/batch4/scope_spec.rb:175
+```
+
+The script starts `hs-postgres` (Postgres 16, trust auth) and `hs-chrome`
+(`selenium/standalone-chrome`), both on the host network, then prepares the DB,
+precompiles the Opal bundle, and runs RSpec against the remote Chrome. It sets the
+flags that make this reliable: `OPAL_PREFORK_DISABLE=1` (Opal 1.8's prefork build
+scheduler hangs in some sandboxes) and `PRECOMPILED_ASSETS=1` (otherwise the
+on-the-fly debug pipeline recompiles per request and the first spec appears to
+hang for minutes).
+
+> **Timezone:** the server and the browser **must** share a timezone, or the
+> `column_type` datetime specs fail by the offset (server time vs. browser-rendered
+> time). The script pins both to `TZ=Etc/UTC`; override `TZ` only if you set it on
+> the host and the Chrome container alike.
+
+Tear the containers down with `docker rm -f hs-postgres hs-chrome`.
+
 ## Contributing
 
 If you would like to help, please read the [CONTRIBUTING][] file for suggestions.

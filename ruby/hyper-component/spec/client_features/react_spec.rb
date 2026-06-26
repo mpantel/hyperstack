@@ -5,14 +5,14 @@ describe 'React', js: true do
     it "should return true if passed a valid element" do
 
       expect_evaluate_ruby do
-        element = Hyperstack::Component::Element.new(JS.call(:eval, "React.createElement('div')"))
+        element = Hyperstack::Component::Element.new(Opal::Raw.call(:eval, "React.createElement('div')"))
         Hyperstack::Component::ReactAPI.is_valid_element?(element)
       end.to eq(true)
     end
 
     it "should return false is passed a non React element" do
       expect_evaluate_ruby do
-        element = Hyperstack::Component::Element.new(JS.call(:eval, "{}"))
+        element = Hyperstack::Component::Element.new(Opal::Raw.call(:eval, "{}"))
         Hyperstack::Component::ReactAPI.is_valid_element?(element)
       end.to eq(false)
     end
@@ -226,7 +226,7 @@ describe 'React', js: true do
     it "should render element to DOM" do # was async, don know how to handle
 
       evaluate_ruby do
-        DIV = JS.call(:eval, 'document.createElement("div")')
+        DIV = Opal::Raw.call(:eval, 'document.createElement("div")')
         Hyperstack::Component::ReactAPI.render(Hyperstack::Component::ReactAPI.create_element('span') { "lorem" }, DIV)
         '' # make to_json happy
       end
@@ -255,7 +255,7 @@ describe 'React', js: true do
           end
         end
 
-        a_div = JS.call(:eval, 'document.createElement("div")')
+        a_div = Opal::Raw.call(:eval, 'document.createElement("div")')
         instance = Hyperstack::Component::ReactAPI.render(Hyperstack::Component::ReactAPI.create_element(Foo), a_div)
         instance.is_a?(Foo)
       end.to be_truthy
@@ -264,7 +264,7 @@ describe 'React', js: true do
     it "returns the actual DOM node" do
 
       expect_evaluate_ruby do
-        a_div = JS.call(:eval, 'document.createElement("div")')
+        a_div = Opal::Raw.call(:eval, 'document.createElement("div")')
         node = Hyperstack::Component::ReactAPI.render(Hyperstack::Component::ReactAPI.create_element('span') { "lorem" }, a_div)
         node.JS['nodeType']
       end.to eq(1)
@@ -279,7 +279,7 @@ describe 'React', js: true do
       # trying to emulate that failed, becasue during render, _getOpalInstance was not yet defined.
       # it is defined only after render, when the component was mounted. So we call unmount after render
       expect_evaluate_ruby do
-        a_div = JS.call(:eval, 'document.createElement("div")')
+        a_div = Opal::Raw.call(:eval, 'document.createElement("div")')
         Hyperstack::Component::ReactAPI.render(Hyperstack::Component::ReactAPI.create_element('span') { "lorem" }, a_div )
         Hyperstack::Component::ReactAPI.unmount_component_at_node(a_div)
       end.to eq(true)

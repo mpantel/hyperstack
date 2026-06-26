@@ -16,7 +16,7 @@ describe 'Hyperstack::Component::Children', js: true do
             element = Hyperstack::Component::ReactAPI.create_element(component) { childs }
             el_children = element.to_n.JS[:props].JS[:children]
             children = Hyperstack::Component::Children.new(el_children)
-            dom_el = JS.call(:eval, "document.body.appendChild(document.createElement('div'))")
+            dom_el = Opal::Raw.call(:eval, "document.body.appendChild(document.createElement('div'))")
             Hyperstack::Component::ReactAPI.render(element, dom_el)
             children
           end
@@ -70,7 +70,7 @@ describe 'Hyperstack::Component::Children', js: true do
             element = Hyperstack::Component::ReactAPI.create_element(component) { childs }
             el_children = element.to_n.JS[:props].JS[:children]
             children = Hyperstack::Component::Children.new(el_children)
-            dom_el = JS.call(:eval, "document.body.appendChild(document.createElement('div'))")
+            dom_el = Opal::Raw.call(:eval, "document.body.appendChild(document.createElement('div'))")
             Hyperstack::Component::ReactAPI.render(element, dom_el)
             children
           end
@@ -107,7 +107,7 @@ describe 'Hyperstack::Component::Children', js: true do
             element = Hyperstack::Component::ReactAPI.create_element(component)
             el_children = element.to_n.JS[:props].JS[:children]
             children = Hyperstack::Component::Children.new(el_children)
-            dom_el = JS.call(:eval, "document.body.appendChild(document.createElement('div'))")
+            dom_el = Opal::Raw.call(:eval, "document.body.appendChild(document.createElement('div'))")
             Hyperstack::Component::ReactAPI.render(element, dom_el)
             children
           end

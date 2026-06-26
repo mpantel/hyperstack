@@ -50,7 +50,7 @@ describe 'Hyperstack::Internal::Component::Validator', js: true do
       it 'coerces native JS prop types to opal objects' do
         evaluate_ruby do
           VALIDATOR = Hyperstack::Internal::Component::Validator.new.build do
-            requires :foo, type: JS.call(:eval, "(function () { return { x: 1 }; })();")
+            requires :foo, type: Opal::Raw.call(:eval, "(function () { return { x: 1 }; })();")
           end
         end
         expect_evaluate_ruby('VALIDATOR.validate({foo: `{ x: 1 }`})').to eq(["Provided prop `foo` could not be converted to [object Object]"])

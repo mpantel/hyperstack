@@ -34,7 +34,7 @@ describe 'Adding state to a component (second tutorial example)', js: true do
 
   it 'renders to the document' do
     evaluate_ruby do
-      ele = JS.call(:eval, "document.body.appendChild(document.createElement('div'))")
+      ele = Opal::Raw.call(:eval, "document.body.appendChild(document.createElement('div'))")
       Hyperstack::Component::ReactAPI.render(Hyperstack::Component::ReactAPI.create_element(HelloMessage2), ele)
     end
     expect(page).to have_xpath('//div', text: 'Hello @catmando')

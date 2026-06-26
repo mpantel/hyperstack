@@ -45,7 +45,7 @@ describe 'getting ref from an Element', js: true do
 
   it "the ref method has a dom_node method that works with native react components" do
     mount 'TestComponent' do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeComponent = class extends React.Component {
             constructor(props) {
