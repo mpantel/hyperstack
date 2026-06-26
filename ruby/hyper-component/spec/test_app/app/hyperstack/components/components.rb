@@ -1,4 +1,3 @@
-require 'js'
 require 'hyperstack/internal/component/haml'
 
 # these mechanisms are deprecated in favor of using the features of hyper-spec.  However

@@ -109,12 +109,19 @@ module Hyperstack
 
         def fetch_from_cache(name, param_type, props)
           last, cached_value = cache[name]
-          return cached_value if last.equal?(props[name])
+          # Value compare (==), not equal?. We must compare the *passed* props
+          # (next_props on reload), which is up to date, so changed props
+          # re-convert (e.g. name 'fred' -> 'freddy'). equal? worked pre-1.8 only
+          # because props[name] was identity-stable; Opal 1.8 (Hash->Map)
+          # re-bridges native hash/array props into a fresh object on every
+          # access, so equal? is never true for them and memoization breaks.
+          # (Native identity is not an option here: the live component native
+          # still holds the *old* props during reload.)
           # see: https://github.com/hyperstack-org/hyperstack/issues/417
-          value = convert_param(name, param_type, props) #.tap do |value|
+          return cached_value if last == props[name]
+          value = convert_param(name, param_type, props)
           cache[name] = [props[name], value]
           value
-          # end
         end
 
         def convert_param(name, param_type, props)

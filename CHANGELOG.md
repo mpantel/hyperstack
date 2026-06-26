@@ -4,6 +4,46 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.33.18.0 — 2026-06-26
+
+### Build & dependencies
+
+- **Bump Opal 1.7.4 → 1.8.3** (#14, !24). Updates `OPAL_VERSION` (CI + local-dev
+  docs) to 1.8.3 — the larger jump in the Opal line. 1.8 deprecates the `JS` /
+  x-string (backtick) API in favour of `Opal::Raw`, and changes several runtime
+  semantics (Hash↔Map bridging, `Array#collect` over a mutating buffer,
+  `String#object_id`). The dependency ranges already permit it (`opal < 2.0`), so
+  no gemspec changes are needed. Version bumped to `1.0.alpha1.8.33.18.0`.
+
+### Opal 1.8 migration
+
+- **Migrate framework `JS::Error` → `Opal::Raw::Error`** with a cross-version
+  guard (falls back to `JS::Error` on Opal < 1.8); migrated the test suite off the
+  `JS` module to `Opal::Raw`.
+- **Opt in to backtick-JavaScript globally** so the codebase's pervasive x-string
+  usage compiles cleanly under 1.8. A per-file `# backtick_javascript: true`
+  migration is deferred to the eventual Opal 2.0 work. The one-time
+  `JS → Opal::Raw` deprecation warning is filtered in the console-cleanliness specs.
+- **Define `String#to_key` explicitly** instead of relying on `object_id` (1.8
+  changed `String#object_id`).
+- **Fix doubled render output**: `RenderingContext` iterates a `dup` of the buffer
+  before `collect`, because 1.8's `Array#collect` now visits items appended during
+  iteration.
+- **Fix param-conversion memoization** under 1.8's Hash→Map bridging: compare the
+  passed props by value (`==`) rather than native identity, since native
+  hash/array props are re-bridged to a fresh Opal object on every access.
+
+### Fixes
+
+- **hyper-model: guard `infer_type_from_hash` against a nil inheritance column.**
+  A non-STI model passed as a typed param (`param :m, type: Model`) has
+  `inheritance_column == nil`, so `hash[inheritance_column]` is `hash[nil]`. Under
+  Opal 1.8 the Hash→Map bridging makes `native_hash[nil]` return the *whole* hash
+  (not nil), which blew up `Object.const_get` with a `Hash`. Now returns the base
+  class when there is no inheritance column. Fixes the 1.8-only failures in
+  hyper-model `batch4/scope_spec.rb:175` and `batch2/relationships_spec.rb:34`; the
+  full hyper-model suite (423 examples) passes on Opal 1.8.3.
+
 ## 1.0.alpha1.8.33.17.0 — 2026-06-26
 
 ### Build & dependencies

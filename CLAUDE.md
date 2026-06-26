@@ -87,6 +87,11 @@ This prevents Spring from trying to preload multiple Rails applications simultan
 
 ## Local Development and Testing
 
-- set OPAL_VERSION=1.7.4 before running specs
+- set OPAL_VERSION=1.8.3 before running specs
 - run specs locally in sqlite
 - run specs with rspec and spring disabled
+- the server and the browser MUST share a timezone, or the `column_type` datetime
+  specs fail by the offset (server-computed time vs. browser-rendered time). When
+  the browser runs in a Docker container (e.g. `selenium/standalone-chrome`), give
+  it the host's `-e TZ=...` or pin both to UTC. See `run-local-docker-specs.sh` and
+  the "Running the tests locally" section in `readme.md`.

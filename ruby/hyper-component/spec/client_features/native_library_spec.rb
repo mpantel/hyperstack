@@ -22,13 +22,13 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
   describe "functional stateless component (supported in reactjs v14+ only)" do
     it "is detected as native React.js component by `native_react_component?`" do
       expect_evaluate_ruby do
-        Hyperstack::Internal::Component::ReactWrapper.native_react_component?(JS.call(:eval, "(function () { return function C () { return null; }; })();"))
+        Hyperstack::Internal::Component::ReactWrapper.native_react_component?(Opal::Raw.call(:eval, "(function () { return function C () { return null; }; })();"))
       end.to be_truthy
     end
 
     it "imports a React.js functional stateless component" do
       mount 'Foo', name: "There" do
-        JS.call(:eval, 'window.NativeLibrary = { FunctionalComponent: function HelloMessage(props){
+        Opal::Raw.call(:eval, 'window.NativeLibrary = { FunctionalComponent: function HelloMessage(props){
           return React.createElement("div", null, "Hello ", props.name); }}')
         class Foo < Hyperloop::Component
           imports "NativeLibrary.FunctionalComponent"
@@ -42,7 +42,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
     it "is detected as native React.js component by `native_react_component?`" do
       expect_evaluate_ruby do
         Hyperstack::Internal::Component::ReactWrapper.native_react_component?(
-          JS.call(:eval,
+          Opal::Raw.call(:eval,
             "dummy = { default: function () { return null; }, __esModule: true }"
           )
         )
@@ -51,7 +51,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
     it "is imported" do
       mount 'Foo', name: "There" do
-        JS.call(:eval, 'window.NativeModule = { __esModule: true, default: function HelloMessage(props){
+        Opal::Raw.call(:eval, 'window.NativeModule = { __esModule: true, default: function HelloMessage(props){
           return React.createElement("div", null, "Hello ", props.name); }}')
         class Foo < Hyperloop::Component
           imports "NativeModule"
@@ -73,13 +73,13 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
       render() { return React.createElement("div", null, "Hello ", this.props.name); }
     }')
     expect_evaluate_ruby do
-      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(JS.call(:eval, '(function(){ return window.NativeComponent; })();'))
+      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(Opal::Raw.call(:eval, '(function(){ return window.NativeComponent; })();'))
     end.to be_truthy
     expect_evaluate_ruby do
-      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(JS.call(:eval, '(function(){ return {render: function render() {}}; })();'))
+      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(Opal::Raw.call(:eval, '(function(){ return {render: function render() {}}; })();'))
     end.to be_truthy
     expect_evaluate_ruby do
-      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(JS.call(:eval, '(function(){ return window.DoesntExist; })();'))
+      Hyperstack::Internal::Component::ReactWrapper.native_react_component?(Opal::Raw.call(:eval, '(function(){ return window.DoesntExist; })();'))
     end.to be_falsy
     expect_evaluate_ruby do
       Hyperstack::Internal::Component::ReactWrapper.native_react_component?()
@@ -88,7 +88,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "will import a React.js library into the Ruby name space" do
     mount 'Foo::NativeComponent', name: "There" do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeLibrary = {
             NativeComponent: class extends React.Component {
@@ -109,7 +109,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "will import a nested React.js library into the Ruby name space" do
     mount 'Foo::NestedLibrary::NativeComponent', name: "There" do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeLibrary = {
             NestedLibrary: {
@@ -131,7 +131,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "will rename an imported a React.js component" do
     mount 'Foo::Bar', name: "There" do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
       <<-JSCODE
         window.NativeLibrary = {
           NativeComponent: class extends React.Component {
@@ -154,7 +154,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
   it "will give a reasonable error when failing to import a renamed component" do
     client_option raise_on_js_errors: :off
     mount 'Foo' do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeLibrary = {
             NativeComponent: class extends React.Component {
@@ -178,7 +178,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "will import a single React.js component into the ruby name space" do
     mount 'Foo', name: "There" do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeComponent = class extends React.Component {
             constructor(props) {
@@ -198,7 +198,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "will import a name scoped React.js component into the ruby name space" do
     mount 'Foo', name: "There" do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeLibrary = {
             NativeComponent: class extends React.Component {
@@ -220,7 +220,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
   it "will give a meaningful error if the React.js component is invalid" do
     client_option raise_on_js_errors: :off
     evaluate_ruby do
-      JS.call(:eval, "window.NativeObject = {}")
+      Opal::Raw.call(:eval, "window.NativeObject = {}")
       class Foo < Hyperloop::Component; end
     end
     expect_evaluate_ruby do
@@ -245,7 +245,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
   it "allows passing native object as props" do
     mount 'Wrapper' do
-      JS.call(:eval,
+      Opal::Raw.call(:eval,
         <<-JSCODE
           window.NativeComponent = class extends React.Component {
             constructor(props) {
@@ -261,7 +261,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
       end
       class Wrapper < Hyperloop::Component
         render do
-          Foo(user: JS.call(:eval, "(function () { return {name: 'David'}; })();"))
+          Foo(user: Opal::Raw.call(:eval, "(function () { return {name: 'David'}; })();"))
         end
       end
     end
@@ -272,7 +272,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
     it "will automatically import a React.js component when referenced in another component" do
       evaluate_ruby do
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeComponent = class extends React.Component {
               constructor(props) {
@@ -293,7 +293,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
         class Foo < Hyperloop::Component
           render { NativeComponent(name: "There") }
         end
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeComponent = class extends React.Component {
               constructor(props) {
@@ -310,7 +310,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
     it "will automatically import a React.js component when referenced as a constant" do
       mount 'NativeComponent', name: "There" do
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeComponent = class extends React.Component {
               constructor(props) {
@@ -327,7 +327,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
     it "will automatically import a native library containing a React.js component" do
       evaluate_ruby do
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeLibrary = {
               NativeNestedLibrary: {
@@ -347,7 +347,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
 
     it "the library and components can begin with lower case letters" do
       mount 'NativeLibrary::NativeComponent', name: "There" do
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.nativeLibrary = {
               nativeComponent: class extends React.Component {
@@ -366,7 +366,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
     it "will produce a sensible error if the component is not in the library" do
       client_option raise_on_js_errors: :off
       expect_evaluate_ruby do
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeLibrary = {
               NativeNestedLibrary: { }
@@ -384,7 +384,7 @@ describe "Hyperstack::Component::NativeLibrary", js: true do
     it "a NativeLibrary::NestedLibrary::NativeComponent() call will not resolve to a toplevel module NativeComponent (was a bug)" do
       evaluate_ruby do
         module NativeComponent; end
-        JS.call(:eval,
+        Opal::Raw.call(:eval,
           <<-JSCODE
             window.NativeLibrary = {
               NativeNestedLibrary: {

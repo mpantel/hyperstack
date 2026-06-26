@@ -41,7 +41,11 @@ module Hyperstack
                     element.waiting_on_resources ||= waiting_on_resources if buffer.last.is_a?(String)
                   end
                 else
-                  buffer = @buffer.collect do |item|
+                  # iterate a snapshot (.dup): the inner RenderingContext.render(:span)
+                  # below appends to @buffer, and under Opal 1.8 Array#collect visits
+                  # those appended items (Opal 1.6 did not), duplicating the output.
+                  # The `if name` branch above already dups for the same reason.
+                  buffer = @buffer.dup.collect do |item|
                     if item.is_a? Hyperstack::Component::Element
                       item.waiting_on_resources ||= saved_waiting_on_resources
                       item

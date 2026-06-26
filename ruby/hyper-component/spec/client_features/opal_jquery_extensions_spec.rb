@@ -87,7 +87,7 @@ describe 'opal-jquery extensions', js: true do
 
     it "accepts plain js object as selector" do
       expect_evaluate_ruby do
-        Element[JS.call(:eval, "(function () { return window; })();")]
+        Element[Opal::Raw.call(:eval, "(function () { return window; })();")]
         true
       end.to be_truthy
       expect(page.driver.browser.logs.get(:browser).map { |m| m.message.gsub(/\\n/, "\n") }.to_a.join("\n"))

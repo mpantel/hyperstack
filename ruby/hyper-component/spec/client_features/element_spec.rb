@@ -11,7 +11,7 @@ describe 'Hyperstack::Component::Element', js: true do
   it 'is renderable' do
     expect_evaluate_ruby do
       element = Hyperstack::Component::ReactAPI.create_element('span')
-      a_div = JS.call(:eval, 'document.createElement("div")')
+      a_div = Opal::Raw.call(:eval, 'document.createElement("div")')
       Hyperstack::Component::ReactAPI.render(element, a_div)
       a_div.JS[:children].JS[0].JS[:tagName]
     end.to eq("SPAN")
