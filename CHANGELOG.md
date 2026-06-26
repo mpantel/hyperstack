@@ -4,6 +4,41 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.1 — 2026-06-26
+
+### Versioning
+
+- **Adopt the `hyperstack-addons` compatibility scheme**, keeping the historical
+  `1.0.alpha1.8` prefix:
+  `1.0.alpha1.8.<ruby>.<opal>.<rails>.<react major+minor>.<patch>`. The previous
+  `1.0.alpha1.8.34.18.0` marker becomes `1.0.alpha1.8.34.18.61.1614.1` =>
+  Ruby 3.4, Opal 1.8, Rails 6.1, React 16.14, patch 1. This makes the full
+  compatibility matrix explicit in the version and keeps this repo aligned with
+  the downstream `hyperstack-addons` gem (`34.18.61.1614.0`). The trailing
+  `.1` is this fix. All per-gem `version.rb` files, `HYPERSTACK_VERSION`, and the
+  component `Gemfile.lock`s move to the new string in lockstep.
+
+### Bug fixes
+
+- **Fix client components crashing under Opal 1.8 / Rails 6.1 (#23).** With Opal
+  1.8.3, model class load reaches `ClassMethods#method_missing` for server-only
+  macros such as `:regulate_scope` *before* the first mount. The generic
+  attribute-accessor heuristic matched the macro name and prematurely called
+  `define_attribute_methods`, while `ReactiveRecord::Base.public_columns_hash`
+  was still `nil` — producing `undefined method '[]' for nil` in `columns_hash`
+  and then the cascading `<Pager>` `to_sym for nil` render crash. Two changes in
+  `reactive_record/active_record/class_methods.rb`:
+  - **Root cause:** exclude `SERVER_METHODS` from the `method_missing`
+    attribute-defining heuristic, so server macros stay silent no-ops on the
+    client and attribute methods are defined only in `before_first_mount` (once
+    `public_columns_hash` is populated). Array-delegated query methods that also
+    live in `SERVER_METHODS` (`:first`, `:count`, …) are unaffected — they are
+    still routed through `all.send`.
+  - **Defensive guard:** `columns_hash` now snapshots
+    `public_columns_hash || {}` so the lookup can never dereference `nil`,
+    regardless of load order. Verified against the `ru/hyperstack-addons` A/B CI
+    that surfaced the regression (Opal 1.5.1 green, 1.8.3 failing).
+
 ## 1.0.alpha1.8.34.18.0 — 2026-06-26
 
 ### Build & dependencies

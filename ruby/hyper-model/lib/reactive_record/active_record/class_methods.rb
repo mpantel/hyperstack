@@ -227,10 +227,18 @@ module ActiveRecord
         nil
       end
 
+      # The trailing regex clause is a heuristic: "anything shaped like an attribute
+      # accessor, try to define attribute methods for it". Server-only macros such as
+      # :regulate_scope match that shape but are NOT attributes — they belong to
+      # SERVER_METHODS and are meant to be silent no-ops on the client. Excluding them
+      # here keeps them from prematurely triggering define_attribute_methods at model
+      # load (the Opal 1.8 crash path). Array-delegated query methods that also live in
+      # SERVER_METHODS (:first, :count, ...) are still handled below via all.send.
       if name.to_s.start_with?("_hyperstack_internal_setter_") ||
          (safe_columns_hash &&
           (safe_columns_hash.key?(name.to_s) || safe_columns_hash.key?(name.to_s.chomp("=")))) ||
-         (name.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && name.to_s != 'class')
+         (name.to_s.match(/^[a-zA-Z_][a-zA-Z0-9_]*[=!?]?$/) && name.to_s != 'class' &&
+          !SERVER_METHODS.include?(name))
 
         # Special handling for _hyperstack_internal_setter_ methods - define them immediately if possible
         if name.to_s.match(/^_hyperstack_internal_setter_(.+)$/)
@@ -416,14 +424,19 @@ module ActiveRecord
     end
 
     def columns_hash
-      result = ReactiveRecord::Base.public_columns_hash[name] || {}
+      # `public_columns_hash` is nil until `before_first_mount` populates it on the
+      # client. Under Opal 1.8 model class load can reach here before that point
+      # (e.g. via a server-only macro falling through method_missing), so guard the
+      # lookup to avoid `undefined method [] for nil`.
+      public_columns = ReactiveRecord::Base.public_columns_hash || {}
+      result = public_columns[name] || {}
       inherited_columns = false
 
       # For STI classes, if no columns found, check parent classes
       if result.empty? && superclass != ActiveRecord::Base
         current_class = superclass
         while current_class && current_class != ActiveRecord::Base && result.empty?
-          result = ReactiveRecord::Base.public_columns_hash[current_class.name] || {}
+          result = public_columns[current_class.name] || {}
           inherited_columns = true if !result.empty?
           current_class = current_class.superclass
         end
