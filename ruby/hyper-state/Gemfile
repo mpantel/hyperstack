@@ -9,3 +9,12 @@ gem 'hyper-component',  path: '../hyper-component'
 gem 'sprockets', '~> 4.0', '< 4.2'
 gem 'connection_pool', '< 3.0'
 gemspec
+
+# Ruby 3.4 dropped several gems from the default set (now "bundled gems"), but
+# Rails 6.1.7.x (activesupport) still requires them. Declare them explicitly so
+# the bundle resolves on Ruby >= 3.4. See #11 (3.3 -> 3.4 bump).
+gem 'bigdecimal'
+gem 'mutex_m'
+gem 'drb'
+gem 'base64'
+gem 'logger'

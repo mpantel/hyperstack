@@ -324,7 +324,11 @@ describe 'React::Component', js: true do
           render { {'foo' => 'bar'} }
         end
       end
-      expect(page).to have_content("#{{'foo' => 'bar'}}")
+      # The hash is rendered client-side by Opal, whose Hash#to_s emits the
+      # pre-3.4 format ({"foo"=>"bar"}). Don't interpolate a server-side hash
+      # here: Ruby 3.4 changed Hash#inspect to add spaces around `=>`
+      # ({"foo" => "bar"}), which the (unchanged) Opal output won't match.
+      expect(page).to have_content('{"foo"=>"bar"}')
     end
 
     it "will convert only the final value to a string if the buffer is empty" do

@@ -4,6 +4,38 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.0 — 2026-06-26
+
+### Build & dependencies
+
+- **Bump Ruby 3.3.11 → 3.4.9** (#11). Ruby 3.3 is in security-maintenance only
+  (EOL ~March 2027); 3.4 is in full maintenance. Updates `.ruby-version` and the
+  CI `RBENV_VERSION` to 3.4.9; the version marker's Ruby segment moves `33 → 34`
+  (`1.0.alpha1.8.34.18.0`). The earlier 3.2 → 3.3 jump already cleared the hard
+  Opal/Rails-6.1 compatibility work, so this is a straightforward bump.
+  - **Prereq:** the CI base image (`base24:yjit`) must ship Ruby 3.4.9 for
+    `RBENV_VERSION` to resolve (confirmed: it does).
+
+### Ruby 3.4 compatibility fixes
+
+- **Declare the gems Ruby 3.4 demoted from default to bundled** (`bigdecimal`,
+  `mutex_m`, `drb`, `base64`, `logger`) in every component Gemfile. Rails
+  6.1.7.x (activesupport) still `require`s them at boot; under `bundle exec`,
+  bundler drops default gems not in the Gemfile from the load path, so without
+  these every Rails-loading spec job failed with `cannot load such file --
+  bigdecimal` / `-- mutex_m`.
+- **rails-hyperstack generator:** add the same bundled gems to the generated
+  test app's Gemfile, and move the `require "logger"` shim from
+  `config/application.rb` to `config/boot.rb`. On Ruby 3.4 `logger` is a bundled
+  gem and the `bin/rails` → `rails/commands` path loads activesupport before
+  `application.rb`, so the require has to land in `boot.rb` (loaded first) to
+  avoid `uninitialized constant ActiveSupport::LoggerThreadSafeLevel::Logger`.
+- **hyper-component spec:** `component_spec.rb` no longer interpolates a
+  server-side hash to assert rendered output. Ruby 3.4 changed `Hash#inspect`
+  to add spaces around `=>` (`{"foo" => "bar"}`), but the client-side Opal
+  rendering still emits the pre-3.4 `{"foo"=>"bar"}`; the expectation now
+  matches the Opal output literally.
+
 ## 1.0.alpha1.8.33.18.0 — 2026-06-26
 
 ### Build & dependencies
