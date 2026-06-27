@@ -4,6 +4,42 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.3 — 2026-06-27
+
+### Bug fixes
+
+- **Fix Opal 1.8 props/state *nested* hashes still returning truthy values for
+  missing keys (#26, follow-up to #24).** The #24 fix copied the top-level native
+  props/state object into a plain object literal so `Hash.new` took its populate
+  branch — but only at the top level. Any **nested** Ruby Hash param arrives as a
+  Map-backed Opal Hash and is rebuilt via `Hash.new(map)`, which hits a different
+  bug: the `native` stdlib's `Hash#initialize` populates from a `Map` but forgets
+  to `return self`, so it falls through to MRI `Hash#initialize` and sets the
+  source Map as the hash's **default value**. Missing nested keys
+  (`columns[:x][:filter]`, etc.) then returned the whole nested hash instead of
+  `nil` — the actual root cause behind the hyperstack-addons `Pager`
+  `to_sym for nil` crash. hyper-component now patches `Hash#initialize` (in
+  `native_to_hash.rb`) to clear the leaked default after a Map-sourced
+  construction, fixing every `Hash.new(opal_hash)` path (props, state, and
+  re-render `incoming` props) recursively. Regression specs added in
+  `spec/client_features/native_to_hash_spec.rb`.
+
+  This is a workaround for an upstream Opal bug; a ready-to-file patch and a
+  Hyperstack-free reproduction spec for the Opal repo live in
+  `ruby/hyper-component/upstream/opal-native-hash-new-from-map/`.
+
+- **Fix flaky aliased attribute methods (#25, !30).** `ReactiveRecord#method_missing`
+  matched the raw method name against real columns, so an aliased attribute method
+  (e.g. `surname_changed?`, alias of `last_name`) dealiased to no column and had no
+  lazy fallback — it relied on `alias_attribute`'s generated alias having already
+  propagated to the live browser session, which raced under CI load (`undefined
+  method 'surname_changed?'`, flaky `alias_attribute_spec.rb:81`). `method_missing`
+  now strips the `=`/`!`/`?`/`_changed?` suffix, dealiases the base via
+  `_attribute_aliases` (walking superclasses for inherited aliases), and matches
+  that against columns, so aliased accessors and dirty-tracking methods resolve
+  deterministically. Only fires when the original lookup found nothing and the name
+  dealiases to a real column, so non-alias paths are byte-for-byte unchanged.
+
 ## 1.0.alpha1.8.34.18.61.1614.2 — 2026-06-26
 
 ### Bug fixes
