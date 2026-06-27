@@ -1,0 +1,39 @@
+Subject: [PATCH] native: Hash.new(map) must return self after populating from a Map
+
+The `native` stdlib reopens `Hash#initialize` so that `Hash.new(source)`
+*populates* a fresh Hash from `source`'s entries (instead of using `source` as
+the hash's default value). There are two populate branches:
+
+  * `source.constructor === Object|undefined` -> copy keys, then `return self`
+  * `source instanceof Map`                   -> copy keys, but NO `return self`
+
+Since Opal 1.8 backs every Ruby Hash with a JS `Map`, passing one Ruby Hash to
+`Hash.new` takes the second branch. It populates correctly but then falls
+through to the core MRI `Hash#initialize`, which sets the hash's *default value*
+to `source`. The result is a populated hash whose every *missing* key returns
+the whole `source` hash (a truthy object) instead of `nil`:
+
+    require 'native'
+    src  = { 'a' => 1 }
+    copy = Hash.new(src)
+    copy['a']        # => 1     (populated, good)
+    copy['missing']  # => {'a'=>1}  (BUG: should be nil)
+    copy.default     # => {'a'=>1}  (BUG: should be nil)
+
+The `Object` branch already guards against this with `return self`; the `Map`
+branch is simply missing the same line.
+
+--- a/stdlib/native.rb
++++ b/stdlib/native.rb
+@@ -579,6 +579,8 @@ class Hash
+           } else if (defaults instanceof Map) {
+             Opal.hash_each(defaults, false, function(key, value) {
+               $hash_convert_and_put_value(self, key, value);
+               return [false, false];
+             });
++
++            return self;
+           }
+         }
+
+         return #{_initialize(defaults, &block)};
