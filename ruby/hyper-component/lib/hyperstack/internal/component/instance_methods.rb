@@ -20,7 +20,7 @@ module Hyperstack
         end
 
         def props
-          Hash.new(`#{@__hyperstack_component_native}.props`)
+          Hyperstack::Internal::Component.native_to_hash(`#{@__hyperstack_component_native}.props`)
         end
 
         def dom_node

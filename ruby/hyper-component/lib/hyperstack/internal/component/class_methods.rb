@@ -144,7 +144,7 @@ module Hyperstack
             {
               _componentValidator: %x{
                 function(props, propName, componentName) {
-                  var errors = #{validator.validate(Hash.new(`props`))};
+                  var errors = #{validator.validate(Hyperstack::Internal::Component.native_to_hash(`props`))};
                   return #{`errors`.count > 0 ? `new Error(#{"In component `#{name}`\n" + `errors`.join("\n")})` : `undefined`};
                 }
               }

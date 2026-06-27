@@ -38,7 +38,7 @@ module Hyperstack
         @ref =    `native_element.ref`
         @type =   `native_element.type`
         @_owner = `native_element._owner`
-        @_props_as_hash = Hash.new(@props)
+        @_props_as_hash = Hyperstack::Internal::Component.native_to_hash(@props)
       end
 
       def props
