@@ -189,6 +189,23 @@ describe 'React Integration', js: true do
     expect(page).to have_content('initial_state = nil')
   end
 
+  it 'returns nil (not a truthy native object) for a missing props key (issue #24)' do
+    # Under Opal 1.8 the old `Hash.new(native)` idiom set the hash's default
+    # value to the native props object, so any absent key returned a truthy
+    # object instead of nil. Probe a populated props hash for an undeclared key.
+    mount 'Foo', greeting: 'hi' do
+      class Foo < HyperComponent
+        param :greeting
+        render(DIV) do
+          DIV(id: :present) { props[:greeting].to_s }
+          DIV(id: :missing) { props[:not_a_real_prop].nil? ? 'nil' : 'TRUTHY' }
+        end
+      end
+    end
+    expect(find('#present')).to have_content('hi')
+    expect(find('#missing')).to have_content('nil')
+  end
+
   # DUPLICATE: it 'allows block for life cycle callback' do
   #   mount "Foo" do
   #     class Foo < Hyperloop::Component

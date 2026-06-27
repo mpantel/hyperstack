@@ -4,6 +4,29 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.2 — 2026-06-26
+
+### Bug fixes
+
+- **Fix Opal 1.8 props/state hashes returning truthy values for missing keys
+  (#24).** hyper-component wrapped native React props/state objects with
+  `Hash.new(native)`, relying on the `native` stdlib reopening `Hash#initialize`
+  to populate the hash from the JS object's keys. Under Opal 1.8 that override
+  only takes its populate branch when the native object's constructor is
+  `Object`/`undefined` (or it is a `Map`); React's props/state objects no longer
+  match, so the core MRI `Hash#initialize` ran instead — setting the hash's
+  *default value* to the native object and leaving the hash empty. Any missing
+  key (`contents[:filter]`, etc.) then returned the truthy native object rather
+  than `nil`, silently corrupting absent-key checks (e.g. hyperstack-addons
+  `Pager#filters` selecting every column, leading to the downstream
+  `to_sym for nil` crash). New `Hyperstack::Internal::Component.native_to_hash`
+  copies the native object's own enumerable properties into a plain object
+  literal before `Hash.new`, forcing the `native` bridge's populate branch so the
+  result is a real Hash with a `nil` default and the same recursive key
+  conversion as before. Applied at all five wrap sites (`element.rb`,
+  `instance_methods.rb`, `should_component_update.rb` ×2, `class_methods.rb`).
+  Follow-up to #23.
+
 ## 1.0.alpha1.8.34.18.61.1614.1 — 2026-06-26
 
 ### Versioning
