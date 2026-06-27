@@ -32,6 +32,21 @@ module ActiveRecord
       columns_hash = self.class.columns_hash
       column = columns_hash.detect { |name, *| missing =~ /^#{name}/ }
 
+      if column.nil?
+        # An aliased attribute method (surname_changed?, surname=, surname) won't
+        # match a real column above. Dealias the attribute via the alias map and
+        # retry, so aliased accessors/dirty-methods resolve even when
+        # alias_attribute's define_method alias hasn't been applied to this
+        # instance yet -- which races with the spec's isomorphic block and made
+        # `undefined method 'surname_changed?'` flaky. (#25)
+        base = missing.to_s.sub(/(_changed\?|[=!?])\z/, '')
+        dealiased = self.class._dealias_attribute(base.to_sym)
+        dealiased = self.class._dealias_attribute(base) if dealiased.to_s == base
+        if dealiased.to_s != base
+          column = columns_hash.detect { |name, *| name.to_s == dealiased.to_s }
+        end
+      end
+
       if column
         name = column[0]
         case missing
