@@ -93,4 +93,19 @@ RSpec::Steps.steps 'alias_attribute', js: true do
     expect(SubUser.find_by_surname('Fred')).to be_truthy
   end
 
+  it "resolves aliased attribute methods via method_missing when the alias method is absent" do
+    # Regression for #25: alias_attribute defines explicit alias methods, but they
+    # can race with the spec's isomorphic propagation to the client. Remove them so
+    # the dealias fallback in method_missing is the only path — proving aliased
+    # getter/setter/_changed? resolve to the real column without the explicit alias.
+    expect_evaluate_ruby do
+      %i[surname surname= surname! surname? surname_changed?].each do |m|
+        User.send(:remove_method, m) if User.instance_methods(false).include?(m)
+      end
+      user = User.find_by_first_name('M.')
+      user.surname = 'Reached'
+      [user.surname, user.surname_changed?]
+    end.to eq(['Reached', true])
+  end
+
 end
