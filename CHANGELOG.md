@@ -4,6 +4,42 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.4 — 2026-06-29
+
+### Features
+
+- **Auto-boot the client hot reloader on import; add hot-reload docs + specs
+  (#30).** Importing `hyperstack/hotloader` only defined the class — nothing ever
+  called `Hyperstack::Hotloader.listen`, so the browser never opened the websocket
+  and hot reload silently did nothing in a fresh app (the explicit
+  `OpalHotReloader.listen` boot was lost in the hyperloop → hyperstack
+  import-system refactor, last seen in `90a3c7dc4`). `hotloader.rb` now adds
+  `self.boot!`, invoked at file scope, which calls `listen` automatically when the
+  client bundle loads. It is guarded to run only in a real browser
+  (`window`/`document`/`WebSocket` present), so it is a no-op during prerendering
+  and on the Rails server; it reads port/ping from the `Hyperstack.hotloader.*` JS
+  config and defers via `setTimeout` so the rest of the bundle loads first. The
+  `listen` hyper-component touchpoints are now guarded so the hot loader also works
+  in a minimal bundle that does not pull in hyper-component. Adds
+  `hotloader_server_spec` (deterministic server-side message building) and
+  `hotloader_client_spec` (`js:true`; proves the client auto-connects on page load
+  and evaluates code pushed from the server), and a new
+  `docs/rails-installation/hot-reloading.md` linked from `SUMMARY`.
+
+### Bug fixes
+
+- **Fix hyper-model `Collection#_count_internal` returning raw JS `undefined`
+  (#31).** Under Opal 1.8.3 / Ruby 3.4 an unloaded `ReactiveRecord::Collection`
+  could have its count resolve to raw JS `undefined`, so callers such as `empty?`
+  (`count.zero?`) and the ancestor check in `sync_collection_with_parent` crashed
+  on first render with `Uncaught TypeError: Cannot read properties of undefined
+  (reading '$zero?')`. `_count_internal` now captures the computed count and
+  coerces `undefined`/`nil` to `0` before returning, so every caller gets a value
+  that safely answers `zero?`. All existing behavior for defined values and the
+  `load_from_db` side effects / `@count = 1` fallback is preserved. Adds batch2
+  regression specs covering both the `_count_internal` → 0 coercion and `empty?`
+  not crashing when the count is undefined.
+
 ## 1.0.alpha1.8.34.18.61.1614.3 — 2026-06-27
 
 ### Bug fixes
