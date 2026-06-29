@@ -1,4 +1,7 @@
 # hyper-spec
+# Install the Ruby 3.4 chilled-string warning filter first, before the gems that
+# trigger it (unparser/parser, em-websocket, unicode_utils) are required.
+require 'hyper-spec/internal/warning_filter'
 require 'action_view'
 require 'opal'
 require 'unparser'
