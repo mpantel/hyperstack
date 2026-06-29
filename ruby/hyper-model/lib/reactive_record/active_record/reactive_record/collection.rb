@@ -365,16 +365,24 @@ To determine this sync_scopes first asks if the record being changed is in the s
       # when count is called on a leaf, count_internal is called for each
       # ancestor.  Only the outermost count has load_from_client == true
       observed
-      if @count && @dummy_collection
-        @count # fixes https://github.com/hyperstack-org/hyperstack/issues/79
-      elsif @collection
-        @collection.count
-      elsif @count ||= ReactiveRecord::Base.fetch_from_db([*@vector, "*count"])
-        @count
-      else
-        ReactiveRecord::Base.load_from_db(nil, *@vector, "*count") if load_from_client
-        @count = 1
-      end
+      c =
+        if @count && @dummy_collection
+          @count # fixes https://github.com/hyperstack-org/hyperstack/issues/79
+        elsif @collection
+          @collection.count
+        elsif @count ||= ReactiveRecord::Base.fetch_from_db([*@vector, "*count"])
+          @count
+        else
+          ReactiveRecord::Base.load_from_db(nil, *@vector, "*count") if load_from_client
+          @count = 1
+        end
+      # fixes https://github.com/hyperstack-org/hyperstack/issues/31
+      # Under Opal 1.8.3 / Ruby 3.4 an unloaded collection's count can resolve to
+      # raw JS `undefined`/`null`, which then crashes every caller on `.zero?`
+      # (e.g. `empty?`, the ancestor check in sync_collection_with_parent).
+      # Coerce undefined/null to 0 here so all callers get a value that safely
+      # answers `zero?`.
+      `(c === undefined || c === null) ? 0 : c`
     end
 
     def count
