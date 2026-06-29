@@ -121,17 +121,49 @@ module Hyperstack
     end
 
     def self.listen(port=25222, ping=nil)
-      ::Hyperstack::Internal::Component::TopLevelRailsComponent.include AddErrorBoundry
+      # hyper-component is present in any real Hyperstack app, but guard so the
+      # hot-loader can still connect (and eval pushed files) in a minimal bundle
+      # that doesn't pull in hyper-component.
+      if defined?(::Hyperstack::Internal::Component::TopLevelRailsComponent)
+        ::Hyperstack::Internal::Component::TopLevelRailsComponent.include AddErrorBoundry
+      end
       @server = Hotloader.new(port, ping) do
         # TODO: check this out when Operations are integrated
         # if defined?(Hyperloop::Internal::Operation::ClientDrivers) &&
         #    Hyperloop::ClientDrivers.respond_to?(:initialize_client_drivers_on_boot)
         #   Hyperloop::ClientDrivers.initialize_client_drivers_on_boot
         # end
-        Hyperstack::Component.force_update!
+        Hyperstack::Component.force_update! if defined?(Hyperstack::Component)
       end
       @server.listen
     end
 
+    # Boots the hot-reloader automatically when the client bundle loads.
+    #
+    # Importing 'hyperstack/hotloader' is the signal that hot reloading is wanted
+    # (the install generator only adds that import for non-production
+    # environments), and this is the wiring that actually opens the websocket --
+    # historically apps had to call `listen` by hand, which was lost in the move
+    # to the import system.
+    #
+    # It is a no-op unless we are running in a real browser: `window`, `document`
+    # and `WebSocket` are all absent during server-side prerendering and on the
+    # Rails server, so we never try to connect there. The connect is deferred with
+    # setTimeout so the rest of the client bundle (e.g. Hyperstack::Component) has
+    # finished loading before we call listen. Port/ping come from the
+    # `Hyperstack.hotloader.*` JS config emitted by hyperstack-hotloader-config.js.
+    def self.boot!
+      return unless `typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.WebSocket !== 'undefined'`
+      start = lambda do
+        port = `(window.Hyperstack && window.Hyperstack.hotloader && window.Hyperstack.hotloader.port) || 25222`
+        ping = `(window.Hyperstack && window.Hyperstack.hotloader && window.Hyperstack.hotloader.ping)`
+        listen(port, ping)
+      end
+      `setTimeout(#{start}, 0)`
+    end
+
   end
 end
+
+# start hot reloading as soon as this file is imported into the client bundle
+Hyperstack::Hotloader.boot!

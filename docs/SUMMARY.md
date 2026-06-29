@@ -7,6 +7,7 @@
   * [Using the Generators](rails-installation/generators.md)
   * [File Structure](rails-installation/file-structure.md)
   * [Routing and Mounting Components](rails-installation/routing-and-mounting-components.md)
+  * [Hot Reloading](rails-installation/hot-reloading.md)
   * [Other Rails Configuration Details](rails-installation/other-details.md)
   * [Why Rails? Other Frameworks?](rails-installation/why-rails.md)
 * [HyperComponent](client-dsl/README.md)
