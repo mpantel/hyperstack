@@ -25,7 +25,7 @@ require 'hyper-spec/wait_for_ajax'
 require 'hyper-spec/helpers'
 require 'hyper-spec/expectations'
 
-require 'parser/current'
+require 'prism'
 if defined?(Selenium::WebDriver::Firefox)
   require 'selenium/web_driver/firefox/profile'
 end
@@ -49,6 +49,16 @@ module HyperSpec
   def self.prerendering_disabled?
     %w[0 off no false].include?(ENV['HYPER_SPEC_PRERENDERING'].to_s.strip.downcase)
   end
+
+  # Parses spec-authored Ruby source (e.g. a mount/evaluate_ruby block) into a
+  # Parser::AST::Node tree, for Unparser to re-render as Opal-compilable code.
+  # Uses Prism (bundled with Ruby since 3.3) instead of Parser::CurrentRuby,
+  # which has no grammar for Ruby versions newer than 3.4 (see #35).
+  def self.parse_ruby(source)
+    buffer = Parser::Source::Buffer.new('(spec)')
+    buffer.source = source
+    Prism::Translation::Parser.new.parse(buffer)
+  end
 end
 
 # opt-in to most recent AST format:
@@ -65,6 +75,21 @@ Parser::Builders::Default.emit_procarg0            = true
 if Parser::Builders::Default.respond_to? :emit_arg_inside_procarg0
   Parser::Builders::Default.emit_arg_inside_procarg0 = true
 end
+
+# Prism::Translation::Parser::Builder subclasses Parser::Builders::Default, but
+# these emit_* flags are per-class instance variables, not inherited - without
+# setting them here too, HyperSpec.parse_ruby (see above) emits generic `:send`
+# nodes for indexing/lambdas/pattern-matching instead of the specialized node
+# types Unparser expects, breaking things like `hash['foo'] += 1` (Unparser
+# emits invalid `hash.[]("foo") += 1` for the generic form).
+Prism::Translation::Parser::Builder.emit_lambda              = true
+Prism::Translation::Parser::Builder.emit_procarg0            = true
+(Prism::Translation::Parser::Builder.emit_encoding            = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_index               = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_arg_inside_procarg0 = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_forward_arg         = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_kwargs              = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_match_pattern       = true) rescue nil
 
 module HyperSpec
   if defined? Pry

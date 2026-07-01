@@ -27,6 +27,7 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   spec.add_dependency 'method_source'
   spec.add_dependency 'opal', ENV['OPAL_VERSION'] || '>= 0.11.0', '< 2.0'
   spec.add_dependency 'parser'
+  spec.add_dependency 'prism'
   spec.add_dependency 'rspec'
   spec.add_dependency 'rspec-retry'
   spec.add_dependency 'selenium-webdriver'#,'4.11.0'
