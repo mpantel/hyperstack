@@ -25,7 +25,7 @@ require 'hyper-spec/wait_for_ajax'
 require 'hyper-spec/helpers'
 require 'hyper-spec/expectations'
 
-require 'parser/current'
+require 'prism'
 if defined?(Selenium::WebDriver::Firefox)
   require 'selenium/web_driver/firefox/profile'
 end
@@ -48,6 +48,16 @@ module HyperSpec
   # Re-enable tracked in the "restore server-side prerendering" issue.
   def self.prerendering_disabled?
     %w[0 off no false].include?(ENV['HYPER_SPEC_PRERENDERING'].to_s.strip.downcase)
+  end
+
+  # Parses spec-authored Ruby source (e.g. a mount/evaluate_ruby block) into a
+  # Parser::AST::Node tree, for Unparser to re-render as Opal-compilable code.
+  # Uses Prism (bundled with Ruby since 3.3) instead of Parser::CurrentRuby,
+  # which has no grammar for Ruby versions newer than 3.4 (see #35).
+  def self.parse_ruby(source)
+    buffer = Parser::Source::Buffer.new('(spec)')
+    buffer.source = source
+    Prism::Translation::Parser.new.parse(buffer)
   end
 end
 

@@ -165,7 +165,7 @@ module HyperSpec
     alias expect_promise expect_evaluate_ruby
 
     def run_on_client(&block)
-      script = opal_compile(Unparser.unparse(Parser::CurrentRuby.parse(block.source).children.last))
+      script = opal_compile(Unparser.unparse(HyperSpec.parse_ruby(block.source).children.last))
       page.execute_script(script)
     end
 

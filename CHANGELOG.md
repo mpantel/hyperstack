@@ -4,6 +4,27 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.5 — 2026-07-01
+
+### Bug fixes
+
+- **hyper-spec: replace `Parser::CurrentRuby` with `Prism::Translation::Parser`
+  for parsing spec-authored blocks (#35).** `Parser::CurrentRuby` selects its
+  grammar from a hand-maintained `case RUBY_VERSION` table in the `parser` gem;
+  that table has no branch for Ruby 4.0 and silently falls back to the stale
+  Ruby 3.3 grammar, so any Ruby 4.0-only syntax used inside a `mount`/
+  `evaluate_ruby`/`on_client` block would parse incorrectly (and even 3.4.x
+  prints a spurious version-mismatch warning on every spec run). `add_opal_block`
+  (`client_execution.rb`), `run_on_client` (`helpers.rb`) and
+  `add_block_with_helpers` (`component_mount.rb`) now go through a new
+  `HyperSpec.parse_ruby` helper backed by `Prism::Translation::Parser`, which
+  ships with Ruby itself (bundled since 3.3) and therefore always matches the
+  grammar of the Ruby actually running the specs. `Prism::Translation::Parser`
+  still emits `Parser::AST::Node` trees, so `Unparser.unparse` and the
+  `find_block` AST walk needed no changes. Adds `spec/parse_ruby_spec.rb`
+  covering block-arg/kwarg parsing, string interpolation, and pattern matching
+  (`case/in`) round-tripping through `Unparser.unparse` unchanged.
+
 ## 1.0.alpha1.8.34.18.61.1614.4 — 2026-06-29
 
 ### Features

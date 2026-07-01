@@ -12,7 +12,7 @@ module HyperSpec
         return str unless block
 
         source = block.source
-        ast = Parser::CurrentRuby.parse(source)
+        ast = HyperSpec.parse_ruby(source)
         ast = find_block(ast)
         raise "could not find block within source: #{block.source}" unless ast
 
