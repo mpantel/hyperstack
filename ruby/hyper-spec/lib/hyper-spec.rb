@@ -76,6 +76,21 @@ if Parser::Builders::Default.respond_to? :emit_arg_inside_procarg0
   Parser::Builders::Default.emit_arg_inside_procarg0 = true
 end
 
+# Prism::Translation::Parser::Builder subclasses Parser::Builders::Default, but
+# these emit_* flags are per-class instance variables, not inherited - without
+# setting them here too, HyperSpec.parse_ruby (see above) emits generic `:send`
+# nodes for indexing/lambdas/pattern-matching instead of the specialized node
+# types Unparser expects, breaking things like `hash['foo'] += 1` (Unparser
+# emits invalid `hash.[]("foo") += 1` for the generic form).
+Prism::Translation::Parser::Builder.emit_lambda              = true
+Prism::Translation::Parser::Builder.emit_procarg0            = true
+(Prism::Translation::Parser::Builder.emit_encoding            = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_index               = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_arg_inside_procarg0 = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_forward_arg         = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_kwargs              = true) rescue nil
+(Prism::Translation::Parser::Builder.emit_match_pattern       = true) rescue nil
+
 module HyperSpec
   if defined? Pry
     # add a before eval hook to pry so we can capture the source
