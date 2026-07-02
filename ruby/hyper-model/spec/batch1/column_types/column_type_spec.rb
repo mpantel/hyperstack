@@ -292,6 +292,19 @@ describe "column types on client", js: true do
     check_errors
   end
 
+  it 'converts blank or non-numeric integer input to nil instead of raising' do
+    expect_evaluate_ruby do
+      [:integer, :bigint].collect do |attr|
+        [
+          TypeTest.new(attr => "").send(attr),
+          TypeTest.new(attr => "abc").send(attr),
+          TypeTest.new(attr => nil).send(attr)
+        ]
+      end.flatten.uniq
+    end.to eq([nil])
+    check_errors
+  end
+
   it 'converts strings and text' do
     expect_evaluate_ruby do
       [:string, :text].collect do |attr|
