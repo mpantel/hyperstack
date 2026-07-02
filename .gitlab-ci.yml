@@ -156,6 +156,7 @@ stages:
     - echo creating psql database
     - psql -c 'create database hyper_mesh_test_db;' -U postgres
 
+    - gem install bundler -v '~> 4.0'
     - bundle config set --local path ../../local_gems
 
     - bundle install --jobs=3 --retry=3
@@ -227,6 +228,7 @@ stages:
     - echo initialized for $COMPONENT
     - cd ruby/$COMPONENT
 
+    - gem install bundler -v '~> 4.0'
     - bundle config set --local path ../../local_gems
 
     - bundle install --jobs=3 --retry=3
