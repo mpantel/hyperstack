@@ -222,7 +222,8 @@ module ReactiveRecord
 
     def integrity_check
       @previous_changes.each do |attr, value|
-        next if @record.key?(attr) && @record[attr] == value.last
+        next if @record.key?(attr) &&
+                @backing_record.convert(attr, @record[attr]) == @backing_record.convert(attr, value.last)
         Hyperstack::Component::IsomorphicHelpers.log "Broadcast contained change to #{attr} -> #{value.last} "\
                                      "without corresponding value in attributes (#{@record}).\n",
                                      :error

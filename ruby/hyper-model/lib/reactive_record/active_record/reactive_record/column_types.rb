@@ -44,7 +44,8 @@ module ReactiveRecord
     end
 
     def convert_integer(val)
-      Integer(`parseInt(#{val})`)
+      i = `parseInt(#{val})`
+      `isNaN(i)` ? nil : Integer(i)
     end
 
     alias convert_bigint convert_integer
