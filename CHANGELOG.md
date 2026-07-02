@@ -4,6 +4,42 @@ Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
 
+## 1.0.alpha1.8.34.18.61.1614.6 — 2026-07-02
+
+### Bug fixes
+
+- **hyper-model: `convert_integer` returns `nil` for blank/non-numeric integer
+  input instead of raising `FloatDomainError: NaN` (#34).** `convert_integer`
+  did `Integer(parseInt(val))`; `parseInt` returns JS `NaN` for empty/blanked/
+  non-numeric input and `Integer(NaN)` then raises `FloatDomainError: NaN`
+  (surfaced in the browser console as `Uncaught Error: NaN`). It now guards the
+  `NaN` case and converts to `nil`, matching how ActiveRecord coerces `""` on an
+  integer column and mirroring `convert_float`, which already tolerated these
+  inputs. `convert_bigint` is aliased to `convert_integer`, so it is fixed too.
+  Adds a `column_types` browser spec asserting blank / `"abc"` / `nil` integer
+  input converts to `nil` with no console error.
+
+- **hyper-model: broadcast `integrity_check` no longer false-positives on
+  UTC-vs-local datetime serialization (#33).** `integrity_check` compared the
+  raw serialized strings from the broadcast `record` and `previous_changes`
+  (`@record[attr] == value.last`), so a datetime serialized as UTC on one side
+  and local-offset on the other — the same instant, e.g.
+  `2021-12-17T00:00:00.000Z` vs `2021-12-17T02:00:00.000+02:00` — failed the
+  equality check and raised a spurious `Broadcast Integrity Error`, rejecting
+  the save's broadcast client-side. It now compares normalized values via
+  `@backing_record.convert(attr, …)` on both sides, mirroring the existing
+  `value_changed?` check; `convert`'s guards leave associations, foreign keys
+  and `nil`s untouched, so two representations of the same moment compare equal
+  regardless of `default_timezone` / `time_zone_aware_attributes`.
+
+### CI / tooling
+
+- **Update the CI test jobs to Bundler `~> 4.0` (#36).** The browser-spec job
+  templates previously ran `bundle install` with the base image's default
+  Bundler and no explicit pin; they now `gem install bundler -v '~> 4.0'` first.
+  Applied on the `edge` line first (full suite green on Rails 6.1 / Ruby 3.4)
+  ahead of propagating to the `rails-7` line.
+
 ## 1.0.alpha1.8.34.18.61.1614.5 — 2026-07-01
 
 ### Bug fixes
