@@ -47,3 +47,18 @@ cells:
     react:       "17.0.2"  # derived: bundled by react-rails 2.7.x
     env:
       REACT_RAILS_VERSION: "~> 2.7.1"
+
+  # The first cell to take hyper-component's `createRoot` path rather than the
+  # legacy ReactDOM.render one -- React 18 removed `render`. react-rails 3.3
+  # bundles React 18.2 and serves it through sprockets, so this also covers a
+  # delivery route nothing else tests (rails-7+ take React from npm via esbuild).
+  # (#51)
+  - id: rails61-react18
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "3.3"
+    pipeline:    sprockets
+    react:       "18.2"   # derived: bundled by react-rails 3.3
+    env:
+      REACT_RAILS_VERSION: "~> 3.3"

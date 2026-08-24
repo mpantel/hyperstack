@@ -35,7 +35,11 @@ module Hyperstack
       def set_native_attributes(native_element)
         @key =    `native_element.key`
         @props =  `native_element.props`
-        @ref =    `native_element.ref`
+        # React 19 removed `element.ref` (it warns + is gone): ref is now a regular
+        # prop, so read it from `props.ref`. React <= 18 still keeps it off `props`,
+        # on `element.ref`. Branch on the major version so 19 never touches the
+        # removed getter (which logs a console.error even on access).
+        @ref =    `parseInt(React.version, 10) >= 19 ? (native_element.props ? native_element.props.ref : null) : native_element.ref`
         @type =   `native_element.type`
         @_owner = `native_element._owner`
         @_props_as_hash = Hyperstack::Internal::Component.native_to_hash(@props)
@@ -85,7 +89,34 @@ module Hyperstack
       end
 
       def dom_node
-        `typeof #{ref}.$dom_node == 'function'` ? ref.dom_node : ref
+        r = ref
+        if `typeof #{r}.$dom_node == 'function'`
+          r.dom_node
+        elsif `#{r} !== null && #{r} !== undefined && #{r}.nodeType === undefined`
+          # React 18 (#18): r is a foreign class-component instance — no Hyperstack
+          # dom_node, and not a DOM node. React deprecated findDOMNode (removed in 19)
+          # but still exposes the component's fiber on the instance (_reactInternals);
+          # walk it to the first host (DOM) node — the same result findDOMNode returns,
+          # without the hard-coded deprecation console.error. Fall back to findDOMNode if
+          # the fiber field ever changes shape.
+          %x{
+            var inst = #{r};
+            var fiber = inst._reactInternals || inst._reactInternalFiber;
+            var walk = function(node) {
+              for (var n = node; n; n = n.sibling) {
+                if (n.stateNode && n.stateNode.nodeType) { return n.stateNode; }
+                var deep = n.child ? walk(n.child) : null;
+                if (deep) { return deep; }
+              }
+              return null;
+            };
+            var found = fiber ? walk(fiber.child) : null;
+            if (found) { return found; }
+            return (typeof ReactDOM !== 'undefined' && ReactDOM.findDOMNode) ? ReactDOM.findDOMNode(inst) : inst;
+          }
+        else
+          r
+        end
       end
 
       # Attach event handlers. skip false, nil and blank event names

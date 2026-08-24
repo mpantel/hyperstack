@@ -1,6 +1,14 @@
 require 'react/server_rendering/environment_container'
 require 'react/server_rendering/manifest_container'
-require 'react/server_rendering/webpacker_manifest_container'
+begin
+  # react-rails 2.x ships a Webpacker container; 3.x dropped it along with
+  # Webpacker support. Both majors are supported now (a matrix cell selects
+  # which -- see supported_versions.yml), so require it optionally rather than
+  # forcing one. (#51)
+  require 'react/server_rendering/webpacker_manifest_container'
+rescue LoadError
+  nil
+end
 
 module Hyperstack
   module Internal
@@ -23,7 +31,8 @@ module Hyperstack
               else
                 @ass_containers << React::ServerRendering::EnvironmentContainer.new if ::Rails.application.assets
               end
-              if React::ServerRendering::WebpackerManifestContainer.compatible?
+              if defined?(React::ServerRendering::WebpackerManifestContainer) &&
+                 React::ServerRendering::WebpackerManifestContainer.compatible?
                 @ass_containers << React::ServerRendering::WebpackerManifestContainer.new
               end
               @ass_containers << HyperTestAssetContainer.new

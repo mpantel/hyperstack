@@ -17,7 +17,10 @@ module Hyperstack
                 raise "Hyperstack prerendering only works with MiniRacer. Add 'mini_racer' to your Gemfile"
               end
 
-              super({ files: ['hyperstack-prerender-loader.js'] }.merge(options))
+              # honor Hyperstack.prerendering_files (default ['hyperstack-prerender-loader.js'])
+              # so apps can prepend a server React bundle (e.g. esbuild output, #19),
+              # loaded raw + in order before the Opal prerender loader.
+              super({ files: Hyperstack.prerendering_files }.merge(options))
               ComponentLoader.new(v8_context).load
             end
 

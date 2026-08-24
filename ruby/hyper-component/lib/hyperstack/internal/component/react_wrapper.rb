@@ -67,7 +67,18 @@ module Hyperstack
           %x{
             native_comp.prototype.componentDidCatch = function(error, info) {
               this.__opalInstanceSyncSetState = false;
-              this.__opalInstance.$component_did_catch(error, Opal.Hash.$new(info));
+              // React 18 (#18): componentDidCatch is a React lifecycle — the rescue
+              // block it runs typically mutates state (force_update!), which must NOT
+              // use flushSync while React is committing (React warns + refuses to
+              // flush, so the recovery re-render is dropped and e.g. "rescued" never
+              // shows). Mark that we're inside React so force_update!/set_state! fall
+              // back to a plain forceUpdate, like every other lifecycle wrapper.
+              Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+              try {
+                this.__opalInstance.$component_did_catch(error, Opal.Hash.$new(info));
+              } finally {
+                Opal.global.__hyperstack_in_react--;
+              }
             }
           }
         end
@@ -97,10 +108,35 @@ module Hyperstack
                   return #{type.respond_to?(:default_props) ? type.default_props.to_n : `{}`};
                 },
                 propTypes: #{type.respond_to?(:prop_types) ? type.prop_types.to_n : `{}`},
+                __hyperstackCheckPropTypes: function() {
+                  // React 19 (#19) removed built-in propTypes validation, so the
+                  // `propTypes` validator above (Hyperstack's param type-checking) is
+                  // never invoked and nothing warns. Replicate React's checkPropTypes
+                  // here: run each validator against the current props and console.error
+                  // in React's format. React <= 18 still validates propTypes itself, so
+                  // skip there to avoid double warnings. De-dupe per message, like React's
+                  // own loggedTypeFailures, so re-renders don't spam the console.
+                  if (parseInt(React.version, 10) < 19) { return; }
+                  var pt = this.constructor.propTypes;
+                  if (!pt) { return; }
+                  for (var key in pt) {
+                    if (typeof pt[key] !== 'function') { continue; }
+                    var err;
+                    try { err = pt[key](this.props, key, this.__name); } catch (e) { err = e; }
+                    if (err instanceof Error) {
+                      var msg = 'Warning: Failed prop type: ' + err.message;
+                      var seen = (Opal.global.__hyperstack_proptype_warned =
+                                    Opal.global.__hyperstack_proptype_warned || {});
+                      if (!seen[msg]) { seen[msg] = true; console.error(msg); }
+                    }
+                  }
+                },
                 componentWillMount: old_school && function() {
                   if (#{type.method_defined? :component_will_mount}) {
                     this.__opalInstanceSyncSetState = true;
-                    this.__opalInstance.$component_will_mount();
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { this.__opalInstance.$component_will_mount(); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                     this.__opalInstanceSyncSetState = false;
                   }
                 },
@@ -108,32 +144,42 @@ module Hyperstack
                   this.__opalInstance.__hyperstack_component_is_mounted = true
                   if (#{type.method_defined? :component_did_mount}) {
                     this.__opalInstanceSyncSetState = false;
-                    this.__opalInstance.$component_did_mount();
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { this.__opalInstance.$component_did_mount(); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                   }
                 },
                 UNSAFE_componentWillReceiveProps: function(next_props) {
                   if (#{type.method_defined? :component_will_receive_props}) {
                     this.__opalInstanceSyncSetState = true;
-                    this.__opalInstance.$component_will_receive_props(Opal.Hash.$new(next_props));
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { this.__opalInstance.$component_will_receive_props(Opal.Hash.$new(next_props)); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                     this.__opalInstanceSyncSetState = false;
                   }
                 },
                 shouldComponentUpdate: function(next_props, next_state) {
                   if (#{type.method_defined? :should_component_update?}) {
                     this.__opalInstanceSyncSetState = false;
-                    return this.__opalInstance["$should_component_update?"](Opal.Hash.$new(next_props), Opal.Hash.$new(next_state));
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { return this.__opalInstance["$should_component_update?"](Opal.Hash.$new(next_props), Opal.Hash.$new(next_state)); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                   } else { return true; }
                 },
                 UNSAFE_componentWillUpdate: function(next_props, next_state) {
                   if (#{type.method_defined? :component_will_update}) {
                     this.__opalInstanceSyncSetState = false;
-                    this.__opalInstance.$component_will_update(Opal.Hash.$new(next_props), Opal.Hash.$new(next_state));
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { this.__opalInstance.$component_will_update(Opal.Hash.$new(next_props), Opal.Hash.$new(next_state)); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                   }
                 },
                 componentDidUpdate: function(prev_props, prev_state) {
                   if (#{type.method_defined? :component_did_update}) {
                     this.__opalInstanceSyncSetState = false;
-                    this.__opalInstance.$component_did_update(Opal.Hash.$new(prev_props), Opal.Hash.$new(prev_state));
+                    Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                    try { this.__opalInstance.$component_did_update(Opal.Hash.$new(prev_props), Opal.Hash.$new(prev_state)); }
+                    finally { Opal.global.__hyperstack_in_react--; }
                   }
                 },
                 componentWillUnmount: function() {
@@ -145,7 +191,16 @@ module Hyperstack
                 },
                 render: function() {
                   this.__opalInstanceSyncSetState = false;
-                  return this.__opalInstance.$send(render_fn).$to_n();
+                  this.__hyperstackCheckPropTypes();
+                  // React 18 (#18): mark that React is in its render/commit phase so
+                  // force_update!/set_state! (e.g. from a mutate during render) skip
+                  // flushSync, which warns + refuses to flush while React is busy.
+                  Opal.global.__hyperstack_in_react = (Opal.global.__hyperstack_in_react || 0) + 1;
+                  try {
+                    return this.__opalInstance.$send(render_fn).$to_n();
+                  } finally {
+                    Opal.global.__hyperstack_in_react--;
+                  }
                 }
               })
             }
@@ -274,9 +329,11 @@ module Hyperstack
                           function(dom_node){
                             if (dom_node !== null && dom_node.__opalInstance !== undefined && dom_node.__opalInstance !== null) {
                               #{ Hyperstack::Internal::State::Mapper.ignore_mutations { fn.call(`dom_node.__opalInstance`) } };
-                            } else if(dom_node !== null && ReactDOM.findDOMNode !== undefined && dom_node.nodeType === undefined) {
-                              #{ Hyperstack::Internal::State::Mapper.ignore_mutations { fn.call(`ReactDOM.findDOMNode(dom_node)`) } };
                             } else if(dom_node !== null){
+                              // React 18 (#18): pass the raw ref value (a host DOM node, or a
+                              // foreign class-component instance). For foreign instances the
+                              // DOM-node lookup is deferred to Element#dom_node so we don't call
+                              // the deprecated ReactDOM.findDOMNode eagerly at every mount.
                               #{ Hyperstack::Internal::State::Mapper.ignore_mutations { fn.call(`dom_node`) } };
                             }
                           }

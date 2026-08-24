@@ -205,9 +205,33 @@ module Hyperstack
 
     def _render_wrapper
       _run_before_render_callbacks
+      # React 18/19 (#39): createRoot's concurrent renderer "recovers" from an
+      # error thrown during a render by re-rendering the whole root BEFORE
+      # escalating to the nearest error boundary (componentDidCatch); it only
+      # calls the boundary if a re-render ALSO throws. A rescue whose error
+      # condition is consumed on the first raise (the common
+      # `raise_error!`/`check_error` idiom, and any transient error) therefore
+      # never reaches its `rescues` block — on React 17's legacy root the throw
+      # went straight to the boundary, so this regressed. Persist the error and
+      # re-raise it on every subsequent render so React's recovery re-render(s)
+      # also throw and React escalates to the boundary, restoring the React-17
+      # contract. Persist until the boundary actually handles it
+      # (RescueWrapper#after_error clears @__hyperstack_pending_render_error before
+      # force_update!) rather than for a fixed number of retries, because React's
+      # DEVELOPMENT build additionally re-invokes a throwing render to replay the
+      # error — so the number of re-renders before the boundary fires is not
+      # fixed (1 in production, 2+ in development). NotQuiet (the while-loading
+      # signal) is < Exception not StandardError, is idempotent, and is
+      # intentionally left to propagate on its own.
+      raise @__hyperstack_pending_render_error if @__hyperstack_pending_render_error
       observing(rendering: true) do
-        element = Hyperstack::Internal::Component::RenderingContext.render(nil) do
-          render || ""
+        begin
+          element = Hyperstack::Internal::Component::RenderingContext.render(nil) do
+            render || ""
+          end
+        rescue StandardError => e
+          @__hyperstack_pending_render_error = e
+          raise e
         end
         @__hyperstack_component_waiting_on_resources =
           element.waiting_on_resources if element.respond_to? :waiting_on_resources
