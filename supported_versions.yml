@@ -32,3 +32,18 @@ cells:
     pipeline:    sprockets
     react:       "16.14"   # derived: bundled by react-rails 2.x
     env: {}                # the gemspec defaults already describe this cell
+
+  # React 17 takes the SAME hyper-component code path as 16 -- neither has
+  # ReactDOM.createRoot, so both use ReactDOM.render/findDOMNode. So this cell is
+  # not about new component code: it covers the react-rails 2.7 integration,
+  # which edge's default pin (`< 2.7.0`) deliberately excludes. Costs no code
+  # change, only a version selection. (#51)
+  - id: rails61-react17
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "2.7"
+    pipeline:    sprockets
+    react:       "17.0.2"  # derived: bundled by react-rails 2.7.x
+    env:
+      REACT_RAILS_VERSION: "~> 2.7.1"
