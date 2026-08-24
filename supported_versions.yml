@@ -70,3 +70,24 @@ cells:
     env:
       REACT_RAILS_VERSION: "~> 3.3"
       HYPERSTACK_JS_PIPELINE: webpacker
+
+  # SPIKE (#51): the first cell to move the *Rails* axis rather than the React one.
+  # React is held at edge's default (16.14) so anything that breaks is attributable
+  # to Rails alone, and opal-rails is pinned to 2.x so bundler cannot silently jump
+  # to 3.0 -- that is an app/opal rewrite (#37) and would conflate the pipeline with
+  # the framework. opal-rails 2.x supports rails 6.0-7.2, so 7.2 is the furthest
+  # this pipeline can reach.
+  - id: rails72-react16
+    ruby:        "3.4"
+    rails:       "7.2"
+    opal:        "1.8"
+    react_rails: "2.6"
+    pipeline:    sprockets
+    react:       "16.14"
+    env:
+      RAILS_VERSION: "~> 7.2"
+      OPAL_RAILS_VERSION: "~> 2.0"
+      # Rails 7 has no webpacker:install; the generator and the test-app harness
+      # both read this, so the app is scaffolded and precompiled with esbuild +
+      # jsbundling instead. Declared rather than inferred, like every other cell.
+      HYPERSTACK_JS_PIPELINE: esbuild

@@ -30,7 +30,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'opal', *(ENV['OPAL_VERSION'] ? [ENV['OPAL_VERSION']] : ['~> 1.8'])
   spec.add_development_dependency 'opal-browser'
   spec.add_development_dependency 'opal-jquery'
-  spec.add_development_dependency 'opal-rails' #, '~> 0.9.4'
+  spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0']) #, '~> 0.9.4'
   spec.add_development_dependency 'rails', *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
   spec.add_development_dependency 'rake'#, '~> 10.0'
   spec.add_development_dependency 'uglifier'#, '4.1.6'

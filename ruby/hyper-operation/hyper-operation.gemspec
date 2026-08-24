@@ -32,7 +32,7 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency 'mysql2'
   spec.add_development_dependency 'pg'
   # spec.add_development_dependency 'opal-browser', '~> 0.2.0'
-  spec.add_development_dependency 'opal-rails'
+  spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
   spec.add_development_dependency 'pry-rescue'
   spec.add_development_dependency 'pry-stack_explorer'
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
