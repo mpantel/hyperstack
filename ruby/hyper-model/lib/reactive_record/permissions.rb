@@ -1,4 +1,25 @@
 module Hyperstack
+  # When a client sends a save or destroy request for an *existing* record it
+  # supplies the record's primary key.  Historically the server resolved that
+  # key with a bare `Model.find(id)`, which meant the only gate on the whole
+  # operation was `create_permitted?`/`update_permitted?`/`destroy_permitted?`.
+  # Policies that read as "is someone signed in" (rather than "does this record
+  # belong to the acting user") therefore let a client name the id of *any*
+  # record of that model, because the natural place to answer "may this client
+  # reach this record at all" -- the read regulation -- was never consulted.
+  #
+  # With this setting true (the default) the resolved record must also be
+  # readable by the acting user, i.e. `view_permitted?(primary_key)` must hold,
+  # which is exactly the gate the read path applies when it resolves a record by
+  # id (see `__hyperstack_internal_scoped_find_by`).
+  #
+  # Set to false in an initializer to restore the pre-fix behavior:
+  #
+  #   Hyperstack.configuration do |config|
+  #     config.verify_record_visibility_on_write = false
+  #   end
+  define_setting :verify_record_visibility_on_write, true
+
   class InternalPolicy
 
     def self.accessible_attributes_for(model, acting_user)

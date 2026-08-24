@@ -684,6 +684,7 @@ You can of course simulate server side changes to your Models through this conso
   To resolve make sure you `require 'pusher'` in your application.js file if using pusher. DO NOT require pusher from your components manifest as this will cause prerendering to fail.
 
 * **No create/update/destroy policies** You must explicitly allow changes to the Models to be made by the client. If you don't you will see 500 responses from the server when you try to update. To open all access do this in your application policy: `allow_change(to: :all, on: [:create, :update, :destroy]) { true }`
+* **Saving a record the browser is not allowed to read** A save or destroy of an existing record is resolved from the primary key the browser sends, and the acting user must be permitted to read that record before the change policy is consulted \(see [What a change policy does and does not check](../policies/README.md#what-a-change-policy-does-and-does-not-check)\). A save that is denied here raises an access violation even though `allow_change` would have said yes; either broaden the broadcast policy so the record is readable, or set `config.verify_record_visibility_on_write = false` and check ownership in the change policy yourself.
 * **Cannot connect to real pusher account** If you are trying to use a real pusher account \(not pusher-fake\) but see errors like this
 
   ```text
