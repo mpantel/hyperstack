@@ -293,8 +293,9 @@ supported-versions:
   before_script:
     - echo "checking supported_versions.yml against the pipeline"
   script:
+    # The SupportedVersions specs themselves run in the hyperstack-config job,
+    # which has a bundle; this job only needs rake and the two files.
     - rake hyperstack:matrix:check
-    - rspec ruby/hyperstack-config/spec/supported_versions_spec.rb
 
 hyper-spec:
   extends: .test_gem

@@ -19,9 +19,11 @@ namespace :hyperstack do
     desc 'Verify .gitlab-ci.yml cells match supported_versions.yml (one table, two consumers)'
     task :check do
       require 'yaml'
-      table = YAML.safe_load(File.read(File.expand_path('supported_versions.yml', __dir__)))
+      # explicit UTF-8: CI runners set no locale, so Ruby would default the
+      # external encoding to US-ASCII and choke on any non-ASCII byte
+      table = YAML.safe_load(File.read(File.expand_path('supported_versions.yml', __dir__), encoding: 'UTF-8'))
       declared = table['cells'].map { |c| c['id'] }.sort
-      ci = File.read(File.expand_path('.gitlab-ci.yml', __dir__))
+      ci = File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8')
       # Each cell must appear as a HYPERSTACK_CELL value in the pipeline, so a
       # combination we claim to support is one that actually gets tested.
       present = ci.scan(/HYPERSTACK_CELL:\s*["']?([\w.-]+)/).flatten.sort.uniq

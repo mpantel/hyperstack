@@ -33,7 +33,8 @@ module Hyperstack
       def cells
         @cells ||= begin
           path = table_path
-          path ? Array(YAML.safe_load(File.read(path))['cells']) : []
+          # explicit UTF-8 -- a process with no locale defaults to US-ASCII
+          path ? Array(YAML.safe_load(File.read(path, encoding: 'UTF-8'))['cells']) : []
         end
       end
 
