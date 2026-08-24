@@ -32,6 +32,10 @@ module Hyperstack
             RescueWrapper.after_error_args = args
             raise error
           end
+          # #39: the rescue handled it — stop persisting/re-raising the error in
+          # the child's _render_wrapper so the force_update! re-render runs the
+          # real render (which now takes the recovered path).
+          @Child.instance_variable_set(:@__hyperstack_pending_render_error, nil)
           @Child.force_update!
         end
       end

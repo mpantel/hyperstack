@@ -24,7 +24,27 @@ module Hyperstack
         end
 
         def dom_node
-          `ReactDOM.findDOMNode(#{self}.__hyperstack_component_native)` # react >= v0.15.0
+          # React 18 (#18): resolve the DOM node by walking the component's own React
+          # fiber (`_reactInternals`) to its first host node. This is robust whenever the
+          # component is mounted — independent of ref-callback timing (the earlier
+          # ref-chain approach raised "instance not mounted yet" in transient states like
+          # while-loading) — and avoids the deprecated findDOMNode console.error. Falls
+          # back to findDOMNode if the fiber shape is unknown / pre-18.
+          %x{
+            var native = #{self}.__hyperstack_component_native;
+            var fiber = native._reactInternals || native._reactInternalFiber;
+            var walk = function(node) {
+              for (var n = node; n; n = n.sibling) {
+                if (n.stateNode && n.stateNode.nodeType) { return n.stateNode; }
+                var deep = n.child ? walk(n.child) : null;
+                if (deep) { return deep; }
+              }
+              return null;
+            };
+            var found = fiber ? walk(fiber.child) : null;
+            if (found) { return found; }
+            return (typeof ReactDOM !== 'undefined' && ReactDOM.findDOMNode) ? ReactDOM.findDOMNode(native) : null;
+          }
         end
 
         def jq_node
@@ -45,8 +65,23 @@ module Hyperstack
           "#{count || 0} #{word}"
         end
 
+        # React 18 (#18): forceUpdate/setState are async (automatic batching), so a
+        # synchronous read after force_update! would see the pre-render value.
+        # flushSync (when present) restores Hyperstack's synchronous-update contract.
         def force_update!
-          `#{self}.__hyperstack_component_native.forceUpdate()`
+          %x{
+            var native = #{self}.__hyperstack_component_native;
+            // React 18 (#18): flushSync gives the synchronous-update contract, but React
+            // warns and refuses to flush when called while it is already rendering or
+            // committing (force_update! from a lifecycle like after_mount, or mutate during
+            // render). There, fall back to a plain forceUpdate (applied in the current
+            // cycle); use flushSync only when called from outside React (e.g. event handlers).
+            if (typeof ReactDOM !== 'undefined' && ReactDOM.flushSync && !(Opal.global.__hyperstack_in_react > 0)) {
+              ReactDOM.flushSync(function(){ native.forceUpdate(); });
+            } else {
+              native.forceUpdate();
+            }
+          }
           self
         end
 
@@ -56,7 +91,19 @@ module Hyperstack
 
         def set_state!(state, &block)
           set_or_replace_state_or_prop(state, 'setState', &block)
-          `#{self}.__hyperstack_component_native.forceUpdate()`
+          %x{
+            var native = #{self}.__hyperstack_component_native;
+            // React 18 (#18): flushSync gives the synchronous-update contract, but React
+            // warns and refuses to flush when called while it is already rendering or
+            // committing (force_update! from a lifecycle like after_mount, or mutate during
+            // render). There, fall back to a plain forceUpdate (applied in the current
+            // cycle); use flushSync only when called from outside React (e.g. event handlers).
+            if (typeof ReactDOM !== 'undefined' && ReactDOM.flushSync && !(Opal.global.__hyperstack_in_react > 0)) {
+              ReactDOM.flushSync(function(){ native.forceUpdate(); });
+            } else {
+              native.forceUpdate();
+            }
+          }
         end
 
         # https://github.com/hyperstack-org/hyperstack/issues/363

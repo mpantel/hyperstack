@@ -39,6 +39,34 @@ if RUBY_ENGINE == 'opal'
   require 'hyperstack/internal/component/while_loading_wrapper'
 
   require 'hyperstack/component/version'
+
+  # React 18/19 (#39): on the sprockets path (react/react-source-browser UMD),
+  # react-rails' react_ujs and Hyperstack's own mount path (react_api.rb) call the
+  # top-level `ReactDOM.createRoot`. React 18+ logs a benign console.error
+  # deprecation on every access ("You are importing createRoot from react-dom
+  # which is not supported. You should instead import it from react-dom/client"),
+  # but the UMD bundle exposes no separate `react-dom/client` global to import
+  # from — the top-level entry is the only one available, so the warning is
+  # unavoidable on this path (the esbuild build avoids it by exposing
+  # react-dom/client's createRoot as window.ReactDOM.createRoot). Drop just that
+  # one message client-side so it does not masquerade as a real error — e.g. specs
+  # that assert on the count of SEVERE console errors. Installed once.
+  %x{
+    if (typeof console !== 'undefined' && console.error && !console.error.__hyperstackCreateRootFilter) {
+      var __hyperstackOrigConsoleError = console.error;
+      var __hyperstackFilteredError = function() {
+        var msg = arguments[0];
+        if (typeof msg === 'string' &&
+            msg.indexOf('which is not supported. You should instead import it from') !== -1 &&
+            (msg.indexOf('createRoot') !== -1 || msg.indexOf('hydrateRoot') !== -1)) {
+          return;
+        }
+        return __hyperstackOrigConsoleError.apply(console, arguments);
+      };
+      __hyperstackFilteredError.__hyperstackCreateRootFilter = true;
+      console.error = __hyperstackFilteredError;
+    }
+  }
 else
   require 'opal'
   require 'hyper-state'

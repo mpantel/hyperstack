@@ -74,28 +74,70 @@ module Hyperstack
       # end
 
       def self.render(element, container)
-        raise "ReactDOM.render is not defined.  In React >= v15 you must import it with ReactDOM" if (`typeof ReactDOM === 'undefined'`)
+        raise "ReactDOM is not defined.  In React >= v15 you must import it with ReactDOM" if (`typeof ReactDOM === 'undefined'`)
 
         container = `container.$$class ? container[0] : container`
 
-        if block_given?
-          cb = %x{
-            function(){
-              setTimeout(function(){
-                #{yield}
-              }, 0)
-            }
+        cb = if block_given?
+          %x{ function(){ setTimeout(function(){ #{yield} }, 0) } }
+        else
+          `null`
+        end
+
+        if `typeof ReactDOM.createRoot === 'function'`
+          # React 18+: ReactDOM.render is gone. Use createRoot (one root per
+          # container, kept on the node for re-render + unmount). createRoot.render()
+          # returns nothing, but Hyperstack's mount contract needs the component
+          # instance — capture it via a ref and force a synchronous commit with
+          # flushSync so the ref fires before we return. (#18)
+          native = %x{
+            (function(){
+              var root = container.__hyperstackReactRoot;
+              if (!root) {
+                // React 19 (#19): an uncaught error during render is reported to the
+                // root's onUncaughtError callback instead of propagating synchronously
+                // out of render/flushSync (the React <= 18 behavior Hyperstack's mount
+                // contract relies on — e.g. a NoMethodError raised in render must reach
+                // the caller). Stash it on the container and re-throw below. On React
+                // <= 18 the option is ignored and flushSync re-throws as before.
+                root = ReactDOM.createRoot(container, {
+                  onUncaughtError: function(error){ container.__hyperstackRenderError = error; }
+                });
+                container.__hyperstackReactRoot = root;
+              }
+              container.__hyperstackRenderError = null;
+              var captured = null;
+              var elem = React.cloneElement(#{element.to_n}, { ref: function(inst){ if (inst) { captured = inst; } } });
+              var flush = ReactDOM.flushSync || function(f){ f(); };
+              flush(function(){ root.render(elem); });
+              if (container.__hyperstackRenderError) {
+                var err = container.__hyperstackRenderError;
+                container.__hyperstackRenderError = null;
+                throw err;
+              }
+              var cb = #{cb};
+              if (cb) { cb(); }
+              return captured;
+            })()
           }
-          native = `ReactDOM.render(#{element.to_n}, container, cb)`
+        elsif block_given?
+          native = `ReactDOM.render(#{element.to_n}, container, #{cb})`
         else
           native = `ReactDOM.render(#{element.to_n}, container)`
         end
 
-        return unless `#{native} !== null`
+        return unless `#{native} !== null && #{native} !== undefined`
 
         if `#{native}.__opalInstance !== undefined && #{native}.__opalInstance !== null`
           `#{native}.__opalInstance`
-        elsif `ReactDOM.findDOMNode !== undefined && #{native}.nodeType === undefined`
+        elsif `#{native}.nodeType !== undefined`
+          native # already a DOM node (e.g. a host-element ref)
+        elsif `container.firstChild !== null && container.firstChild !== undefined`
+          # React 18 (#18): the mounted root's DOM node, without ReactDOM.findDOMNode
+          # (deprecated in 18, removed in 19). Hyperstack mounts a single element into
+          # `container`, so its firstChild is that component's top DOM node.
+          `container.firstChild`
+        elsif `ReactDOM.findDOMNode !== undefined` # React < 18 fallback
           `ReactDOM.findDOMNode(#{native})`
         else
           native
@@ -130,10 +172,15 @@ module Hyperstack
       end
 
       def self.unmount_component_at_node(node)
-        if !(`typeof ReactDOM === 'undefined'`)
-          `ReactDOM.unmountComponentAtNode(node.$$class ? node[0] : node)` # v0.15+
+        raise "ReactDOM is not defined.  In React >= v15 you must import it with ReactDOM" if `typeof ReactDOM === 'undefined'`
+        node = `node.$$class ? node[0] : node`
+        if `node.__hyperstackReactRoot` # React 18+: unmount the createRoot we made
+          %x{ node.__hyperstackReactRoot.unmount(); delete node.__hyperstackReactRoot; }
+          true
+        elsif `typeof ReactDOM.unmountComponentAtNode === 'function'` # React < 18
+          `ReactDOM.unmountComponentAtNode(node)`
         else
-          raise "unmountComponentAtNode is not defined.  In React >= v15 you must import it with ReactDOM"
+          false
         end
       end
 
