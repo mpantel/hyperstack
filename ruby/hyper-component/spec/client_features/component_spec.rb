@@ -163,7 +163,16 @@ describe 'React::Component', js: true do
         end
       end
       expect_evaluate_ruby('Foo.get_error').to eq('ErrorFoo Error')
-      expect_evaluate_ruby('Foo.get_info').to eq("\n    in ErrorFoo (created by Foo)\n    in div (created by Foo)\n    in Foo (created by Hyperstack::Internal::Component::TopLevelRailsComponent)\n    in Hyperstack::Internal::Component::TopLevelRailsComponent")
+      # React 17 replaced the synthetic component stack ("in Foo (created by Bar)")
+      # with native error frames, which name files rather than components. What the
+      # callback guarantees on every version is that it receives a non-empty
+      # componentStack; only React <= 16 can be asserted component by component. (#51)
+      expect_evaluate_ruby('Foo.get_info.is_a?(String) && !Foo.get_info.empty?').to be_truthy
+      if react_version_major <= 16
+        expect_evaluate_ruby('Foo.get_info').to eq("\n    in ErrorFoo (created by Foo)\n    in div (created by Foo)\n    in Foo (created by Hyperstack::Internal::Component::TopLevelRailsComponent)\n    in Hyperstack::Internal::Component::TopLevelRailsComponent")
+      else
+        expect_evaluate_ruby('Foo.get_info').to match(/ErrorFoo|at eval|factory\.js/)
+      end
     end
   end
 
@@ -546,7 +555,7 @@ describe 'React::Component', js: true do
           end
           Hyperstack::Component::ReactTestUtils.render_component_into_document(Foo, bar: 10, lorem: Lorem.new)
         end
-        expect(page.driver.browser.logs.get(:browser).map { |m| m.message.gsub(/\\n/, "\n") }.to_a.join("\n"))
+        expect(console_messages)
           .to match(/Warning: Failed prop( type|Type): In component `Foo`\nRequired prop `foo` was not specified\nProvided prop `bar` could not be converted to String/)
       end
 
@@ -564,7 +573,7 @@ describe 'React::Component', js: true do
           end
           Hyperstack::Component::ReactTestUtils.render_component_into_document(Foo, foo: 10, bar: '10', lorem: Lorem.new)
         end
-        expect(page.driver.browser.logs.get(:browser).map { |m| m.message.gsub(/\\n/, "\n") }.to_a.join("\n")).to_not match(/prop/)
+        expect(console_messages).to_not match(/prop/)
       end
     end
 
@@ -616,7 +625,7 @@ describe 'React::Component', js: true do
           render { Foo }
         end
       end
-      expect(page.driver.browser.logs.get(:browser).map { |m| m.message.gsub(/\\n/, "\n") }.to_a.join("\n"))
+      expect(console_messages)
         .to match(/did you mean to say Foo()/)
     end
   end
