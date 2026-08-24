@@ -42,6 +42,37 @@ describe "ActiveRecord::ClassMethods", js: true do
     end
   end
 
+  # Issue #25 regression: alias_attribute installs the explicit alias methods AND
+  # an _attribute_aliases entry in one call. When the explicit methods are absent
+  # -- e.g. wiped by a mid-sequence re-mount in a shared-session (rspec-steps)
+  # spec, which is what made batch2/alias_attribute_spec.rb flake with
+  # `undefined method 'surname_changed?'` -- method_missing must still resolve the
+  # aliased getter/setter/_changed? to the real column via the alias map. These are
+  # single-example specs (each its own mount, no shared session), so they lock the
+  # dealias contract deterministically, without the re-mount race.
+  context "aliased attribute methods via method_missing (issue #25)" do
+    it "_dealias_attribute maps an alias to its real column and passes non-aliases through" do
+      expect_evaluate_ruby do
+        User.alias_attribute :surname, :last_name
+        [User._dealias_attribute(:surname).to_s, User._dealias_attribute(:first_name).to_s]
+      end.to eq(['last_name', 'first_name'])
+    end
+
+    it "resolves the aliased getter/setter/_changed? when the explicit alias methods are absent" do
+      expect_evaluate_ruby do
+        User.alias_attribute :surname, :last_name
+        # drop the explicit alias methods so method_missing's dealias is the only path
+        %i[surname surname= surname! surname? surname_changed?].each do |m|
+          User.send(:remove_method, m) if User.instance_methods(false).include?(m)
+        end
+        user = User.new
+        user.surname = 'Pantel'           # setter dealias -> last_name=
+        changed = user.surname_changed?   # _changed? suffix dealias -> last_name (must not raise)
+        [user.surname, user.last_name, [true, false].include?(changed)]
+      end.to eq(['Pantel', 'Pantel', true])
+    end
+  end
+
   context "columns_hash" do
     # Issue #23: model class load can reach columns_hash before before_first_mount
     # populates ReactiveRecord::Base.public_columns_hash. The lookup must tolerate a

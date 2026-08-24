@@ -1,7 +1,55 @@
 require 'spec_helper'
 require 'rspec-steps'
 
+# The steps below run as a single shared-session RSpec::Steps sequence inside one
+# long-lived browser. The aliases under test are installed on the client via
+# `before(:step) { isomorphic/on_client { User.alias_attribute ... } }`, where
+# `on_client`/`isomorphic` inject code only at *mount* time. Because the whole
+# sequence runs inside one example, that injection effectively happens once (on
+# the first step's mount) and then has to survive for the rest of the run. If
+# hyper-spec re-mounts/reloads the page mid-sequence -- `insure_page_loaded`
+# reloads whenever `Opal` momentarily looks absent (a transient `evaluate_script`
+# hiccup is swallowed and treated as "Opal missing") -- the page is replaced and
+# the aliases are gone, so a later step blows up with
+# `undefined method 'surname_changed?'` (#25). This is the same mount-injection
+# lifetime flake hardened in hyper-operation/execution_spec.rb (7c3e545ba).
+#
+# `alias_attribute` installs BOTH the explicit alias methods AND the
+# `_attribute_aliases` entry in the same call (ReactiveRecord ClassMethods), so a
+# wiped injection takes the `method_missing` dealias fallback down with it --
+# which is why the deterministic dealias (#25) alone did not stop the flake.
+#
+# Fix (spec-only): (re)define the client aliases immediately before *every* client
+# evaluation. Run `insure_page_loaded` first (performing any pending re-mount up
+# front), then re-install the aliases as a standalone top-level script, then call
+# super; by then Opal is loaded so super's own `insure_page_loaded` is a no-op and
+# cannot wipe them. All eval entry points the spec uses
+# (expect_evaluate_ruby/expect_promise and evaluate_promise) funnel through
+# `evaluate_ruby`, so that is the seam we hook (overriding `internal_evaluate_ruby`
+# would be invisible to callers that invoke the alias).
+module HyperspecAliasAttributeClientSetup
+  CLIENT_ALIASES = <<~RUBY
+    class SubUser < User; end unless defined?(SubUser)
+    User.alias_attribute :surname, :last_name
+    User.alias_attribute :client_name, :last_name
+  RUBY
+
+  module Prepended
+    def evaluate_ruby(*args, &block)
+      insure_page_loaded
+      page.execute_script(opal_compile(CLIENT_ALIASES))
+      super(*args, &block)
+    end
+  end
+
+  def self.included(base)
+    base.prepend(Prepended)
+  end
+end
+
 RSpec::Steps.steps 'alias_attribute', js: true do
+
+  include HyperspecAliasAttributeClientSetup
 
   before(:each) do
     require 'pusher'
