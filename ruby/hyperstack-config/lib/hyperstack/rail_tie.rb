@@ -7,7 +7,30 @@ module Hyperstack
 
   define_setting :prerendering_files, ['hyperstack-prerender-loader.js']
 
+  # Boot-time check of the ruby/rails/opal/react-rails combination against
+  # supported_versions.yml. From 1.0.alpha1.9 one gem serves many combinations,
+  # so the version string no longer tells anyone what was tested -- this does.
+  #
+  #   :warn  (default) warn on an untested combination, raise on an unsupported one
+  #   :raise            raise on either
+  #   :off              say nothing
+  define_setting :check_supported_versions, :warn
+
   class Railtie < ::Rails::Railtie
+
+    # after_initialize, so the app's own gems are loaded and the versions we
+    # read are the ones it will actually run with.
+    config.after_initialize do
+      mode = Hyperstack.check_supported_versions
+      unless mode == :off
+        require 'hyperstack/supported_versions'
+        begin
+          Hyperstack::SupportedVersions.check!(mode: mode)
+        rescue LoadError
+          nil # table absent (installed gem without the repo alongside it)
+        end
+      end
+    end
 
     class Options < ActiveSupport::OrderedOptions
       def delete_first(a, e)
