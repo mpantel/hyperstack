@@ -411,5 +411,10 @@ module ActiveRecord
     end
   end
 
-  InternalMetadata.do_not_synchronize if defined? InternalMetadata
+  # Rails 7.1+ made InternalMetadata a plain class (no longer an
+  # ActiveRecord::Base subclass), so it doesn't get do_not_synchronize and
+  # doesn't participate in sync anyway. Guard on respond_to? for both eras.
+  if defined?(InternalMetadata) && InternalMetadata.respond_to?(:do_not_synchronize)
+    InternalMetadata.do_not_synchronize
+  end
 end
