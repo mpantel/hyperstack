@@ -65,6 +65,13 @@ workflow:
     - if: $CI_COMMIT_BRANCH =='master'
 
 variables:
+  # The configuration this pipeline runs, as an id from supported_versions.yml.
+  # `rake hyperstack:matrix:check` fails if the cells declared there and the ones
+  # CI actually runs disagree, so "supported" cannot drift from "tested". When
+  # the matrix grows this moves to a `parallel: matrix:` axis and every cell gets
+  # its own bundle via gemfiles/. (#51)
+  HYPERSTACK_CELL: rails61-react16
+
   TERM: ansi
   MOUNT_PATH: /home/michail
   CONTAINER_SUBNET: 192.168.48.0/24
@@ -276,6 +283,19 @@ stages:
 
 
 
+
+# Guards the "one table, two consumers" contract from #51: the cells declared in
+# supported_versions.yml must be exactly the cells CI runs. Cheap, no services.
+supported-versions:
+  extends: .test_gem
+  variables:
+    COMPONENT: hyperstack-config
+  before_script:
+    - echo "checking supported_versions.yml against the pipeline"
+  script:
+    # The SupportedVersions specs themselves run in the hyperstack-config job,
+    # which has a bundle; this job only needs rake and the two files.
+    - rake hyperstack:matrix:check
 
 hyper-spec:
   extends: .test_gem

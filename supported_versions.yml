@@ -1,0 +1,28 @@
+# The supported-configuration matrix — single source of truth.
+#
+# Two consumers, so what we claim to support and what we actually test cannot
+# drift apart:
+#
+#   1. CI       — one pipeline cell per entry (`rake hyperstack:matrix:check`
+#                 fails if .gitlab-ci.yml and this file disagree).
+#   2. Runtime  — Hyperstack::SupportedVersions checks a booting app against
+#                 this table; `rake hyperstack:config:check` does the same from
+#                 the command line.
+#
+# Notes on the axes:
+#
+# * `react` is DERIVED, not selected. It is whatever `react_rails` + `pipeline`
+#   deliver: react-rails 2.x bundles React 16.x, react-rails 3.3 bundles 18.2,
+#   and the esbuild pipeline takes React from npm instead (19.2). It is recorded
+#   here so the table documents the real span, but nothing installs it directly.
+# * `ruby` and `rails` are major.minor; a booting app matches on major.minor.
+#
+name: hyperstack supported configurations
+cells:
+  - id: rails61-react16
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "2.6"
+    pipeline:    sprockets
+    react:       "16.14"   # derived: bundled by react-rails 2.x
