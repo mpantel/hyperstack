@@ -15,6 +15,21 @@ namespace :hyperstack do
     end
   end
 
+  namespace :cell do
+    desc 'Print shell exports for HYPERSTACK_CELL (used by CI: eval "$(rake hyperstack:cell:env)")'
+    task :env do
+      require 'yaml'
+      id = ENV['HYPERSTACK_CELL'].to_s
+      table = YAML.safe_load(File.read(File.expand_path('supported_versions.yml', __dir__), encoding: 'UTF-8'))
+      cell = table['cells'].detect { |c| c['id'] == id }
+      abort "unknown HYPERSTACK_CELL #{id.inspect}; known: #{table['cells'].map { |c| c['id'] }.join(', ')}" unless cell
+      # Values come from the table, never from .gitlab-ci.yml, so the pipeline
+      # names cells and the table defines them. A cell with no env takes the
+      # gemspec defaults.
+      (cell['env'] || {}).each { |k, v| puts "export #{k}=#{v.to_s.inspect}" }
+    end
+  end
+
   namespace :matrix do
     desc 'Verify .gitlab-ci.yml cells match supported_versions.yml (one table, two consumers)'
     task :check do
@@ -25,8 +40,12 @@ namespace :hyperstack do
       declared = table['cells'].map { |c| c['id'] }.sort
       ci = File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8')
       # Each cell must appear as a HYPERSTACK_CELL value in the pipeline, so a
-      # combination we claim to support is one that actually gets tested.
-      present = ci.scan(/HYPERSTACK_CELL:\s*["']?([\w.-]+)/).flatten.sort.uniq
+      # combination we claim to support is one that actually gets tested. Handles
+      # both the scalar form and the `parallel: matrix:` list form
+      # (`HYPERSTACK_CELL: [a, b]`).
+      present = ci.scan(/HYPERSTACK_CELL:\s*(\[[^\]]*\]|["']?[\w.-]+)/).flatten.flat_map do |raw|
+        raw.start_with?('[') ? raw.tr('[]"\'', '').split(',') : [raw.delete('"\'')]
+      end.map(&:strip).reject(&:empty?).sort.uniq
       missing = declared - present
       extra   = present - declared
       if missing.empty? && extra.empty?
