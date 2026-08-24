@@ -135,7 +135,7 @@ stages:
   # `rake hyperstack:matrix:check` fails if this list and the table disagree. (#51)
   parallel:
     matrix:
-      - HYPERSTACK_CELL: [rails61-react16]
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17]
 
   before_script:
     # - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
@@ -196,7 +196,7 @@ stages:
   # `rake hyperstack:matrix:check` fails if this list and the table disagree. (#51)
   parallel:
     matrix:
-      - HYPERSTACK_CELL: [rails61-react16]
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17]
 
 #  language: ruby
 #  cache:

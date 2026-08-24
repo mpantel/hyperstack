@@ -90,3 +90,38 @@ end
 #     end
 #   end
 # end
+
+# React <= 16 interpolated its warnings before handing them to console.error, so
+# Chrome captured one readable sentence. React 17 passes the *format string* and
+# its arguments separately instead:
+#
+#   "Warning: Failed %s type: %s%s"  "prop"  "In component `Foo` ..."  " at eval ..."
+#
+# Same information, different shape. Re-interpolating here lets the assertions be
+# written once, against the readable form, on either React version -- rather than
+# teaching every expectation about both. (#51)
+def console_messages
+  page.driver.browser.logs.get(:browser)
+      .map { |m| expand_console_format(m.message.gsub(/\\n/, "\n")) }
+      .to_a.join("\n")
+end
+
+def expand_console_format(message)
+  return message unless message.include?('%s')
+
+  segments = message.scan(/"((?:[^"\\]|\\.)*)"/m).flatten
+  return message if segments.size < 2
+
+  format_str, *args = segments
+  expanded = format_str.dup
+  args.each { |arg| expanded = expanded.sub('%s', arg) }
+  "#{message.split('"').first}#{expanded}"
+end
+
+# The React the browser actually loaded. Which React a cell gets is decided by
+# react-rails (2.x bundles 16.x, 2.7.x bundles 17.0.2, 3.3 bundles 18.2) or, on
+# the esbuild pipeline, by npm -- so asking the page is the only reliable answer.
+# Used where React changed observable behaviour rather than API. (#51)
+def react_version_major
+  @react_version_major ||= evaluate_ruby('`React.version`').to_s.split('.').first.to_i
+end
