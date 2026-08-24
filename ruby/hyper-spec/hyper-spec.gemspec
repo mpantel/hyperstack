@@ -25,7 +25,7 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   # spec.add_dependency 'chromedriver-helper', '1.2.0'
   spec.add_dependency 'filecache'
   spec.add_dependency 'method_source'
-  spec.add_dependency 'opal', ENV['OPAL_VERSION'] || '>= 0.11.0', '< 2.0'
+  spec.add_dependency 'opal', *(ENV['OPAL_VERSION'] ? [ENV['OPAL_VERSION']] : ['~> 1.8'])
   spec.add_dependency 'parser'
   spec.add_dependency 'prism'
   spec.add_dependency 'rspec'
@@ -45,7 +45,7 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'rails', ENV['RAILS_VERSION'] || '>= 5.0.0', '< 7.0'
   spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'react-rails', '>= 2.3.0', '< 2.7.0'
+  spec.add_development_dependency 'react-rails', *(ENV['REACT_RAILS_VERSION'] ? [ENV['REACT_RAILS_VERSION']] : ['>= 2.3.0', '< 2.7.0'])
   spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rspec-collection_matchers'
   spec.add_development_dependency 'rspec-expectations'

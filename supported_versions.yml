@@ -16,6 +16,11 @@
 #   and the esbuild pipeline takes React from npm instead (19.2). It is recorded
 #   here so the table documents the real span, but nothing installs it directly.
 # * `ruby` and `rails` are major.minor; a booting app matches on major.minor.
+# * `env` is what CI exports for the cell, resolved by `rake hyperstack:cell:env`.
+#   It is applied after the pipeline's own variables, so a cell overrides the
+#   global default (OPAL_VERSION) and leaving a variable out takes the gemspec's
+#   default -- which is why the cell describing today's configuration has an
+#   empty env and is a no-op.
 #
 name: hyperstack supported configurations
 cells:
@@ -26,3 +31,4 @@ cells:
     react_rails: "2.6"
     pipeline:    sprockets
     react:       "16.14"   # derived: bundled by react-rails 2.x
+    env: {}                # the gemspec defaults already describe this cell

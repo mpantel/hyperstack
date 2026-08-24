@@ -5,9 +5,10 @@ gem 'hyper-operation',  path: '../hyper-operation'
 gem 'hyper-spec', path: '../hyper-spec'
 gem 'hyper-trace', path: '../hyper-trace'
 gem 'hyperstack-config', path: '../hyperstack-config'
-unless ENV['OPAL_VERSION']&.match("0.11")
-  gem 'opal-browser', git: 'https://github.com/opal/opal-browser'
-end
+# Was guarded by `unless ENV['OPAL_VERSION']&.match("0.11")`. Dead since the
+# gemspecs declare `~> 1.8`: opal 0.11 can no longer resolve, so the guard could
+# never be false. (#51)
+gem 'opal-browser', git: 'https://github.com/opal/opal-browser'
 
 # CI/test harness: pin transitive deps to versions compatible with react-rails
 # (< 2.7.0). sprockets >= 4.2 raises "can't modify immutable cached environment";

@@ -27,7 +27,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'hyper-operation', Hyperloop::Console::VERSION
   spec.add_development_dependency 'hyper-store', Hyperloop::Console::VERSION
   spec.add_development_dependency 'hyperstack-config', Hyperloop::Console::VERSION
-  spec.add_development_dependency 'opal', ENV['OPAL_VERSION'] || '>= 0.11.0', '< 2.0'
+  spec.add_development_dependency 'opal', *(ENV['OPAL_VERSION'] ? [ENV['OPAL_VERSION']] : ['~> 1.8'])
   spec.add_development_dependency 'opal-browser'
   spec.add_development_dependency 'opal-jquery'
   spec.add_development_dependency 'opal-rails' #, '~> 0.9.4'
