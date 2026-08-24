@@ -462,6 +462,59 @@ end
 
 Note that there is no `allow_read` method. Read access is granted if this browser would have the attribute broadcast to it.
 
+### What a change policy does and does not check
+
+A change policy is the only gate on *what may be done*, so it is worth being
+precise about what the server has already decided by the time your block runs.
+
+**Which record the block runs against.** A save or destroy of an existing record
+arrives from the browser carrying that record's primary key, and the server looks
+the record up by that key. Before running your `allow_update`/`allow_destroy`
+block, Hyperstack checks that the acting user is permitted to *read* the record
+it just looked up — the same check the read path makes when it resolves a record
+by id, i.e. some attribute of the record would be broadcast to this browser.
+Without that check a client could name the primary key of any record of that
+model and have your change policy evaluated against it, which matters because
+policies are very often written as "is anyone signed in":
+
+```ruby
+class TodoPolicy
+  # any signed in user - this is NOT "acting_user owns this todo"
+  allow_change { acting_user }
+end
+```
+
+If you need to allow writes to records the acting user cannot read, set
+
+```ruby
+Hyperstack.configuration do |config|
+  config.verify_record_visibility_on_write = false
+end
+```
+
+in an initializer, and make your change policies check record ownership
+themselves.
+
+**Which attributes get written.** There is no per-attribute write policy. Every
+attribute the browser sends in the save request is written to the record before
+`create_permitted?`/`update_permitted?` is consulted, so a change policy that
+returns true authorises a write to *every* column of that record, not just the
+ones your components happen to expose. Where that is too broad, narrow it in the
+policy block itself with the change helpers:
+
+```ruby
+class TodoPolicy
+  # the owner may change anything; anybody else may only tick it off
+  allow_update do
+    acting_user == owner || only_changed?(:complete)
+  end
+end
+```
+
+`only_changed?`, `none_changed?`, `any_changed?` and `all_changed?` are available
+inside change policy blocks, and see the pending values, because the attributes
+have already been assigned when the block runs.
+
 ## Method Summary and Name Space Conflicts
 
 Policy classes \(and the Hyperloop::PolicyMethods module\) define the following class methods:

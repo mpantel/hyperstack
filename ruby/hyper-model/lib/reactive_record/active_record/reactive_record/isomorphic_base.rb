@@ -375,10 +375,32 @@ module ReactiveRecord
           end
           found
         elsif id
-          model.find(id)
+          verify_record_is_visible(model.find(id), acting_user)
         else
           model.new
         end
+      end
+
+      # A save or destroy request for an existing record arrives with the record's
+      # primary key, and we resolve it with a plain `find`, which knows nothing
+      # about who is asking.  `create_permitted?`/`update_permitted?`/
+      # `destroy_permitted?` are then the only gate, so a policy written as
+      # "is someone signed in" lets a client name the id of any record of that
+      # model, not just the ones it could actually reach.
+      #
+      # So before handing the record to the CRUD regulation, insist that the
+      # acting user can *read* it.  That is the same check the read path makes
+      # when it resolves a record by id (see the __hyperstack_internal_scoped_find_by
+      # finder_method in active_record_base.rb), which keeps
+      # "a client can only reach records it is permitted to see" true for writes
+      # as well as for queries.
+      def self.verify_record_is_visible(record, acting_user)
+        return record unless Hyperstack.verify_record_visibility_on_write
+        return record unless record.respond_to?(:check_permission_with_acting_user)
+
+        record.check_permission_with_acting_user(
+          acting_user, :view_permitted?, record.class.primary_key
+        )
       end
 
 
@@ -605,7 +627,7 @@ module ReactiveRecord
       def self.destroy_record(model, id, vector, acting_user)
         model = Object.const_get(model)
         record = if id
-                   model.find(id)
+                   verify_record_is_visible(model.find(id), acting_user)
                  else
                    ServerDataCache.new(acting_user, {})[*vector].value
                  end
