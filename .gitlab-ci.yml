@@ -152,28 +152,22 @@ stages:
 .test_gem_pg:
   interruptible: true
   stage: test
-  # Retry the whole job once on failure.
+  # Retry the whole job once, but ONLY for failures that are never the code's
+  # fault. `script_failure` is deliberately NOT retried.
   #
-  # hyper-spec already wraps every js example in `run_with_retry(retry: 3)`, but
-  # that re-runs the example in the *same* process and browser, so it cannot help
-  # when the cause is environmental -- a slow container, a saturated runner,
-  # accumulated state. Observed repeatedly: a spec fails all 3 in-job retries and
-  # then passes on a fresh job (default_value_spec:156, and the reactive-sync
-  # assertions in where_and_class_method_delegation_spec).
-  #
-  # This matters more since the matrix landed: each pipeline now runs every gem
-  # once per cell (13 jobs -> 37), so the chance of a pipeline catching an
-  # environment-level flake roughly tripled.
-  #
-  # `runner_system_failure` and `stuck_or_timeout_failure` are included because
-  # those are never the code's fault. `script_failure` covers the flakes above;
-  # a genuinely broken spec still fails twice and reddens the pipeline.
+  # It was originally included (!72) on the belief that browser specs were
+  # failing to environment-level flakiness that in-process rspec-retry could not
+  # absorb. That diagnosis was wrong: the failures were the runner running out of
+  # disk (#56, ru/infrastructure#7) -- Postgres, Rails logging and hyper-spec's
+  # cache all failing to write, and Chrome dying with it. With the cause handled
+  # in infrastructure, retrying `script_failure` no longer absorbs flakiness; it
+  # hides genuine test failures and, worse, would quietly paper over the next
+  # resource exhaustion instead of letting it fail loudly.
   retry:
     max: 1
     when:
       - runner_system_failure
       - stuck_or_timeout_failure
-      - script_failure
 
 
   # One job per configuration in supported_versions.yml. The pipeline only names
@@ -236,28 +230,22 @@ stages:
 .test_gem:
   interruptible: true
   stage: test
-  # Retry the whole job once on failure.
+  # Retry the whole job once, but ONLY for failures that are never the code's
+  # fault. `script_failure` is deliberately NOT retried.
   #
-  # hyper-spec already wraps every js example in `run_with_retry(retry: 3)`, but
-  # that re-runs the example in the *same* process and browser, so it cannot help
-  # when the cause is environmental -- a slow container, a saturated runner,
-  # accumulated state. Observed repeatedly: a spec fails all 3 in-job retries and
-  # then passes on a fresh job (default_value_spec:156, and the reactive-sync
-  # assertions in where_and_class_method_delegation_spec).
-  #
-  # This matters more since the matrix landed: each pipeline now runs every gem
-  # once per cell (13 jobs -> 37), so the chance of a pipeline catching an
-  # environment-level flake roughly tripled.
-  #
-  # `runner_system_failure` and `stuck_or_timeout_failure` are included because
-  # those are never the code's fault. `script_failure` covers the flakes above;
-  # a genuinely broken spec still fails twice and reddens the pipeline.
+  # It was originally included (!72) on the belief that browser specs were
+  # failing to environment-level flakiness that in-process rspec-retry could not
+  # absorb. That diagnosis was wrong: the failures were the runner running out of
+  # disk (#56, ru/infrastructure#7) -- Postgres, Rails logging and hyper-spec's
+  # cache all failing to write, and Chrome dying with it. With the cause handled
+  # in infrastructure, retrying `script_failure` no longer absorbs flakiness; it
+  # hides genuine test failures and, worse, would quietly paper over the next
+  # resource exhaustion instead of letting it fail loudly.
   retry:
     max: 1
     when:
       - runner_system_failure
       - stuck_or_timeout_failure
-      - script_failure
 
 
   # One job per configuration in supported_versions.yml. The pipeline only names
