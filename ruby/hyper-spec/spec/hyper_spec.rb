@@ -338,7 +338,12 @@ describe 'hyper-spec', js: true do
     # regression test for that behaviour, so a revert cannot pass unnoticed.
     it 'waits for a client value that arrives after the first read (#64)' do
       mount 'SayHello', name: 'Fred'
-      evaluate_ruby('`window.__hyperspec_late = null; setTimeout(function () { window.__hyperspec_late = 42 }, 1500)`')
+      # plain JS via Capybara: routing this through evaluate_ruby would compile it
+      # as Opal and mangle the statement separator
+      page.execute_script(
+        'window.__hyperspec_late = null;' \
+        'setTimeout(function () { window.__hyperspec_late = 42 }, 1500);'
+      )
       expect { `window.__hyperspec_late` }.on_client_to eq 42
     end
 
