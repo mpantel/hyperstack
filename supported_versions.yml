@@ -28,14 +28,54 @@
 #   empty env and is a no-op.
 #
 name: hyperstack supported configurations
-# ---------------------------------------------------------------------------
-# SPIKE BRANCH ONLY. The three rails61 cells are removed here so CI runs 13 jobs
-# instead of 49 while the Rails 7.2 cell is being iterated on -- they are 12/12
-# green on edge and re-running them proves nothing. Trimmed here rather than
-# bypassing `hyperstack:matrix:check`, so the declared == tested invariant stays
-# true. RESTORE THE FULL LIST before this branch is merged (it must not be).
-# ---------------------------------------------------------------------------
 cells:
+  - id: rails61-react16
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "2.6"
+    pipeline:    sprockets
+    react:       "16.14"   # derived: bundled by react-rails 2.x
+    env:
+      HYPERSTACK_JS_PIPELINE: webpacker
+
+  # React 17 takes the SAME hyper-component code path as 16 -- neither has
+  # ReactDOM.createRoot, so both use ReactDOM.render/findDOMNode. So this cell is
+  # not about new component code: it covers the react-rails 2.7 integration,
+  # which edge's default pin (`< 2.7.0`) deliberately excludes. Costs no code
+  # change, only a version selection. (#51)
+  - id: rails61-react17
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "2.7"
+    pipeline:    sprockets
+    react:       "17.0.2"  # derived: bundled by react-rails 2.7.x
+    env:
+      REACT_RAILS_VERSION: "~> 2.7.1"
+      HYPERSTACK_JS_PIPELINE: webpacker
+
+  # The first cell to take hyper-component's `createRoot` path rather than the
+  # legacy ReactDOM.render one -- React 18 removed `render`. react-rails 3.3
+  # bundles React 18.2 and serves it through sprockets, so this also covers a
+  # delivery route nothing else tests (rails-7+ take React from npm via esbuild).
+  # (#51)
+  - id: rails61-react18
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "3.3"
+    pipeline:    sprockets
+    react:       "18.2"   # derived: bundled by react-rails 3.3
+    env:
+      REACT_RAILS_VERSION: "~> 3.3"
+      HYPERSTACK_JS_PIPELINE: webpacker
+
+  # The first cell to move the RAILS axis. Everything else is held constant --
+  # react-rails 2.6 / React 16.14 on sprockets, exactly as rails61-react16 -- so
+  # a failure here is a Rails-version failure and nothing else. The JS pipeline
+  # must change with it (Rails 7 has no webpacker:install), which is selected
+  # explicitly via HYPERSTACK_JS_PIPELINE rather than inferred. (#51)
   - id: rails72-react16
     ruby:        "3.4"
     rails:       "7.2"
