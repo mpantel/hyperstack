@@ -22,7 +22,10 @@ if defined?(Spring) && Rails.respond_to?(:application) && Rails.application.nil?
   end
 end
 
-if Rails.configuration.try(:autoloader) == :zeitwerk
+# Rails 7 removed `config.autoloader` (Zeitwerk is the only autoloader), so the
+# old `Rails.configuration.autoloader == :zeitwerk` check is false there and the
+# server-side shadow files never load. Detect Zeitwerk via Rails.autoloaders.
+if Rails.respond_to?(:autoloaders) && Rails.autoloaders.zeitwerk_enabled?
   Rails.autoloaders.each do |loader|
     loader.on_load do |_cpath, _value, abspath|
       ActiveSupport::Dependencies.add_server_side_dependency(abspath) do |load_path|
@@ -37,17 +40,6 @@ module ActiveSupport
   module Dependencies
     HYPERSTACK_DIR = "hyperstack"
     class << self
-      alias original_require_or_load require_or_load
-
-      # before requiring_or_loading a file, first check if
-      # we have the same file in the server side directory
-      # and add that as a dependency
-
-      def require_or_load(file_name, const_path = nil)
-        add_server_side_dependency(file_name) { |load_path| require_dependency load_path }
-        original_require_or_load(file_name, const_path)
-      end
-
       # search the filename path from the end towards the beginning
       # for the HYPERSTACK_DIR directory.  If found, remove it from
       # the filename, and if a ruby file exists at that location then
@@ -66,6 +58,24 @@ module ActiveSupport
         return unless File.exist? "#{load_path}.rb"
 
         yield load_path
+      end
+    end
+
+    # The classic-autoloader require_or_load hook only exists before Zeitwerk;
+    # Rails 7 removed ActiveSupport::Dependencies.require_or_load. On Zeitwerk the
+    # loader.on_load hook above already handles shadowed server-side files, so
+    # only override require_or_load when it's actually present (Rails < 7).
+    if respond_to?(:require_or_load, true)
+      class << self
+        alias original_require_or_load require_or_load
+
+        # before requiring_or_loading a file, first check if
+        # we have the same file in the server side directory
+        # and add that as a dependency
+        def require_or_load(file_name, const_path = nil)
+          add_server_side_dependency(file_name) { |load_path| require_dependency load_path }
+          original_require_or_load(file_name, const_path)
+        end
       end
     end
   end
