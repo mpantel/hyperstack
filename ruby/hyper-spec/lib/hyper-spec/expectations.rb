@@ -8,7 +8,7 @@ module RSpec
       end
 
       def to_on_client(matcher, message = nil, &block)
-        evaluate_client.to(matcher, message, &block)
+        evaluate_client(matcher).to(matcher, message, &block)
       end
 
       alias on_client_to to_on_client
@@ -30,10 +30,58 @@ module RSpec
 
       private
 
-      def evaluate_client
+      def client_value
         source = add_opal_block(@args_str, @target)
-        value = @target.binding.eval("evaluate_ruby(#{source.inspect}, {}, {})")
+        @target.binding.eval("evaluate_ruby(#{source.inspect}, {}, {})")
+      end
+
+      # Client state is asynchronous: a value may be broadcast, fetched or
+      # recomputed after the block first returns. Reading once and matching once
+      # therefore races whatever produces the value -- which is #64, and the same
+      # defect class as #61 (a spec that read the DOM before the data arrived).
+      #
+      # So poll: evaluate, test the matcher, and re-evaluate until it is satisfied
+      # or Capybara's timeout expires. This mirrors what Capybara's own matchers do
+      # and what `have_field(..., with:)` does for the DOM.
+      #
+      # Two deliberate limits:
+      #
+      # * Only POSITIVE expectations poll. Retrying a negative would wait for
+      #   something to stop being true, which is a different assertion from the one
+      #   written, so `to_on_client_not` keeps reading once.
+      # * Block matchers (raise_error, change, ...) are excluded. They expect a
+      #   block, not a value, so `matches?` here is meaningless -- and without the
+      #   guard a mismatch would poll uselessly for the full timeout before failing.
+      #
+      # A matching value still costs exactly one evaluation, as before. Only the
+      # previously-failing path re-evaluates, so a block with side effects is only
+      # re-run in the case that used to fail outright.
+      def evaluate_client(matcher = nil)
+        value = client_value
+        if pollable?(matcher)
+          deadline = now + ::Capybara.default_max_wait_time
+          until matched?(matcher, value) || now >= deadline
+            sleep 0.1
+            value = client_value
+          end
+        end
         ExpectationTarget.for(value, nil)
+      end
+
+      def pollable?(matcher)
+        matcher.respond_to?(:matches?) &&
+          !(matcher.respond_to?(:supports_block_expectations?) &&
+            matcher.supports_block_expectations?)
+      end
+
+      def matched?(matcher, value)
+        matcher.matches?(value)
+      rescue ::StandardError
+        false
+      end
+
+      def now
+        ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
       end
     end
 
