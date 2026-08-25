@@ -193,17 +193,33 @@ describe 'defaultValue special handling', js: true do
         end
       end
     end
-    expect(page).not_to have_content('loading...', wait: 0)
-    expect(find('#uncontrolled-input').value).to eq('I have been loaded')
-    expect(find('#uncontrolled-checkbox')).to be_checked
-    expect(find('#uncontrolled-select').value).to eq('I have been loaded')
-    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
-    expect(find('#controlled-input').value).to eq('I have been loaded')
-    expect(find('#controlled-checkbox')).to be_checked
-    expect(find('#controlled-select').value).to eq('I have been loaded')
-    expect(find('#controlled-textarea').value).to eq('I have been loaded')
+    # #61: wait for the data to ARRIVE before reading the DOM.
+    #
+    # The gate that used to be here -- `not_to have_content('loading...', wait: 0)` --
+    # was vacuous: 'loading...' only ever appears as an OPTION *value* attribute,
+    # never as page text, and DummyValue#to_s returns ''. So nothing waited for the
+    # fetch; `find` waited only for the ELEMENT, which exists immediately carrying the
+    # placeholder, and `.value` was read once and compared with a non-retrying `eq`.
+    # The example raced the fetch by construction -- that race is the whole of #61,
+    # and it is why the failure looked like a flake with no correlation to Rails,
+    # React, batch or runner load.
+    #
+    # have_field(..., with:) retries until Capybara's timeout, so it waits for the
+    # VALUE rather than merely for the element to exist.
+    expect(page).to have_field('uncontrolled-input', with: 'I have been loaded')
+    expect(page).to have_field('uncontrolled-checkbox', checked: true)
+    expect(page).to have_field('uncontrolled-select', with: 'I have been loaded')
+    expect(page).to have_field('uncontrolled-textarea', with: 'I have been loaded')
+    expect(page).to have_field('controlled-input', with: 'I have been loaded')
+    expect(page).to have_field('controlled-checkbox', checked: true)
+    expect(page).to have_field('controlled-select', with: 'I have been loaded')
+    expect(page).to have_field('controlled-textarea', with: 'I have been loaded')
 
     TestModel.first.update(test_attribute: 'another value', completed: false)
+    # Wait for the broadcast to land before asserting what did NOT change. Without
+    # this the "unchanged" assertions below can pass simply because nothing has
+    # arrived yet, which makes them prove nothing.
+    expect(page).to have_field('controlled-input', with: 'another value')
     expect(find('#uncontrolled-input').value).to eq('I have been loaded')
     expect(find('#uncontrolled-checkbox')).to be_checked
     expect(find('#uncontrolled-select').value).to eq('I have been loaded')
