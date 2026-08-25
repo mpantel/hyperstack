@@ -327,6 +327,21 @@ describe 'hyper-spec', js: true do
         .on_client_to eq 24
     end
 
+    # #64: client state is asynchronous -- a value can be broadcast, fetched or
+    # recomputed after the block first returns. Reading once and matching once
+    # races whatever produces it, which is what made
+    # where_and_class_method_delegation_spec:51 intermittently red.
+    #
+    # This example is deterministic in both directions: the value is absent for
+    # 1.5s and then appears. Without polling `on_client_to` reads nil and fails
+    # every time; with polling it waits and passes every time. It is the
+    # regression test for that behaviour, so a revert cannot pass unnoticed.
+    it 'waits for a client value that arrives after the first read (#64)' do
+      mount 'SayHello', name: 'Fred'
+      evaluate_ruby('`window.__hyperspec_late = null; setTimeout(function () { window.__hyperspec_late = 42 }, 1500)`')
+      expect { `window.__hyperspec_late` }.on_client_to eq 42
+    end
+
     it 'can evaluate expressions on the client using the on_client_not_to method' do
       expect { 12 + 12 }.on_client_not_to eq 25
     end
