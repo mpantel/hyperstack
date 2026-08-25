@@ -38,14 +38,27 @@ hot-loader: bundle exec hyperstack-hotloader -p 25222 -d app/hyperstack
 
     def add_component
       # add_component AFTER webpack so component generator webpack check works
-      if skip_adding_component?
-        # normally this is handled by the hyper:component
-        # generator, but if we are skipping it we will check it
-        # now.
-        insure_hyperstack_loader_installed
-        check_javascript_link_directory
-      else
+      unless skip_adding_component?
         generate 'hyper:router App --add-route'
+      end
+      # Wire the Opal/hyperstack loader on both paths. Pre-7 layouts shipped a
+      # javascript tag to anchor on; Rails 7 (--skip-javascript) ships none, so
+      # the loader + manifest link + layout include tag must be ensured here.
+      # All three are idempotent.
+      insure_hyperstack_loader_installed
+      check_javascript_link_directory
+      insure_layout_loads_javascript
+    end
+
+    # Make sure the application layout actually loads the sprockets application
+    # bundle. Rails 7's --skip-javascript layout has no javascript tag at all, so
+    # without this the Opal/Hyperstack code never runs in the browser.
+    def insure_layout_loads_javascript
+      layout = Rails.root.join('app', 'views', 'layouts', 'application.html.erb')
+      return unless File.exist?(layout)
+      return if File.foreach(layout).any? { |l| l =~ /javascript_include_tag\s+('|")application/ }
+      inject_into_file layout.to_s, before: %r{\s*</head>} do
+        "\n    <%= javascript_include_tag 'application' %>"
       end
     end
 
