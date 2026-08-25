@@ -65,6 +65,12 @@ workflow:
     - if: $CI_COMMIT_BRANCH =='master'
 
 variables:
+  # Point yarn's download cache inside the project dir so GitLab can cache it
+  # (cache paths must be under $CI_PROJECT_DIR). Set as a variable rather than
+  # `yarn config set` so it is inherited by the yarn runs the install generator
+  # makes inside the generated test app, not just the one in before_script. (#55)
+  YARN_CACHE_FOLDER: "$CI_PROJECT_DIR/.yarn-cache"
+
   TERM: ansi
   MOUNT_PATH: /home/michail
   CONTAINER_SUBNET: 192.168.48.0/24
@@ -110,11 +116,29 @@ variables:
 # before_script), so there is nothing useful to cache for node and the path would
 # just be a dangling symlink.
 default:
+  # Two independent caches, because they have different lifetimes.
+  #
+  # Gems are per (component, ruby, cell): a cell deliberately installs a
+  # different gem set, and local_gems holds *installed* gems including compiled
+  # C extensions, so a cache built on one Ruby ABI must never be restored into a
+  # job on another. (#55)
+  #
+  # The yarn download cache is none of those things. npm packages do not depend
+  # on the Ruby version, the Rails version or which react-rails gem a cell
+  # selects, so scoping it the same way would keep ~48 near-identical copies and
+  # hand every new cell a cold cache. One shared key instead: the yarn cache is
+  # content-addressed, so entries from different jobs coexist rather than
+  # conflict, and every job warms it for every other. Bump the suffix to
+  # invalidate by hand.
   cache:
-    key: "gems-$COMPONENT-$RBENV_VERSION"
-    paths:
-      - local_gems
-    policy: pull-push
+    - key: "gems-$COMPONENT-$RBENV_VERSION-$HYPERSTACK_CELL"
+      paths:
+        - local_gems
+      policy: pull-push
+    - key: "yarn-v1"
+      paths:
+        - .yarn-cache
+      policy: pull-push
 
 stages:
   #  - databases

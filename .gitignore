@@ -14,3 +14,5 @@
 /ruby/**/spec/test_app/public/assets/
 /ruby/**/spec/test_app/app/assets/builds/
 /ruby/**/spec/test_app/db/schema.rb
+# yarn download cache, kept in-project so GitLab CI can cache it (#55)
+/.yarn-cache/
