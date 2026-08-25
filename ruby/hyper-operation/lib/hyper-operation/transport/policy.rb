@@ -593,7 +593,17 @@ module Hyperstack
     def self.load(name, value)
       const_get("#{name}Policy") if name && !name.end_with?("Policy".freeze) && value.is_a?(Class)
     rescue Exception => e
+      # A policy that simply doesn't exist is fine (plain NameError /
+      # "uninitialized constant"). But a policy file that *exists* yet fails to
+      # define its constant is a real error and must propagate as a LoadError.
+      #   - classic / older autoloader: LoadError "Unable to autoload constant NamePolicy"
+      #   - Rails 7 Zeitwerk: Zeitwerk::NameError "expected file ... to define
+      #     constant NamePolicy, but didn't" -> convert to LoadError to preserve
+      #     the contract.
       raise e if e.is_a?(LoadError) && e.message =~ /Unable to autoload constant #{name}Policy/
+      if defined?(Zeitwerk::NameError) && e.is_a?(Zeitwerk::NameError) && e.message =~ /#{name}Policy/
+        raise LoadError, e.message
+      end
     end
   end
 end
