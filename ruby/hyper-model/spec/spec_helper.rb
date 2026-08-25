@@ -91,7 +91,14 @@ RSpec.configure do |config|
 
   config.color = true
   config.fail_fast = ENV['FAIL_FAST'] || false
-  config.fixture_path = File.join(File.expand_path(File.dirname(__FILE__)), "fixtures")
+  fixtures_dir = File.join(File.expand_path(File.dirname(__FILE__)), "fixtures")
+  # rspec-rails 7 (Rails 7) removed fixture_path= in favour of fixture_paths= (array).
+  # respond_to? rather than a Rails version check, so this works on both eras. (#51)
+  if config.respond_to?(:fixture_paths=)
+    config.fixture_paths = [fixtures_dir]
+  else
+    config.fixture_path = fixtures_dir
+  end
   config.infer_spec_type_from_file_location!
   config.mock_with :rspec
   config.raise_errors_for_deprecations!
