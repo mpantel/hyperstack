@@ -183,6 +183,11 @@ Hyperstack.transport = :action_cable # :pusher, :simple_poller or :none
           next c if line.empty?
           next c if line.start_with?('#')
           next c if line.start_with?('mount')
+          # Rails 7+ default routes.rb ships built-in routes (health check on /up,
+          # and on 7.2 the PWA service-worker/manifest routes), all pointing at
+          # rails/* controllers. Ignore them so a freshly generated app still
+          # counts as "new".
+          next c if line.include?('rails/')
           c + 1
         end
         count <= 2
