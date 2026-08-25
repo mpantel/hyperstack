@@ -4,6 +4,26 @@ require 'pry'
 
 RSpec::Core::RakeTask.new(:spec)
 
+# Which JavaScript pipeline the generated test app should use. Mirrors the
+# generator's own choice (see generators/hyperstack/install_generator_base.rb
+# #js_pipeline_name) so the harness and the generator can never disagree:
+# Webpacker for Rails < 7, esbuild + jsbundling for Rails >= 7, and
+# HYPERSTACK_JS_PIPELINE overrides both. (#51)
+def hyperstack_js_pipeline
+  ENV['HYPERSTACK_JS_PIPELINE'] || (hyperstack_rails_major >= 7 ? 'esbuild' : 'webpacker')
+end
+
+def hyperstack_rails_major
+  # the cell exports RAILS_VERSION (e.g. "~> 7.2"); fall back to the bundled gem
+  if (v = ENV['RAILS_VERSION'].to_s[/\d+/])
+    v.to_i
+  else
+    Gem::Specification.find_by_name('rails').version.segments.first
+  end
+rescue StandardError
+  6
+end
+
 namespace :spec do
   task :prepare do
     rails_version = `bundle info rails`.match(/\* rails \((.+)\)/)[1]
@@ -49,8 +69,16 @@ namespace :spec do
           sh(%q{ruby -e 'f="config/boot.rb"; File.write(f, %Q(require "logger"\n)+File.read(f))'})
           sh("bundle update")
           sh("bundle binstubs bundler")
-          sh("bundle exec rails webpacker:install")
-          sh('spring stop')
+          if hyperstack_js_pipeline == 'webpacker'
+            sh("bundle exec rails webpacker:install")
+            sh('spring stop')
+          else
+            # esbuild + jsbundling (#19/#21): the generator runs yarn install +
+            # yarn build itself, so there is nothing to install here. Rails 7's
+            # default app no longer bundles spring, so `spring stop` exits 127 --
+            # make it non-fatal rather than aborting the whole task.
+            sh('spring stop || true')
+          end
           sh('bundle exec rails g hyperstack:install')
           sh('bundle exec rails generate model Sample name:string description:text')
           sleep 1
@@ -61,7 +89,13 @@ namespace :spec do
           sh('bundle exec rake db:migrate')
           sh('RAILS_ENV=test bundle exec rake db:setup')
           # sh('bundle exec rails dev:cache') # not tested yet...
-          sh('RAILS_ENV=test bundle exec rails webpacker:compile')
+          if hyperstack_js_pipeline == 'webpacker'
+            sh('RAILS_ENV=test bundle exec rails webpacker:compile')
+          else
+            # sprockets-only: precompile the Opal/sprockets assets (the React
+            # bundles were already built by esbuild during the generator run).
+            sh('RAILS_ENV=test bundle exec rails assets:precompile')
+          end
         end
       end
     end
