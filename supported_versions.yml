@@ -70,3 +70,23 @@ cells:
     env:
       REACT_RAILS_VERSION: "~> 3.3"
       HYPERSTACK_JS_PIPELINE: webpacker
+
+  # The first cell to move the RAILS axis. Everything else is held constant --
+  # react-rails 2.6 / React 16.14 on sprockets, exactly as rails61-react16 -- so
+  # a failure here is a Rails-version failure and nothing else. The JS pipeline
+  # must change with it (Rails 7 has no webpacker:install), which is selected
+  # explicitly via HYPERSTACK_JS_PIPELINE rather than inferred. (#51)
+  - id: rails72-react16
+    ruby:        "3.4"
+    rails:       "7.2"
+    opal:        "1.8"
+    react_rails: "2.6"
+    pipeline:    sprockets
+    react:       "16.14"
+    env:
+      RAILS_VERSION: "~> 7.2"
+      OPAL_RAILS_VERSION: "~> 2.0"
+      # Rails 7 has no webpacker:install; the generator and the test-app harness
+      # both read this, so the app is scaffolded and precompiled with esbuild +
+      # jsbundling instead. Declared rather than inferred, like every other cell.
+      HYPERSTACK_JS_PIPELINE: esbuild

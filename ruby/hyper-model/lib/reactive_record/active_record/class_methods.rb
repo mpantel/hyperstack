@@ -87,6 +87,15 @@ module ActiveRecord
       # when we implement schema validation we should also implement value checking
     end
 
+    # Rails 7+ generates `class ApplicationRecord < ActiveRecord::Base;
+    # primary_abstract_class; end`. hyperstack:install moves ApplicationRecord to
+    # app/hyperstack/models so it compiles to the client too, where this
+    # server-only class macro is undefined and raises "class method missing" on
+    # boot — corrupting the reactive-record model layer so client-created records
+    # never reactively sync. No-op it on the client, like the other server-only
+    # macros above. (#43)
+    def primary_abstract_class(*); end
+
     def serialize(attr, *args)
       ReactiveRecord::Base.serialized?[self][attr] = true
     end
