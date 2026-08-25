@@ -42,9 +42,15 @@ describe "reactive-record edge cases", js: true do
   end
 
   it "will load all the policies when the system starts" do
-    expect(defined? SomeModelPolicy).to be_falsy
+    # Under Zeitwerk (Rails 7) `defined?`/const_defined? is truthy for any
+    # autoloadable constant, so check whether the policy is *genuinely* loaded:
+    # defined with no pending autoload.
+    policy_loaded = lambda do
+      Object.const_defined?('SomeModelPolicy') && !Object.autoload?('SomeModelPolicy')
+    end
+    expect(policy_loaded.call).to be_falsy
     User.create(name: 'Fred')
-    expect(defined? SomeModelPolicy).to be_truthy
+    expect(policy_loaded.call).to be_truthy
   end
 
 
