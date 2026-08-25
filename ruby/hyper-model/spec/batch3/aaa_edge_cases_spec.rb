@@ -227,10 +227,17 @@ describe "reactive-record edge cases", js: true do
     end
 
     class ActiveRecord::Base
-      alias orig_synchromesh_after_create synchromesh_after_create
-      def synchromesh_after_create
-        sleep 0.4 if try(:name) == "sleepy-time"
-        orig_synchromesh_after_create
+      # Guard the alias: this block runs every time the example runs, and
+      # RSpec::Retry re-runs it on failure. Without the guard, the second
+      # `alias orig_… synchromesh_after_create` re-points `orig` at the
+      # already-overridden method, so the override calls itself — infinite
+      # recursion that floods the log with this backtrace and times the job out.
+      unless method_defined?(:orig_synchromesh_after_create)
+        alias_method :orig_synchromesh_after_create, :synchromesh_after_create
+        def synchromesh_after_create
+          sleep 0.4 if try(:name) == "sleepy-time"
+          orig_synchromesh_after_create
+        end
       end
     end
 
