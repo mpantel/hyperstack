@@ -135,10 +135,22 @@ default:
       paths:
         - local_gems
       policy: pull-push
+      # `when: always`, not GitLab's default `on_success`. What lands in
+      # local_gems is decided by the Gemfile/lockfile and is just as valid when
+      # the specs afterwards go red -- so with the default, a job that is failing
+      # never populates its own cache and every retry re-installs from scratch.
+      # Measured on the Rails 7.2 cell: ~219s of setup on each failing iteration
+      # against ~90s once it finally passed and the cache existed. That is the
+      # cache missing precisely while you are iterating on a red job. (#55)
+      when: always
     - key: "yarn-v1"
       paths:
         - .yarn-cache
       policy: pull-push
+      # Same reasoning: yarn's download cache is content-addressed, so a partial
+      # one is still correct -- it only ever means fewer entries, never wrong
+      # entries.
+      when: always
 
 stages:
   #  - databases
