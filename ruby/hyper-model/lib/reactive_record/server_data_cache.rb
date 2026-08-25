@@ -112,6 +112,20 @@ module ReactiveRecord
 
       if RUBY_ENGINE != 'opal'
 
+        # Whether `str` names a constant that is *genuinely* loaded — defined with
+        # no pending autoload. Plain `const_defined?` is unsafe under Zeitwerk
+        # (Rails 7): every class under app/* has a registered autoload and so
+        # reports as "defined", which would let a client-supplied string force
+        # the load of an arbitrary class.
+        def self.constant_loaded?(str)
+          return false unless const_defined?(str)
+          namespace, _sep, leaf = str.rpartition('::')
+          owner = namespace.empty? ? Object : const_get(namespace)
+          !(owner.respond_to?(:autoload?) && owner.autoload?(leaf))
+        rescue NameError
+          false
+        end
+
         def self.get_model(str)
           # We don't want to open a security hole by allowing some client side string to
           # autoload a class, which would happen if we did a simple str.constantize.
@@ -120,17 +134,19 @@ module ReactiveRecord
           # Check if the model is in public_columns_hash (which includes models available
           # for lazy loading) rather than checking if it's already loaded as a constant.
           #
-          # If str is not in public_columns_hash, we have an access violation.
+          # If str is neither a known AR model nor a genuinely-loaded constant, we
+          # have an access violation. (const_defined? alone is too permissive under
+          # Zeitwerk -- see constant_loaded?.)
           public_columns = ActiveRecord::Base.public_columns_hash
+          loaded = constant_loaded?(str)
 
-          # Check if model is available (either loaded or available for lazy loading)
-          unless const_defined?(str) || public_columns.key?(str)
+          unless loaded || public_columns.key?(str)
             Hyperstack::InternalPolicy.raise_operation_access_violation(:undefined_const, "#{str} is not a loaded constant")
           end
 
-          # Trigger lazy loading by accessing public_columns_hash if needed
-          # This ensures the model is loaded before we try to constantize it
-          public_columns[str] if public_columns.respond_to?(:key?) && public_columns.key?(str) && !const_defined?(str)
+          # Trigger lazy loading by accessing public_columns_hash if the model
+          # isn't loaded yet, so the constant resolves before we constantize it.
+          public_columns[str] if public_columns.respond_to?(:key?) && public_columns.key?(str) && !loaded
 
           str.constantize
         end
