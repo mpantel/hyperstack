@@ -340,11 +340,13 @@ describe 'hyper-spec', js: true do
       mount 'SayHello', name: 'Fred'
       # plain JS via Capybara: routing this through evaluate_ruby would compile it
       # as Opal and mangle the statement separator
+      # Start at a non-null value: the harness taps the result, so a JS null coming
+      # back from the block blows up before the matcher is ever consulted.
       page.execute_script(
-        'window.__hyperspec_late = null;' \
-        'setTimeout(function () { window.__hyperspec_late = 42 }, 1500);'
+        "window.__hyperspec_late = 'waiting';" \
+        "setTimeout(function () { window.__hyperspec_late = 'arrived' }, 1500);"
       )
-      expect { `window.__hyperspec_late` }.on_client_to eq 42
+      expect { `window.__hyperspec_late` }.on_client_to eq 'arrived'
     end
 
     it 'can evaluate expressions on the client using the on_client_not_to method' do
