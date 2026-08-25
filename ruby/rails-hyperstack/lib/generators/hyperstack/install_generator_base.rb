@@ -157,8 +157,8 @@ module Rails
 
       def js_pipeline_strategy
         case js_pipeline_name
-        when 'webpacker' then ::Hyperstack::Generators::JsPipeline::Webpacker
-        when 'esbuild'   then ::Hyperstack::Generators::JsPipeline::Esbuild
+        when 'webpacker' then ::Rails::Generators::JsPipeline::Webpacker
+        when 'esbuild'   then ::Rails::Generators::JsPipeline::Esbuild
         else raise Thor::Error.new("unknown HYPERSTACK_JS_PIPELINE #{js_pipeline_name.inspect}")
         end
       end

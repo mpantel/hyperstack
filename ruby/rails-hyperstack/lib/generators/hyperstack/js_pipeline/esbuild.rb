@@ -1,4 +1,4 @@
-module Hyperstack
+module Rails
   module Generators
     module JsPipeline
       # The esbuild + jsbundling-rails JavaScript pipeline, as generated for

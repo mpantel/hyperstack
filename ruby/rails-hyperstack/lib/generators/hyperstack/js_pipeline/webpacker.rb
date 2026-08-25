@@ -1,4 +1,4 @@
-module Hyperstack
+module Rails
   module Generators
     module JsPipeline
       # The Webpacker JavaScript pipeline, as generated for Rails < 7.
