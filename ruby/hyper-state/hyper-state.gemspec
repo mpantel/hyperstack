@@ -33,7 +33,9 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rails', *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
   spec.add_development_dependency 'rake'
   spec.add_development_dependency 'react-rails', *(ENV['REACT_RAILS_VERSION'] ? [ENV['REACT_RAILS_VERSION']] : ['>= 2.4.0', '< 2.7.0'])
-  spec.add_development_dependency 'rspec', '~> 3.11.0'
+  spec.add_development_dependency 'rspec', '~> 3.11'  # not '~> 3.11.0': that caps rspec-core at 3.11, which blocks
+  # rspec-rails 7+ and so blocks Rails 7 (its FixtureSupport calls the
+  # removed fixture_path=). Left as a range so bundler picks per Rails. (#51)
   spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rspec-steps', '~> 2.1.1'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'

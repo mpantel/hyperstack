@@ -12,7 +12,14 @@ module Hyperstack
 
         do_not_synchronize
 
-        serialize :data
+        # Rails 7.1 requires an explicit coder for serialize; the historical
+        # default was YAML, so keep YAML for backward compatibility with data
+        # already stored in existing tables.
+        if ::ActiveRecord.version >= Gem::Version.new('7.1')
+          serialize :data, coder: YAML
+        else
+          serialize :data
+        end
 
         belongs_to :hyperstack_connection,
                    class_name:  'Hyperstack::ConnectionAdapter::ActiveRecord::Connection',

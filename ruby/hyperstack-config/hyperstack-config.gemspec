@@ -37,7 +37,9 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'rails', *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
   spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'rspec', '~> 3.11.0'
+  spec.add_development_dependency 'rspec', '~> 3.11'  # not '~> 3.11.0': that caps rspec-core at 3.11, which blocks
+  # rspec-rails 7+ and so blocks Rails 7 (its FixtureSupport calls the
+  # removed fixture_path=). Left as a range so bundler picks per Rails. (#51)
   spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
   spec.add_development_dependency 'sqlite3', '< 2' # see https://github.com/rails/rails/issues/35153
