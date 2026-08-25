@@ -20,7 +20,7 @@ module Rails
           install_jsbundling_and_mini_racer
         end
 
-      def webpack_check
+      def pipeline_webpack_check
         # esbuild/jsbundling is set up by `hyperstack:install`, not auto-triggered
         # on component generation. No-op (was: detect ::Webpacker and auto-install).
         nil

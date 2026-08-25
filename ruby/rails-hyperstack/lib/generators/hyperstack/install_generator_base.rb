@@ -155,6 +155,14 @@ module Rails
         install_js_pipeline
       end
 
+      # Called from create_component_file, which is shared and runs before
+      # install_webpack, so the strategy has to be selected here too rather than
+      # relying on install_webpack having extended it already. (#51)
+      def webpack_check
+        extend(js_pipeline_strategy)
+        pipeline_webpack_check
+      end
+
       def js_pipeline_strategy
         case js_pipeline_name
         when 'webpacker' then ::Rails::Generators::JsPipeline::Webpacker

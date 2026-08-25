@@ -19,7 +19,7 @@ module Rails
           install_webpacker
         end
 
-      def webpack_check
+      def pipeline_webpack_check
         return unless defined? ::Webpacker
 
         client_and_server = Rails.root.join("app", "javascript", "packs", "client_only.js")
