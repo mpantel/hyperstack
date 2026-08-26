@@ -57,15 +57,43 @@ module RSpec
       # previously-failing path re-evaluates, so a block with side effects is only
       # re-run in the case that used to fail outright.
       def evaluate_client(matcher = nil)
-        value = client_value
+        value, error = fetch_client_value
         if pollable?(matcher)
           deadline = now + ::Capybara.default_max_wait_time
-          until matched?(matcher, value) || now >= deadline
+          until (error.nil? && matched?(matcher, value)) || now >= deadline
             sleep 0.1
-            value = client_value
+            value, error = fetch_client_value
           end
         end
+        # Timed out still erroring: re-raise the LAST error, so the failure reads
+        # as the real problem rather than as a mismatch against nil.
+        raise error if error
+
         ExpectationTarget.for(value, nil)
+      end
+
+      # The client may not merely hold the wrong value -- it may not be ready at
+      # all. "uninitialized constant Physician" was a load race: the Opal bundle
+      # had not defined the model when the block ran. That raises while EVALUATING,
+      # so without this it escapes before the polling above can retry anything.
+      #
+      # Only JavascriptError is treated as retryable. Retrying every StandardError
+      # would swallow real problems and make each one cost the full timeout before
+      # failing; a JS error is the one that plausibly means "not yet".
+      #
+      # The cost is honest: a genuinely broken block now takes the full timeout
+      # before reporting, instead of failing at once. That is the price of not
+      # being able to tell "broken" from "not ready yet" at the first attempt.
+      def fetch_client_value
+        [client_value, nil]
+      rescue ::StandardError => e
+        raise unless retryable_client_error?(e)
+
+        [nil, e]
+      end
+
+      def retryable_client_error?(error)
+        error.class.name.to_s.include?('Selenium::WebDriver::Error::JavascriptError')
       end
 
       def pollable?(matcher)
