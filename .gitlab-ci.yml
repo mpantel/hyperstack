@@ -104,6 +104,12 @@ variables:
 
 # Cache gems between pipelines, per component and Ruby version.
 #
+# NOTE (#57): the matrix test jobs no longer use this. `.test_gem` and
+# `.test_gem_pg` run on prebaked cell images that already contain `local_gems`
+# and override this with `cache: []`. What follows still governs the jobs that
+# run on base24 -- `supported-versions` and the `.deploy_gem` jobs -- which are
+# not per-cell and so have no image to inherit gems from.
+#
 # `key: gems-$COMPONENT-$RBENV_VERSION` gives each component its own cache, so the
 # ~13 parallel jobs don't clobber a single shared key (default cache policy is
 # pull-push); part1/part2 of a component share one key. The Ruby version is part
@@ -156,6 +162,10 @@ stages:
   #  - databases
   #  - prepare
   #  - check
+  # Cell images are built before anything consumes them. Ordering matters now
+  # that the test jobs RUN on these images: a test job must never start against
+  # an image a build job in the same pipeline is still producing. (#57)
+  - images
   - test
 #  - report
 #  - approve
@@ -164,6 +174,22 @@ stages:
 .test_gem_pg:
   interruptible: true
   stage: test
+  # Run on this cell's prebaked dependency image instead of base24 + a restored
+  # gem cache. The image bakes `local_gems` (every gem's bundle, including
+  # compiled native extensions) for exactly this cell's version selectors, built
+  # from supported_versions.yml by the same `rake hyperstack:cell:env` this job
+  # uses -- so the image and the test run cannot disagree about which versions
+  # they are. (#57)
+  image:
+    name: $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL
+    docker:
+      user: ubuntu
+  # No gem cache: the gems are in the image. Measured on job 40440, keeping it
+  # would cost 19-58s restoring 258 MB over gems already present, plus ~28s
+  # re-uploading them (`policy: pull-push`, `when: always`) -- ~47s/job of pure
+  # waste. The `yarn-v1` cache from `default:` still applies: node packages are
+  # NOT in the image.
+  cache: []
   # Retry the whole job once, but ONLY for failures that are never the code's
   # fault. `script_failure` is deliberately NOT retried.
   #
@@ -210,6 +236,11 @@ stages:
 
     - echo "cell $HYPERSTACK_CELL"
     - eval "$(rake hyperstack:cell:env)"
+    # Gems come from the image, not from restore_cache. Fail loudly rather than
+    # silently falling back to a cold `bundle install`, which would look like a
+    # slow but successful job and hide a broken or missing image.
+    - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
+    - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
 
 # - bundle config set --local path local_gems
     # - bundle install
@@ -242,6 +273,22 @@ stages:
 .test_gem:
   interruptible: true
   stage: test
+  # Run on this cell's prebaked dependency image instead of base24 + a restored
+  # gem cache. The image bakes `local_gems` (every gem's bundle, including
+  # compiled native extensions) for exactly this cell's version selectors, built
+  # from supported_versions.yml by the same `rake hyperstack:cell:env` this job
+  # uses -- so the image and the test run cannot disagree about which versions
+  # they are. (#57)
+  image:
+    name: $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL
+    docker:
+      user: ubuntu
+  # No gem cache: the gems are in the image. Measured on job 40440, keeping it
+  # would cost 19-58s restoring 258 MB over gems already present, plus ~28s
+  # re-uploading them (`policy: pull-push`, `when: always`) -- ~47s/job of pure
+  # waste. The `yarn-v1` cache from `default:` still applies: node packages are
+  # NOT in the image.
+  cache: []
   # Retry the whole job once, but ONLY for failures that are never the code's
   # fault. `script_failure` is deliberately NOT retried.
   #
@@ -293,6 +340,11 @@ stages:
   before_script:
     - echo installing $COMPONENT
     - eval "$(rake hyperstack:cell:env)"
+    # Gems come from the image, not from restore_cache. Fail loudly rather than
+    # silently falling back to a cold `bundle install`, which would look like a
+    # slow but successful job and hide a broken or missing image.
+    - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
+    - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
 #    - sudo apt-get remove --purge mysql-server mysql-client mysql-common
 #    - sudo apt-get autoremove
 #    - sudo apt-get autoclean
@@ -459,9 +511,25 @@ rails-hyperstack:
 # Build args come from supported_versions.yml via `rake hyperstack:cell:env`, so
 # the image and the test run are parameterised from the same table.
 build-cell-image:
-  stage: test
-  when: manual
+  stage: images
   allow_failure: true
+  # Rebuild only when the image's inputs change -- exactly the files
+  # prepare-context.sh stages. Building four cells on every pipeline would cost
+  # ~4 min each and hand back most of what consuming the image saves.
+  #
+  # This is also what stops the image drifting from the table: supported_versions.yml
+  # is baked in at BUILD time, so a purely manual build would let the table advance
+  # while pipelines silently kept testing the old versions -- the drift #51 exists to
+  # prevent, reintroduced by the back door. cell_contract_spec is the backstop (it
+  # asserts the running cell matches the table, reading React from the browser), but
+  # this rule is what keeps it from ever firing.
+  rules:
+    - changes:
+        - supported_versions.yml
+        - ruby/*/*.gemspec
+        - ruby/*/Gemfile
+        - docker/cell-image/**/*
+    - when: manual   # always available on demand
   # No dind service and no DOCKER_HOST: the group runners mount the host docker
   # socket, which is how ru/infrastructure builds base24 (its .gitlab-ci.yml has
   # the dind service commented out yet runs `docker info` / `docker ps`
@@ -500,88 +568,6 @@ build-cell-image:
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - bash docker/cell-image/build.sh --push
-
-# #57 stage 2: does the prebaked image actually pay for itself?
-#
-# MANUAL and additive, like the build job -- nothing depends on it.
-#
-# This is a measurement, so it is deliberately a like-for-like rerun of the
-# baseline: same component and same cell as job 39544
-# (hyper-i18n / rails61-react16), whose sections were
-#   get_sources 13s | restore_cache 58s | step_script 87s
-# Anything else here would not be comparable.
-#
-# The experiment is `cache: []`. A job using the prebaked image must not restore
-# the gem cache at all, so a passing run should show NO restore_cache section in
-# its trace, and `bundle install` should be a warm no-op (~9s) because every gem
-# is already in the image. If restore_cache is gone but bundle install is slow,
-# the image is incomplete and the idea does not pay off -- that is the result
-# this job exists to produce either way.
-cell-image-probe:
-  interruptible: true
-  stage: test
-  when: manual
-  allow_failure: true
-  image:
-    name: $CI_REGISTRY_IMAGE/cell:rails61-react16
-    docker:
-      user: ubuntu
-    # BLOCKED (2026-08-26): this job cannot pull its own project's image.
-    #
-    # The group-level DOCKER_AUTH_CONFIG added today to fix the base24 pull
-    # outage holds ONE auths entry for registry.ru.aegean.gr, using a deploy
-    # token scoped to ru/infrastructure (registry-pull-runner, id 4). That entry
-    # applies to every repository on the host AND outranks the job-token
-    # credentials, so no project in the `ru` group can pull from its own
-    # registry:
-    #   pull access denied for registry.ru.aegean.gr/ru/hyperstack/cell
-    #
-    # `pull_policy: if-not-present` would have sidestepped it -- the image is
-    # already in ru-vm2's local store, because build-cell-image builds through
-    # the host docker socket and both runners are on ru-vm2 -- but the runner
-    # rejects it: allowed_pull_policies is [always].
-    #
-    # Fix is in ru/infrastructure: a GROUP-level read_registry deploy token on
-    # `ru` (group tokens span every project) swapped into DOCKER_AUTH_CONFIG.
-    # There are currently no deploy tokens on the group or on this project.
-    # Once that lands this job runs as-is, with no change here.
-  cache: []          # the whole point -- see above
-  variables:
-    COMPONENT: hyper-i18n
-    HYPERSTACK_CELL: rails61-react16
-    TASK: spec
-  before_script:
-    - sudo service postgresql start
-    - until pg_isready --username=postgres --host=localhost; do sleep 1; done
-    - sudo redis-server --daemonize yes
-    - git config --global --add safe.directory $CI_PROJECT_DIR
-    - echo "cell $HYPERSTACK_CELL"
-    - eval "$(rake hyperstack:cell:env)"
-    # Gems come from the image, not from restore_cache. Fail loudly rather than
-    # silently falling back to a cold install, which would look like a slow but
-    # successful run and quietly invalidate the measurement.
-    - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
-    - du -sh "$HYPERSTACK_PREBAKED_GEMS"
-    - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
-    - echo initialized for $COMPONENT
-    - cd ruby/$COMPONENT
-    - echo creating psql database
-    - psql -c 'create database hyper_mesh_test_db;' -U postgres
-    - gem install bundler -v '~> 4.0'
-    - bundle -v
-    - bundle config set --local path ../../local_gems
-    # Timed on purpose: this number against the baseline's 58s restore_cache is
-    # the go/no-go for building the remaining cells.
-    - time bundle install --jobs=3 --retry=3
-    - google-chrome --version
-    - bundle exec rake spec:prepare
-    - ln -s /node_modules/ ../../node_modules
-    - yarn install
-    - bundle list
-    - echo 'install completed'
-  script:
-    - echo running script $COMPONENT
-    - DRIVER=travis bundle exec rake $TASK
 
 #deploy
 hyper-i18n-deploy:
