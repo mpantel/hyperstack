@@ -254,13 +254,31 @@ describe 'hyper-spec', js: true do
     # before(:each)). Pass nothing while Timecop is driving the client clock from
     # the server -- there is no independent offset then.
     #
-    # The -1/+1 absorbs `to_i` truncation: both clocks are read at second
-    # resolution, so either can round almost a whole second away from the other.
-    def expect_client_clock_to_track_server(gap_low: 0, gap_high: 0)
+    # `slack` absorbs `to_i` truncation (both clocks are read at second
+    # resolution, so either can round almost a whole second away from the other)
+    # AND, under Timecop.scale, the client's legitimate lag -- see `scale:` below.
+    #
+    # `scale:` matters because the bracket alone is NOT sufficient inside
+    # `Timecop.scale n`. There the SERVER clock advances n x real time while the
+    # client advances its own copy at real speed between syncs, so the client
+    # genuinely falls behind and lands below the server's window. Observed on edge
+    # (job 41605) after the first version of this helper assumed both clocks
+    # advance together -- true for freeze/travel, false under scaling:
+    #
+    #   expected 1756243851 to be between 1756243852 and 1756243858
+    #
+    # So allow SLACK_SECONDS of real-time lag, expressed in the scaled units the
+    # comparison happens in. At scale 60 that is a wide window in scaled seconds,
+    # but it is still a real 2s bound -- a client not tracking Timecop at all
+    # would be out by a year, not by seconds.
+    SLACK_SECONDS = 2
+
+    def expect_client_clock_to_track_server(gap_low: 0, gap_high: 0, scale: 1)
+      slack  = SLACK_SECONDS * scale
       before = Time.now.to_i
       client = evaluate_ruby('puts ""; Time.now.to_i')
       after  = Time.now.to_i
-      expect(client).to be_between(before - gap_high - 1, after - gap_low + 1)
+      expect(client).to be_between(before - gap_high - slack, after - gap_low + slack)
     end
 
     # After Timecop releases its hold the browser is back on its own clock, so
@@ -309,7 +327,7 @@ describe 'hyper-spec', js: true do
 
     it "will use TimeCop travelling time with scaling" do
       Timecop.scale 60, Time.now-1.year do
-        expect_client_clock_to_track_server
+        expect_client_clock_to_track_server(scale: 60)
 
         # Scaled time should advance ~60x real time. Compare against the real
         # time actually slept rather than assuming `sleep 1` sleeps exactly one
@@ -322,7 +340,7 @@ describe 'hyper-spec', js: true do
         real_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - real_before
         expect(Time.now - start_time).to be_within(10).of(real_elapsed * 60)
 
-        expect_client_clock_to_track_server
+        expect_client_clock_to_track_server(scale: 60)
       end
       expect_client_clock_restored
     end
