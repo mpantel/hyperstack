@@ -24,6 +24,14 @@ for v in RBENV_VERSION RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS
   if [ -n "${!v:-}" ]; then ARGS+=(--build-arg "$v=${!v}"); fi
 done
 
+# Bundle exactly what CI bundles, not every directory with a Gemfile. The
+# COMPONENT values in .gitlab-ci.yml are the definition; hyper-console has a
+# Gemfile but is never tested, and its multiple global `source` lines are a hard
+# error under Bundler 4 ("Each source after the first must include a block"),
+# which failed the first build.
+COMPONENTS="$(grep -oE 'COMPONENT: [a-z0-9-]+' "$ROOT/.gitlab-ci.yml" | awk '{print $2}' | sort -u | tr '\n' ' ')"
+echo "components: $COMPONENTS"
+
 "$ROOT/docker/cell-image/prepare-context.sh" "$CONTEXT"
 
 echo "building $IMAGE"
@@ -34,6 +42,7 @@ printf '  %s\n' "${ARGS[@]:-(no cell overrides; gemspec defaults)}"
 # what makes "on demand" work without having to detect whether a rebuild is due.
 docker build \
   --cache-from "$IMAGE" \
+  --build-arg "HYPERSTACK_COMPONENTS=$COMPONENTS" \
   ${BASE_IMAGE:+--build-arg "BASE_IMAGE=$BASE_IMAGE"} \
   "${ARGS[@]}" \
   -t "$IMAGE" \

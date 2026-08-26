@@ -375,6 +375,7 @@ supported-versions:
   # so it should run once per pipeline rather than once per cell.
   interruptible: true
   stage: test
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyperstack-config
   before_script:
@@ -498,48 +499,59 @@ build-cell-image:
 #deploy
 hyper-i18n-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-i18n
 hyper-trace-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-trace
 hyper-state-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-state
 hyper-component-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-component
 hyper-model-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-model
 hyper-operation-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-operation
 hyper-router-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-router
 hyper-spec-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-spec
 hyper-store-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyper-store
 
 hyperstack-config-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: hyperstack-config
 
 rails-hyperstack-deploy:
   extends: .deploy_gem
+  rules: [{ when: never }]   # #57 image-build branch: only the build job runs here
   variables:
     COMPONENT: rails-hyperstack
 

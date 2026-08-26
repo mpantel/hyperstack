@@ -23,6 +23,11 @@ ARG RAILS_VERSION=""
 ARG OPAL_VERSION=""
 ARG OPAL_RAILS_VERSION=""
 ARG REACT_RAILS_VERSION=""
+# The gems CI actually bundles, passed in from .gitlab-ci.yml's COMPONENT values
+# by build.sh. Not "every directory with a Gemfile": hyper-console has one but is
+# never tested, and its Gemfile has multiple global sources, which Bundler 4
+# rejects outright.
+ARG HYPERSTACK_COMPONENTS=""
 
 # Only RBENV_VERSION is exported unconditionally; the version selectors must NOT
 # be present-but-empty. The gemspecs choose like this:
@@ -57,10 +62,9 @@ RUN set -eux; \
     done; \
     env | grep -E '^(RBENV|RAILS|OPAL|REACT)' || echo 'no version selectors set (gemspec defaults)'; \
     gem install bundler -v '~> 4.0'; \
-    for dir in ruby/*/; do \
-      gem="$(basename "$dir")"; \
-      [ -f "$dir/Gemfile" ] || continue; \
-      cd "/hyperstack/$dir"; \
+    for gem in ${HYPERSTACK_COMPONENTS}; do \
+      [ -f "ruby/$gem/Gemfile" ] || continue; \
+      cd "/hyperstack/ruby/$gem"; \
       bundle config set --local path ../../local_gems; \
       bundle install --jobs=3 --retry=3; \
       cd /hyperstack; \
