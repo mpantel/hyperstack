@@ -49,10 +49,46 @@ RSpec::Steps.steps 'the where method and class delegation', js: true do
   end
 
   it "and will update the collection on the client " do
-    User.create(first_name: "Paul", last_name: "VanDuyn")
-    expect do
-      User.where(surname: "VanDuyn").pluck(:id, :first_name)
-    end.on_client_to eq User.where(surname: "VanDuyn").pluck(:id, :first_name)
+    # #70 DIAGNOSTICS -- debug branch, not for merge.
+    #
+    # This step creates a record server-side and expects the client's
+    # already-loaded collection to update over pusher-fake. It fails on most full
+    # matrix runs, on every cell, and `on_client_to` polls -- so the broadcast is
+    # not merely late, it never arrives.
+    #
+    # Two candidates, which these prints separate:
+    #   a) nobody was listening   -> `channels:` is empty / lacks the client's
+    #                                channel at create time (subscription race)
+    #   b) sent but not received  -> channels look right and send_to_channel is
+    #                                called, but the client never applies it
+    #
+    # show_diagnostics also turns on, in the library:
+    #   active_record_base.rb:351  synchromesh_after_create + Connection.active
+    #   broadcast.rb:9             "Broadcast aftercommit hook: <data>"
+    #   connection.rb              open / send_to_channel / read / connect_to_transport
+    begin
+      $stdout.puts "[#70] channels BEFORE create: #{Hyperstack::Connection.active.inspect}"
+      $stdout.flush
+      Hyperstack::Connection.show_diagnostics = true
+
+      User.create(first_name: "Paul", last_name: "VanDuyn")
+
+      $stdout.puts "[#70] channels AFTER create: #{Hyperstack::Connection.active.inspect}"
+      $stdout.puts "[#70] server sees: #{User.where(surname: "VanDuyn").pluck(:id, :first_name).inspect}"
+      $stdout.flush
+
+      expect do
+        User.where(surname: "VanDuyn").pluck(:id, :first_name)
+      end.on_client_to eq User.where(surname: "VanDuyn").pluck(:id, :first_name)
+    ensure
+      # Report the client's final view either way, so a PASSING run gives us a
+      # baseline to compare the failing one against.
+      $stdout.puts "[#70] client finally sees: " \
+                   "#{evaluate_ruby('User.where(surname: "VanDuyn").pluck(:id, :first_name)').inspect}"
+      $stdout.puts "[#70] channels AT END: #{Hyperstack::Connection.active.inspect}"
+      $stdout.flush
+      Hyperstack::Connection.show_diagnostics = false
+    end
   end
 
   it "or it can take SQL plus params" do

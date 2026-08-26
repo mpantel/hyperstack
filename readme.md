@@ -1,5 +1,4 @@
 # Hyperstack
-[![Build Status](https://travis-ci.com/hyperstack-org/hyperstack.svg?branch=edge)](https://travis-ci.com/hyperstack-org/hyperstack)
 [![Gem Version](https://badge.fury.io/rb/rails-hyperstack.svg)](https://badge.fury.io/rb/rails-hyperstack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Slack](https://img.shields.io/badge/slack-hyperstack.org/slack-yellow.svg?logo=slack)](https://join.slack.com/t/hyperstack-org/shared_invite/enQtNTg4NTI5NzQyNTYyLWQ4YTZlMGU0OGIxMDQzZGIxMjNlOGY5MjRhOTdlMWUzZWYyMTMzYWJkNTZmZDRhMDEzODA0NWRkMDM4MjdmNDE)
