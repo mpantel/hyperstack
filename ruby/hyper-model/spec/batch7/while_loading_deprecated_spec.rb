@@ -296,9 +296,24 @@ describe "while loading (deprecated methods)", js: true do
     expect(page).to have_content('no fetch yet chet')
     expect(page).not_to have_content('loading...', wait: 0)
     expect(page).not_to have_content('DaDog', wait: 0)
+    # FetchNow is a ServerOp dispatched to the client over pusher. The assertions
+    # above prove the page RENDERED, not that the pusher handshake finished -- and
+    # a dispatch to a still-handshaking client is queued against a connection that
+    # expires in 10s and is then deleted unread (#70). That is candidate (1) in
+    # #65: the component never receives FetchNow, so it never fetches and never
+    # renders 'loading...'.
+    wait_for_transport_connection
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
       FetchNow.run
-      expect(page).to have_content('loading...')
+      # If this still fails, say WHICH candidate it is instead of only that
+      # 'loading...' was absent -- the whole difficulty in #65 was that the
+      # failure message did not distinguish them. Lazy, so page.text is only read
+      # on failure.
+      expect(page).to have_content('loading...'), lambda {
+        "expected 'loading...' but the page shows: #{page.text.inspect}\n" \
+        "  'no fetch yet chet' => the FetchNow dispatch never arrived (#70 class)\n" \
+        "  'DaDog'             => the record was already loaded, so no fetch was needed"
+      }
       expect(page).not_to have_content('DaDog', wait: 0)
       expect(page).not_to have_content('no fetch yet chet', wait: 0)
     end
