@@ -285,6 +285,32 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
         run 'yarn build'
       end
 
+      # Override the base's no-op (#66). The base only PREPENDS a commented-out
+      # line, which documents the option for a fresh app but cancels nothing --
+      # so `rails-hyperstack.rb`'s unconditional
+      # `js_import 'react/react-source-browser'` still put the react-rails UMD
+      # into the Opal loader manifest. application.js requires react_runtime
+      # BEFORE hyperstack-loader, so the UMD assigned window.React last and won:
+      # the app shipped a 1.2 MB React 19 bundle and then ran React 16.14.
+      #
+      # Ported from rails-7, where it has always been the real thing. Kept in the
+      # esbuild strategy rather than the base because the Webpacker path also
+      # calls cancel_react_source_import, and cancelling there is untested on
+      # this line -- the three Rails 6.1 cells currently depend on the sprockets
+      # React being present.
+      #
+      # react_server_runtime is loaded at_head in the prerender bundle so its
+      # globals are set before the React defines-check runs. cancel_import is a
+      # safe no-op when hyper-router isn't present (#32).
+      def cancel_react_source_import
+        inject_into_initializer(
+          "Hyperstack.cancel_import 'react/react-source-browser'\n"\
+          "Hyperstack.cancel_import 'react/react-source-server'\n"\
+          "Hyperstack.cancel_import 'hyperstack/router/react-router-source'\n"\
+          "Hyperstack.import 'react_server_runtime', js_import: true, server_only: true, at_head: true"
+        )
+      end
+
       def gem_in_gemfile?(name)
         gemfile = Rails.root.join('Gemfile')
         File.exist?(gemfile) &&
