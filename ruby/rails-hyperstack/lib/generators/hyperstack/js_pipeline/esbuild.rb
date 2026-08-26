@@ -236,8 +236,8 @@ require('esbuild').build({
   "dependencies": {
     "create-react-class": "^15.7.0",
     "history": "^4.10.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "#{react_npm_version}",
+    "react-dom": "#{react_npm_version}",
     "react-router": "^5.3.4",
     "react-router-dom": "^5.3.4"
   },
@@ -309,6 +309,20 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
           "Hyperstack.cancel_import 'hyperstack/router/react-router-source'\n"\
           "Hyperstack.import 'react_server_runtime', js_import: true, server_only: true, at_head: true"
         )
+      end
+
+      # The npm React the esbuild bundles are built from. Parameterised so a
+      # matrix cell can SELECT it, the way REACT_RAILS_VERSION selects the
+      # sprockets/react-rails React (#51).
+      #
+      # Without this the version was hardcoded, so the React axis was selectable
+      # on one delivery path and frozen on the other -- which is why no cell could
+      # honestly claim React 19: the only lever moved react-rails, and react-rails
+      # tops out at 3.3 / React 18.2.
+      #
+      # Default stays ^19.0.0, so an unparameterised install is unchanged.
+      def react_npm_version
+        ENV['REACT_NPM_VERSION'] || '^19.0.0'
       end
 
       def gem_in_gemfile?(name)
