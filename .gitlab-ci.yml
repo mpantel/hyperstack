@@ -496,6 +496,69 @@ build-cell-image:
   script:
     - bash docker/cell-image/build.sh --push
 
+# #57 stage 2: does the prebaked image actually pay for itself?
+#
+# MANUAL and additive, like the build job -- nothing depends on it.
+#
+# This is a measurement, so it is deliberately a like-for-like rerun of the
+# baseline: same component and same cell as job 39544
+# (hyper-i18n / rails61-react16), whose sections were
+#   get_sources 13s | restore_cache 58s | step_script 87s
+# Anything else here would not be comparable.
+#
+# The experiment is `cache: []`. A job using the prebaked image must not restore
+# the gem cache at all, so a passing run should show NO restore_cache section in
+# its trace, and `bundle install` should be a warm no-op (~9s) because every gem
+# is already in the image. If restore_cache is gone but bundle install is slow,
+# the image is incomplete and the idea does not pay off -- that is the result
+# this job exists to produce either way.
+cell-image-probe:
+  interruptible: true
+  stage: test
+  when: manual
+  allow_failure: true
+  image:
+    name: $CI_REGISTRY_IMAGE/cell:rails61-react16
+    docker:
+      user: ubuntu
+  cache: []          # the whole point -- see above
+  variables:
+    COMPONENT: hyper-i18n
+    HYPERSTACK_CELL: rails61-react16
+    TASK: spec
+  before_script:
+    - sudo service postgresql start
+    - until pg_isready --username=postgres --host=localhost; do sleep 1; done
+    - sudo redis-server --daemonize yes
+    - git config --global --add safe.directory $CI_PROJECT_DIR
+    - echo "cell $HYPERSTACK_CELL"
+    - eval "$(rake hyperstack:cell:env)"
+    # Gems come from the image, not from restore_cache. Fail loudly rather than
+    # silently falling back to a cold install, which would look like a slow but
+    # successful run and quietly invalidate the measurement.
+    - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
+    - du -sh "$HYPERSTACK_PREBAKED_GEMS"
+    - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
+    - echo initialized for $COMPONENT
+    - cd ruby/$COMPONENT
+    - echo creating psql database
+    - psql -c 'create database hyper_mesh_test_db;' -U postgres
+    - gem install bundler -v '~> 4.0'
+    - bundle -v
+    - bundle config set --local path ../../local_gems
+    # Timed on purpose: this number against the baseline's 58s restore_cache is
+    # the go/no-go for building the remaining cells.
+    - time bundle install --jobs=3 --retry=3
+    - google-chrome --version
+    - bundle exec rake spec:prepare
+    - ln -s /node_modules/ ../../node_modules
+    - yarn install
+    - bundle list
+    - echo 'install completed'
+  script:
+    - echo running script $COMPONENT
+    - DRIVER=travis bundle exec rake $TASK
+
 #deploy
 hyper-i18n-deploy:
   extends: .deploy_gem
