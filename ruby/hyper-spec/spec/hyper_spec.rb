@@ -349,6 +349,24 @@ describe 'hyper-spec', js: true do
       expect { `window.__hyperspec_late` }.on_client_to eq 'arrived'
     end
 
+    # #64: the client can also be NOT READY YET, rather than merely holding the
+    # wrong value. `Physician.first.patients.count` raised "uninitialized constant
+    # Physician" on edge because the Opal bundle had not defined the model when the
+    # expectation ran -- a load race, not a wrong answer.
+    #
+    # The polling added for on_client_to does not help there: the exception comes
+    # from evaluating the block, not from the matcher, so it propagates before any
+    # retry. This example reproduces that shape deterministically -- the object is
+    # absent for 1.5s, so reading a property of it throws, and then it appears.
+    it 'waits for a client that is not ready yet (#64)' do
+      mount 'SayHello', name: 'Fred'
+      page.execute_script(
+        'delete window.__hyperspec_notready;' \
+        "setTimeout(function () { window.__hyperspec_notready = { v: 'arrived' } }, 1500);"
+      )
+      expect { `window.__hyperspec_notready.v` }.on_client_to eq 'arrived'
+    end
+
     it 'can evaluate expressions on the client using the on_client_not_to method' do
       expect { 12 + 12 }.on_client_not_to eq 25
     end
