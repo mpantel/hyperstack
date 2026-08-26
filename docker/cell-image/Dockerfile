@@ -24,11 +24,16 @@ ARG OPAL_VERSION=""
 ARG OPAL_RAILS_VERSION=""
 ARG REACT_RAILS_VERSION=""
 
-ENV RBENV_VERSION=${RBENV_VERSION} \
-    RAILS_VERSION=${RAILS_VERSION} \
-    OPAL_VERSION=${OPAL_VERSION} \
-    OPAL_RAILS_VERSION=${OPAL_RAILS_VERSION} \
-    REACT_RAILS_VERSION=${REACT_RAILS_VERSION}
+# Only RBENV_VERSION is exported unconditionally; the version selectors must NOT
+# be present-but-empty. The gemspecs choose like this:
+#
+#   *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
+#
+# and an empty string is TRUTHY in Ruby, so an exported RAILS_VERSION="" takes
+# the ENV branch and yields [""] -> "Illformed requirement". The empty ARG
+# defaults exist so a cell that omits a variable falls back to the gemspec
+# default, which means they have to be unset rather than exported empty.
+ENV RBENV_VERSION=${RBENV_VERSION}
 
 USER root
 RUN mkdir -p /hyperstack && chown -R ubuntu:ubuntu /hyperstack
@@ -47,6 +52,10 @@ RUN git init -q . && git config user.email ci@hyperstack && git config user.name
 # One `local_gems` shared by every gem, exactly as CI does it
 # (`bundle config set --local path ../../local_gems`).
 RUN set -eux; \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION; do \
+      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
+    done; \
+    env | grep -E '^(RBENV|RAILS|OPAL|REACT)' || echo 'no version selectors set (gemspec defaults)'; \
     gem install bundler -v '~> 4.0'; \
     for dir in ruby/*/; do \
       gem="$(basename "$dir")"; \
