@@ -57,6 +57,28 @@ require 'spec_helper'
       expect(described_class.active).to eq([])
     end
 
+    it 'a queued message keeps its pending connection alive (#70)' do
+      # A broadcast to a client that has opened a connection but not yet
+      # completed connect_to_transport is QUEUED. Before the fix, that queued
+      # message was destroyed along with its connection when
+      # expire_new_connection_in elapsed, so a broadcast issued while a client was
+      # still handshaking was silently lost -- routine on a loaded server.
+      #
+      # Timed deliberately: the message arrives just BEFORE the original window
+      # closes, and we then travel past that original window. With the fix the
+      # connection expires relative to the queued message instead, so it survives.
+      opened_at = Time.now
+      window = described_class.transport.expire_new_connection_in
+      described_class.open('TestChannel', '0')
+
+      Timecop.travel(opened_at + window - 1)
+      described_class.send_to_channel('TestChannel', 'data')
+
+      Timecop.travel(opened_at + window + 1)
+      expect(described_class.active).to eq(['TestChannel'])
+      expect(described_class.read('0', 'path')).to eq(['data'])
+    end
+
     it 'can send and read data from a channel' do
       described_class.open('TestChannel', '0')
       described_class.open('TestChannel', '1')

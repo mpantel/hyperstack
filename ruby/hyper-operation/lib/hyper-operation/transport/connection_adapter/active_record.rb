@@ -51,6 +51,21 @@ module Hyperstack
         def send_to_channel(channel, data)
           Connection.pending_for(channel).each do |connection|
             QueuedMessage.create(data: data, hyperstack_connection: connection)
+          # A message is waiting for this client, so this is not an abandoned
+          # half-open connection -- extend the handshake window instead of letting
+          # it expire and taking the queued message with it.
+          #
+          # `expire_new_connection_in` (default 10s) exists to reap connections
+          # that `open` and never `connect_to_transport`. But the reaping is
+          # `Connection.expired.delete_all`, which destroys the queued messages
+          # too, so a broadcast issued while a client is still handshaking was
+          # silently lost if the handshake ran past the window -- routine on a
+          # loaded server. Diagnosed in #70: passing runs pushed, failing runs
+          # queued and then dropped.
+          #
+          # Extending only when a message arrives keeps the leak protection for
+          # genuinely idle half-open connections.
+            connection.update(expires_at: Time.current + transport.expire_new_connection_in)
           end
 
           transport.send_data(channel, data) if Connection.exists?(channel: channel, session: nil)
