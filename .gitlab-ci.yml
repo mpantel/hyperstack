@@ -451,6 +451,33 @@ rails-hyperstack:
 
 
 
+# Dependency image per cell (#57). MANUAL and additive: nothing in the normal
+# pipeline depends on it yet, so it cannot break a test run. Run it to publish
+# an image, then measure a job against the 57.9s restore_cache baseline before
+# wiring anything to consume it.
+#
+# Build args come from supported_versions.yml via `rake hyperstack:cell:env`, so
+# the image and the test run are parameterised from the same table.
+build-cell-image:
+  stage: test
+  when: manual
+  allow_failure: true
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    CELL_IMAGE_PREFIX: $CI_REGISTRY_IMAGE/cell
+  parallel:
+    matrix:
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails72-react16]
+  before_script:
+    - apk add --no-cache bash git ruby ruby-rake
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - bash docker/cell-image/build.sh --push
+
 #deploy
 hyper-i18n-deploy:
   extends: .deploy_gem
