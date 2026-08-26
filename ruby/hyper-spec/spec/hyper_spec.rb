@@ -233,56 +233,117 @@ describe 'hyper-spec', js: true do
     # javascript time does not always advance until you do some I/O so
     # we prefix all Time.now.to_i with a `puts ''`
 
+    # Comparing a browser round trip against the server clock does not need a
+    # tolerance to be guessed at all -- and every guess here was wrong in one
+    # direction or the other (#63).
+    #
+    # Instead, bracket the read: sample the server clock immediately before and
+    # after the round trip. Wherever the client's timestamp really came from, it
+    # must fall inside the window the server observed around it. A slow round
+    # trip widens the window by exactly as much as it delays the read, so the
+    # assertion cannot be broken by load -- while still failing hard if the
+    # client clock is genuinely wrong.
+    #
+    # This fixes the scaled case for free. Inside `Timecop.scale 60`, a tolerance
+    # written in scaled seconds is really a latency budget of tolerance/60:
+    # `be_within(5)` allowed ~83ms of round trip, and `be_within(10)` ~167ms. The
+    # bracket needs no scale arithmetic, because the two server samples are taken
+    # in scaled time too and the window widens by the same factor.
+    #
+    # `gap_low`/`gap_high` carry the browser/server clock offset (see the
+    # before(:each)). Pass nothing while Timecop is driving the client clock from
+    # the server -- there is no independent offset then.
+    #
+    # The -1/+1 absorbs `to_i` truncation: both clocks are read at second
+    # resolution, so either can round almost a whole second away from the other.
+    def expect_client_clock_to_track_server(gap_low: 0, gap_high: 0)
+      before = Time.now.to_i
+      client = evaluate_ruby('puts ""; Time.now.to_i')
+      after  = Time.now.to_i
+      expect(client).to be_between(before - gap_high - 1, after - gap_low + 1)
+    end
+
+    # After Timecop releases its hold the browser is back on its own clock, so
+    # the natural offset applies again.
+    def expect_client_clock_restored
+      expect_client_clock_to_track_server(gap_low: @sync_gap_low, gap_high: @sync_gap_high)
+    end
+
     before(:each) do
-      @sync_gap = Time.now.to_i - evaluate_ruby('Time.now.to_i')
+      # The browser/server clock offset, measured as a RANGE rather than a point.
+      #
+      # It used to be one number -- `Time.now.to_i - evaluate_ruby('Time.now.to_i')`
+      # -- but measuring it costs a round trip, so that number baked in whatever
+      # that particular round trip happened to cost, and every later assertion
+      # inherited the error. The real uncertainty is an interval, so record the
+      # interval. (#63)
+      before = Time.now.to_i
+      client = evaluate_ruby('puts ""; Time.now.to_i')
+      after  = Time.now.to_i
+      @sync_gap_low  = before - client
+      @sync_gap_high = after - client
     end
 
     it "will use TimeCop frozen time" do
       Timecop.freeze Time.now-1.year do
+        # Exact, deliberately: frozen time does not advance and is pushed to the
+        # client from the server, so there is nothing to be within.
         expect(evaluate_ruby('Time.now.to_i')).to eq(Time.now.to_i)
       end
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+      # This one previously omitted @sync_gap while its three siblings applied
+      # it, with no stated reason. Post-block, the browser is back on its own
+      # clock, so the offset applies here too. (#63)
+      expect_client_clock_restored
     end
 
     it "will use TimeCop travelling time" do
 
       Timecop.travel Time.now-1.year do
-        expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+        expect_client_clock_to_track_server
         sleep 3
-        expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+        expect_client_clock_to_track_server
       end
 
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i+@sync_gap)
+      expect_client_clock_restored
     end
 
     it "will use TimeCop travelling time with scaling" do
       Timecop.scale 60, Time.now-1.year do
-        expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(10).of(Time.now.to_i)
-        start_time = Time.now
+        expect_client_clock_to_track_server
+
+        # Scaled time should advance ~60x real time. Compare against the real
+        # time actually slept rather than assuming `sleep 1` sleeps exactly one
+        # second: the old `be_within(1)` was one SCALED second, i.e. ~16ms of
+        # scheduler jitter, which a loaded runner exceeds routinely. Timecop does
+        # not mock CLOCK_MONOTONIC, so it still measures real elapsed time here.
+        real_before = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        start_time  = Time.now
         sleep 1 # sleep is still in "real time" but Time will move 60 times faster
-        expect(start_time).to be_within(1).of(Time.now-1.minute)
-        expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(5).of(Time.now.to_i)
+        real_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - real_before
+        expect(Time.now - start_time).to be_within(10).of(real_elapsed * 60)
+
+        expect_client_clock_to_track_server
       end
-      expect(evaluate_ruby('Time.now.to_i')).to be_within(3).of(Time.now.to_i+@sync_gap)
+      expect_client_clock_restored
     end
 
     it "will advance time along with time cop freezing" do
       Timecop.freeze Time.now+1.year
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+      expect_client_clock_to_track_server
       Timecop.freeze Time.now-2.years
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+      expect_client_clock_to_track_server
       Timecop.return
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(3).of(Time.now.to_i+@sync_gap)
+      expect_client_clock_restored
     end
 
     it "can temporarily return to true time" do
       Timecop.freeze Time.now+1.year do
-        expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+        expect_client_clock_to_track_server
         Timecop.return do
-          expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i)
+          expect_client_clock_to_track_server
         end
       end
-      expect(evaluate_ruby('puts ""; Time.now.to_i')).to be_within(1).of(Time.now.to_i+@sync_gap)
+      expect_client_clock_restored
     end
   end
 
