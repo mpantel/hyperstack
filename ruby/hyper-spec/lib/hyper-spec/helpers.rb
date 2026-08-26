@@ -161,7 +161,11 @@ module HyperSpec
     # on_client_to does -- roughly 19 of the call sites have blocks with side
     # effects, and re-evaluating re-runs them.
     def expect_evaluate_ruby(*args, &block)
-      HyperSpec::AsyncExpectationTarget.new { evaluate_ruby(*args, &block) }
+      # Evaluate NOW, before the matcher argument is constructed -- see
+      # AsyncExpectationTarget#initialize. The block is passed for re-evaluation
+      # only.
+      first = evaluate_ruby(*args, &block)
+      HyperSpec::AsyncExpectationTarget.new(first) { evaluate_ruby(*args, &block) }
     end
 
     alias evaluate_ruby internal_evaluate_ruby

@@ -33,7 +33,21 @@ module HyperSpec
   class AsyncExpectationTarget
     INTERVAL = 0.25
 
-    def initialize(&producer)
+    # `first` is evaluated EAGERLY by the caller, before the matcher argument is
+    # built. That ordering is load-bearing and was nearly lost: some specs
+    # interpolate server state into the matcher itself, e.g.
+    #
+    #   expect_promise { todo = TodoItem.new(title: 'test4'); ... }
+    #     .to match /... #{TodoItem.find_by_title('test4').id} .../
+    #
+    # Ruby builds the matcher argument before calling `.to`, so with a lazy
+    # producer the block had not run yet, the record did not exist, and
+    # find_by_title returned nil -> NoMethodError. Evaluating up front preserves
+    # the semantics expect_evaluate_ruby has always had; the producer is only for
+    # RE-evaluation while polling.
+    def initialize(first, &producer)
+      @first = first
+      @have_first = true
       @producer = producer
     end
 
@@ -43,13 +57,19 @@ module HyperSpec
 
     # Single read: see the note above on negative expectations.
     def not_to(matcher = nil, message = nil, &block)
-      target_for(@producer.call).not_to(matcher, message, &block)
+      value, error = fetch
+      raise error if error
+
+      target_for(value).not_to(matcher, message, &block)
     end
     alias to_not not_to
 
     # Anything else behaves exactly as `expect(value)` did before.
     def method_missing(name, *args, &block)
-      target_for(@producer.call).public_send(name, *args, &block)
+      value, error = fetch
+      raise error if error
+
+      target_for(value).public_send(name, *args, &block)
     end
 
     def respond_to_missing?(name, include_private = false)
@@ -81,6 +101,11 @@ module HyperSpec
     end
 
     def fetch
+      if @have_first
+        @have_first = false
+        return [@first, nil]
+      end
+
       [@producer.call, nil]
     rescue ::StandardError => e
       # Only a JS error plausibly means "the client is not ready yet". Retrying
