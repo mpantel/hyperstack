@@ -394,7 +394,6 @@ hyper-spec:
 # (all batches in one process). part1..part7 remain as ad-hoc per-batch rake tasks.
 hyper-model:
   extends: .test_gem_pg
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-model
     TASK: spec
@@ -403,37 +402,30 @@ hyper-model:
     PARALLEL_PROCESSES: "4"
 hyper-trace:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-trace
 hyperstack-config:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyperstack-config
 hyper-state:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-state
 hyper-component:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-component
 hyper-router:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-router
 hyper-store:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-store
 hyper-operation:part1:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-operation
     TASK: part1
@@ -443,7 +435,6 @@ hyper-operation:part1:
 # part1 (aaa_run_first) stays serial above.
 hyper-operation:part2:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-operation
     TASK: part2
@@ -451,12 +442,10 @@ hyper-operation:part2:
     PARALLEL_PROCESSES: "3"
 hyper-i18n:
   extends: .test_gem_pg
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: hyper-i18n
 rails-hyperstack:
   extends: .test_gem
-  rules: [{ when: never }]   # CONTROL — revert before merge
   variables:
     COMPONENT: rails-hyperstack
 
