@@ -1,7 +1,6 @@
 ### Current Status
 
 
-[![Build Status](https://travis-ci.com/hyperstack-org/hyperstack.svg?branch=edge)](https://travis-ci.com/hyperstack-org/hyperstack)
 [![Gem Version](https://badge.fury.io/rb/rails-hyperstack.svg)](https://badge.fury.io/rb/rails-hyperstack)
 [![Slack](https://img.shields.io/badge/slack-hyperstack.org/slack-yellow.svg?logo=slack)]([![Slack](https://img.shields.io/badge/slack-hyperstack.org/slack-yellow.svg?logo=slack)](https://join.slack.com/t/hyperstack-org/shared_invite/enQtNTg4NTI5NzQyNTYyLWQ4YTZlMGU0OGIxMDQzZGIxMjNlOGY5MjRhOTdlMWUzZWYyMTMzYWJkNTZmZDRhMDEzODA0NWRkMDM4MjdmNDE))
 
