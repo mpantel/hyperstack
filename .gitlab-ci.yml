@@ -482,6 +482,21 @@ build-cell-image:
   before_script:
     - apk add --no-cache bash git ruby ruby-rake
     - docker info    # fail fast and legibly if the socket is not mounted
+    # Docker CLI 29+ reads $DOCKER_AUTH_CONFIG and lets it OVERRIDE `docker
+    # login` -- it prints "Warn -> DOCKER_AUTH_CONFIG is set and takes
+    # precedence." and then ignores the credentials just stored. 27.3.1 ignored
+    # the variable entirely (it was only ever a GitLab Runner concept for the
+    # executor's own image pulls), so this surfaced the moment the client was
+    # pinned to match the 29.7.2 daemon.
+    #
+    # The group value is a `read_registry` deploy token, so the login below
+    # succeeds and is then discarded, and the push fails with
+    #   denied: requested access to the resource is denied
+    #   unauthorized: authentication required
+    # after happily uploading every layer (job 40810). The executor has already
+    # used the variable to pull this job's image by now; from here the job needs
+    # the job token, which is the credential allowed to write.
+    - unset DOCKER_AUTH_CONFIG
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - bash docker/cell-image/build.sh --push
