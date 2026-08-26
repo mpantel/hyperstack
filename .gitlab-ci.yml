@@ -470,7 +470,10 @@ build-cell-image:
   # because privileged containers are not available. Building through the host
   # daemon also puts the image straight into ru-vm2's local store, which is
   # where we want it.
-  image: docker:27.3.1
+  # Client only -- the build runs on ru-vm2's daemon through the mounted
+  # socket. Pinned to match that daemon (`docker info` in job 40528 reported
+  # Server Version 29.7.2) so client and server do not drift apart.
+  image: docker:29.7.2
   variables:
     CELL_IMAGE_PREFIX: $CI_REGISTRY_IMAGE/cell
   parallel:
