@@ -521,6 +521,17 @@ cell-image-probe:
     name: $CI_REGISTRY_IMAGE/cell:rails61-react16
     docker:
       user: ubuntu
+    # The group-level DOCKER_AUTH_CONFIG (added 2026-08-26 to fix the base24
+    # pull outage) holds ONE auths entry for registry.ru.aegean.gr, using a
+    # deploy token scoped to ru/infrastructure. That entry applies to every
+    # repository on the host and takes precedence over the job-token
+    # credentials, so a job cannot pull its own project's images:
+    #   pull access denied for registry.ru.aegean.gr/ru/hyperstack/cell
+    # build-cell-image builds through ru-vm2's host docker socket and both
+    # runners are on ru-vm2, so the image is already in the local store and we
+    # can measure without waiting on a credential change. The real fix is a
+    # GROUP-level read_registry deploy token on `ru` in DOCKER_AUTH_CONFIG.
+    pull_policy: if-not-present
   cache: []          # the whole point -- see above
   variables:
     COMPONENT: hyper-i18n
