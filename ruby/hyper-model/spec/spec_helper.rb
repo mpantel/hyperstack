@@ -239,9 +239,45 @@ module CheckErrors
   end
 end
 
+# Broadcasting to a client that has not finished the pusher handshake silently
+# loses the message. (#70)
+#
+# `Hyperstack::Connection` has two states for a channel:
+#
+#   session NOT NULL -> the client has `open`ed the connection but has not yet
+#                       completed `connect_to_transport`. send_to_channel takes
+#                       the QUEUE path (`Connection.pending_for`).
+#   session NULL     -> transport-connected. send_to_channel PUSHES via pusher.
+#
+# The queue exists to cover that window, but a pending connection is created with
+# `expires_at = Time.current + transport.expire_new_connection_in` (default
+# **10 seconds**, connection.rb:27) and `Connection.active` calls
+# `Connection.expired.delete_all` -- so the queued message is thrown away with its
+# connection ~10s later and the client never sees it.
+#
+# A step that loads a collection proves only that the LOAD completed; the
+# handshake may still be in flight, and under CI load it routinely is. Diagnosed
+# on pipeline 6619, where the two failing cells created QueuedMessages and the two
+# passing cells did not -- a 4/4 split.
+#
+# So: wait for the transport-connected state before broadcasting. Deterministic --
+# it removes the race rather than widening a window.
+module WaitForTransportConnection
+  def wait_for_transport_connection(channel = 'TestApplication')
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      sleep 0.1 until Hyperstack::Connection.exists?(channel: channel, session: nil)
+    end
+  rescue Timeout::Error
+    raise "client never completed the pusher handshake for #{channel.inspect} " \
+          "within #{Capybara.default_max_wait_time}s; " \
+          "channels: #{Hyperstack::Connection.active.inspect}"
+  end
+end
+
 RSpec.configure do |config|
   config.include WaitForAjax
   config.include CheckErrors
+  config.include WaitForTransportConnection
 end
 
 RSpec.configure do |config|
