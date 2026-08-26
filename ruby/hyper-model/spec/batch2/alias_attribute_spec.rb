@@ -106,9 +106,19 @@ RSpec::Steps.steps 'alias_attribute', js: true do
   end
 
   it "works with find_by without fetching from the DB" do
-    expect_evaluate_ruby do
+    # #64: this deliberately does NOT load -- it relies on the record already
+    # being in the client cache from the previous rspec-step. That makes it a
+    # read of asynchronously-arriving state, and `expect_evaluate_ruby` reads
+    # once and matches once, so it raced the previous step's load: the observed
+    # failure was `id` coming back as 0, the placeholder for an unloaded record.
+    #
+    # `on_client_to` polls until the matcher is satisfied (!81), so use that
+    # path rather than widening `expect_evaluate_ruby` -- which has 475 call
+    # sites, and re-evaluating a block with side effects there would be a much
+    # larger change than this bug justifies.
+    expect do
       User.find_by(first_name: 'M.', last_name: 'Pantel').id
-    end.to eq(@user.id)
+    end.on_client_to eq(@user.id)
   end
 
   it "implements the getter" do
