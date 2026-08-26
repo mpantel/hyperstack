@@ -345,17 +345,29 @@ stages:
   resource_group: production
   stage: deploy
   before_script:
+    # No `cd` here: hyperstack:gem:publish resolves ruby/$COMPONENT itself, so the
+    # same task works from CI and from a developer's checkout.
     - git config --global --add safe.directory $CI_PROJECT_DIR
-    - cd ruby/$COMPONENT
   environment:
     name: production
-    url: https://gems.ru.aegean.gr
+    url: https://gitlab.ru.aegean.gr/ru/rubygems/-/packages
   when: manual
   allow_failure: true
   script:
     - echo deploying $COMPONENT
-    - gem build $COMPONENT.gemspec
-    - gem push "#{$COMPONENT}-#{Hyperstack::VERSION.tr("'",'')}.gem" ,'--host' ,"https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr"
+    # Was `gem build` + a `gem push --host https://michail:$GEM_SERVER_KEY@...`
+    # line that was Ruby syntax pasted into a shell script -- `#{...}` does not
+    # interpolate in bash, so it pushed a literally-named file to geminabox,
+    # which has been retired anyway. Both publishing paths (this and
+    # `rake publish`) now share one implementation. (#49)
+    #
+    # Credential: reuses BUNDLE_GEMS__RU__AEGEAN__GR, the group variable CI
+    # already has for `source "https://gems.ru.aegean.gr"` -- that host IS the
+    # GitLab registry now, so there is no second secret to provision. Set
+    # GEM_SERVER_TOKEN to override with a differently-scoped token. If the
+    # credential turns out to be read-only the upload fails loudly with the
+    # HTTP status, rather than appearing to succeed.
+    - rake hyperstack:gem:publish COMPONENT=$COMPONENT
 #  deploy:
 #    - provider: rubygems
 #      api_key:

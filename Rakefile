@@ -1,5 +1,93 @@
 require './ruby/version'
 
+
+# Publishing moved off geminabox: gems.ru.aegean.gr was repointed to GitLab's
+# RubyGems Package Registry (ru/rubygems, project 65) on 2026-08-18 and the
+# standalone gemserver container is stopped. (#49)
+#
+# `gem push` cannot be used at all here -- gems built against the old host carry
+# an `allowed_push_host` the RubyGems client refuses to override -- and neither
+# can the old `curl -F` multipart upload: GitLab answers 201, then stores the
+# form envelope as the gem, the extraction worker fails, and a broken
+# `Gem.Temporary.Package` is left behind. The file must be POSTed as a RAW body,
+# the way `gem push` sends it, with a PLAIN token header (`Bearer` and
+# `PRIVATE-TOKEN` are both rejected by this endpoint).
+#
+# Ported from ru/hyperstack-addons' Rakefile `publish` task, which already
+# solved this.
+def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
+  require 'net/http'
+  require 'uri'
+  require 'json'
+
+  # Reuse the credential CI already has for the private gem server:
+  # BUNDLE_GEMS__RU__AEGEAN__GR is bundler's credential for
+  # `source "https://gems.ru.aegean.gr"`, and that host IS this registry now, so
+  # there is no second secret to provision. GEM_SERVER_TOKEN still wins if set,
+  # for a token with different scope.
+  #
+  # Bundler stores a source credential as `user:password`, while this endpoint
+  # wants the token alone -- so take everything after the first colon when the
+  # value carries a username, and use it as-is when it does not.
+  # `find`, not `||`: an empty string is TRUTHY in Ruby, and CI happily defines a
+  # variable as "". `||` would then pick the empty one and never reach the real
+  # credential -- the same trap documented in docker/cell-image/Dockerfile.
+  raw = [ENV['GEM_SERVER_TOKEN'],
+         ENV['BUNDLE_GEMS__RU__AEGEAN__GR'],
+         ENV['GEM_SERVER_KEY']].find { |v| !v.to_s.empty? }
+  if raw.to_s.empty?
+    abort 'No gem-server credential: set GEM_SERVER_TOKEN (or BUNDLE_GEMS__RU__AEGEAN__GR) ' \
+          'to a GitLab token with write_package_registry scope'
+  end
+  token = raw.include?(':') ? raw.split(':', 2).last : raw
+
+  host       = ENV['GEM_SERVER_HOST'] || 'https://gitlab.ru.aegean.gr'
+  project_id = ENV['GEM_SERVER_PROJECT_ID'] || '65' # ru/rubygems
+  registry   = "#{host}/api/v4/projects/#{project_id}/packages/rubygems"
+  gem_file   = "#{gem}-#{version}.gem"
+
+  sh 'gem', 'build', "#{gem}.gemspec"
+
+  uri = URI("#{registry}/api/v1/gems")
+  request = Net::HTTP::Post.new(uri)
+  request['Authorization'] = token
+  request['Content-Type']  = 'application/octet-stream'
+  request.body = File.binread(gem_file)
+  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    http.request(request)
+  end
+  unless response.code == '201'
+    abort "Upload of #{gem_file} failed: HTTP #{response.code} #{response.body}"
+  end
+  puts "Uploaded #{gem_file} to #{registry}"
+
+  # 201 only means the file was stored; GitLab extracts the gemspec
+  # asynchronously, so poll until the version appears with status "default".
+  list = URI("#{host}/api/v4/projects/#{project_id}/packages?package_name=#{gem}&per_page=100")
+  10.times do
+    sleep 2
+    check = Net::HTTP::Get.new(list)
+    check['Authorization'] = token
+    result = Net::HTTP.start(list.hostname, list.port, use_ssl: list.scheme == 'https') do |http|
+      http.request(check)
+    end
+    next unless result.code == '200'
+
+    package = JSON.parse(result.body).find { |pkg| pkg['version'] == version }
+    next if package.nil?
+
+    case package['status']
+    when 'default'
+      puts "Published #{gem} #{version} (package #{package['id']})"
+      return true
+    when 'error'
+      abort "Package #{package['id']} is in state 'error' - delete it and retry"
+    end
+  end
+  puts "Uploaded, but #{gem} #{version} has not appeared in #{registry} yet - check the registry."
+  false
+end
+
 namespace :hyperstack do
   namespace :config do
     desc 'Check the current ruby/rails/opal/react-rails combination against supported_versions.yml'
@@ -27,6 +115,17 @@ namespace :hyperstack do
       # names cells and the table defines them. A cell with no env takes the
       # gemspec defaults.
       (cell['env'] || {}).each { |k, v| puts "export #{k}=#{v.to_s.inspect}" }
+    end
+  end
+
+  namespace :gem do
+    desc 'Build and publish ONE gem to the GitLab RubyGems registry (COMPONENT=hyper-model)'
+    task :publish do
+      component = ENV['COMPONENT'].to_s
+      abort 'Set COMPONENT to the gem to publish, e.g. COMPONENT=hyper-model' if component.empty?
+      dir = File.expand_path("ruby/#{component}", __dir__)
+      abort "no such gem directory: #{dir}" unless Dir.exist?(dir)
+      Dir.chdir(dir) { publish_gem(component) }
     end
   end
 
@@ -86,8 +185,9 @@ task publish: 'hyperstack:matrix:check' do
       File.delete('Gemfile.lock') if File.exist?('Gemfile.lock')
       puts "Bundling..."
       sh ['bundle','install']
-      sh 'gem' ,'build', "#{gem}.gemspec"
-      sh 'curl', '-F', "file=@#{gem}-#{Hyperstack::VERSION.tr("'",'')}.gem", "https://michail:#{ENV['GEM_SERVER_KEY']}@gems.ru.aegean.gr/upload"
+      # was: gem build + `curl -F ... @gems.ru.aegean.gr/upload` (geminabox).
+      # publish_gem builds and uploads the way the GitLab registry requires. (#49)
+      publish_gem(gem)
     end
   end
 end
