@@ -25,6 +25,7 @@ require 'hyper-spec/controller_helpers'
 
 require 'hyper-spec/wait_for_ajax'
 
+require 'hyper-spec/async_expectation_target'
 require 'hyper-spec/helpers'
 require 'hyper-spec/expectations'
 

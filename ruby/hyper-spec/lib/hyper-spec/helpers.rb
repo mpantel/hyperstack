@@ -156,8 +156,12 @@ module HyperSpec
     # legacy methods for backwards compatibility
     # these may be removed in a future version
 
+    # Waits for the value instead of reading once (#64). See
+    # AsyncExpectationTarget for why this polls more conservatively than
+    # on_client_to does -- roughly 19 of the call sites have blocks with side
+    # effects, and re-evaluating re-runs them.
     def expect_evaluate_ruby(*args, &block)
-      expect(evaluate_ruby(*args, &block))
+      HyperSpec::AsyncExpectationTarget.new { evaluate_ruby(*args, &block) }
     end
 
     alias evaluate_ruby internal_evaluate_ruby
