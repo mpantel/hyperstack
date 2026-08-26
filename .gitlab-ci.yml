@@ -474,18 +474,23 @@ build-cell-image:
   stage: test
   when: manual
   allow_failure: true
-  image: docker:27
-  services:
-    - docker:27-dind
+  # No dind service and no DOCKER_HOST: the group runners mount the host docker
+  # socket, which is how ru/infrastructure builds base24 (its .gitlab-ci.yml has
+  # the dind service commented out yet runs `docker info` / `docker ps`
+  # directly). The first attempt here used dind and failed with
+  #   Head "http://docker:2375/_ping": connect: no route to host
+  # because privileged containers are not available. Building through the host
+  # daemon also puts the image straight into ru-vm2's local store, which is
+  # where we want it.
+  image: docker:27.3.1
   variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
     CELL_IMAGE_PREFIX: $CI_REGISTRY_IMAGE/cell
   parallel:
     matrix:
       - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails72-react16]
   before_script:
     - apk add --no-cache bash git ruby ruby-rake
+    - docker info    # fail fast and legibly if the socket is not mounted
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
   script:
     - bash docker/cell-image/build.sh --push
