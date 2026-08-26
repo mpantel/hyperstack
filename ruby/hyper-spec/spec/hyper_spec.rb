@@ -367,6 +367,24 @@ describe 'hyper-spec', js: true do
       expect { `window.__hyperspec_notready.v` }.on_client_to eq 'arrived'
     end
 
+    # #64: expect_evaluate_ruby (and its alias expect_promise) is the OTHER
+    # read-once path. It is literally `expect(evaluate_ruby(...))` -- one read,
+    # one match, no retry -- so it races whatever produces the value, exactly as
+    # on_client_to did before !81/!86.
+    #
+    # This is not hypothetical: batch6/server_method_spec.rb:71 passed on every
+    # cell at 07:42 and then failed on three different cells across two unrelated
+    # MRs immediately after ru-vm2 was reconfigured. Nothing about the spec
+    # changed; the timing did.
+    it 'waits for a late value via expect_evaluate_ruby (#64)' do
+      mount 'SayHello', name: 'Fred'
+      page.execute_script(
+        "window.__hyperspec_late2 = 'waiting';" \
+        "setTimeout(function () { window.__hyperspec_late2 = 'arrived' }, 1500);"
+      )
+      expect_evaluate_ruby { `window.__hyperspec_late2` }.to eq 'arrived'
+    end
+
     it 'can evaluate expressions on the client using the on_client_not_to method' do
       expect { 12 + 12 }.on_client_not_to eq 25
     end
