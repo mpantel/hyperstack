@@ -223,7 +223,12 @@ RSpec.configure do |config|
 
   config.mock_with :rspec
 
+  # How much narrower/shorter the page is than the window we ask the window
+  # manager for -- browser chrome, and a debugger pane if one is open. Measured
+  # once per run when unset. Height is not optional: without it the size a spec
+  # asks for is unreachable on any browser with a title bar. (#79)
   config.add_setting :debugger_width, default: nil
+  config.add_setting :debugger_height, default: nil
 
   # When the browser will not give size_window the size it asked for, warn (the
   # default) or raise HyperSpec::WindowSizeError. Suites that deliberately probe
