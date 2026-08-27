@@ -26,14 +26,22 @@ module Helpers
   def calculate_window_restrictions
     return if @min_width
 
-    size_window(100, 100)
+    probe_window(100, 100)
     @min_width = width
     @min_height = height
-    size_window(500, 500)
+    probe_window(500, 500)
     @height_adjust = 500 - height
-    size_window(6000, 6000)
+    probe_window(6000, 6000)
     @max_width = width
     @max_height = height
+  end
+
+  # 100x100 and 6000x6000 are sizes we expect the browser to refuse -- finding
+  # out where it draws the line is the whole point of the helper above. Go
+  # through the internal resize rather than size_window, so #77's reporting
+  # stays quiet about a discrepancy this helper provokes on purpose.
+  def probe_window(width, height)
+    hs_internal_resize_to(*determine_size(width, height))
   end
 
   def height

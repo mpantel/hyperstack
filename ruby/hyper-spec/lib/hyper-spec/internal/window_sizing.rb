@@ -1,6 +1,19 @@
 module HyperSpec
+  # Raised by size_window when the browser will not give us the size we asked
+  # for, and the suite has set
+  #   RSpec.configuration.raise_on_unreachable_window_size = true
+  # Off by default: a suite that deliberately probes the browser's limits (ask
+  # for 100x100, see what you get) is doing something legitimate. (#77)
+  class WindowSizeError < StandardError; end
+
   module Internal
     module WindowSizing
+      # Each distinct "asked for X, got Y" is reported once per run. The js
+      # before hook calls size_window for EVERY example, so a suite running in
+      # a window the browser clamps would otherwise repeat one line thousands
+      # of times and bury everything else. (#77)
+      REPORTED_SIZES = {}
+
       private
 
       STD_SIZES = {
@@ -12,13 +25,28 @@ module HyperSpec
       }
 
       def determine_size(width, height)
+        requested = [width, height]
         width, height = [height, width] if width == :portrait
         width, height = width if width.is_a? Array
         portrait = true if height == :portrait
         width ||= :default
         width, height = STD_SIZES[width] if STD_SIZES[width]
+        check_size!(width, height, requested)
         width, height = [height, width] if portrait
         [width + debugger_width, height]
+      end
+
+      # A name that is not one of STD_SIZES fell through to `symbol + debugger_width`
+      # and raised NoMethodError, which size_window's blanket rescue then swallowed:
+      # `size_window(:medium)` sized nothing at all, silently, for years. Say what
+      # was wrong with it instead. (#77)
+      def check_size!(width, height, requested)
+        return if width.is_a?(Numeric) && height.is_a?(Numeric)
+
+        raise ArgumentError,
+              "size_window(#{requested.compact.map(&:inspect).join(', ')}) is not a size "\
+              "hyper-spec knows: pass a width and a height, or one of "\
+              "#{STD_SIZES.keys.map(&:inspect).join(', ')}."
       end
 
       def debugger_width
@@ -32,41 +60,97 @@ module HyperSpec
         RSpec.configuration.debugger_width
       end
 
+      # Returns [[width, height], outcome] where outcome is one of :reached,
+      # :stalled or :timed_out -- see wait_for_size.
       def hs_internal_resize_to(width, height)
         Capybara.current_session.current_window.resize_to(width, height)
         yield if block_given?
         wait_for_size(width, height)
       end
 
+      # How long the window has to hold one size before we accept that the
+      # browser is not going to give us the size we asked for.
+      #
+      # The old test was five polls -- 0.25s -- of EITHER dimension holding
+      # still, counted with tallies that never reset. A browser under load trips
+      # over that routinely: the CI failure this comes from asked a 480x640
+      # window for 600x600, and a quarter second of a steady width, with the
+      # resize simply not applied yet, ended the wait at 480 wide. The example
+      # then failed on a dimension it had asked to be 600.
+      #
+      # This is a grace period, not a delay. A resize that lands is returned the
+      # moment it lands; only a size the browser will not honor pays the second.
+      # It has to stay well under default_max_wait_time (30s in hyper-spec.rb),
+      # which every js example would otherwise pay whenever a size is out of
+      # reach -- a headed browser, whose window chrome means the inner size
+      # never equals the outer size we set, reaches this path every time. (#77)
+      STABLE_TIME = 1.0
+
+      # A size this browser has already refused, and the size it gave instead.
+      # Proving the limit costs the grace period above; being reminded of it
+      # does not need to. hyper-model and friends call size_window from a
+      # before hook that runs for EVERY js example, so without this a suite
+      # asking for a size its browser cannot give would pay the grace period
+      # thousands of times over. (#77)
+      KNOWN_LIMITS = {}
+      SETTLED_TIME = 0.25
+
+      # Poll until the window is the size we asked for, or until it is clear we
+      # are not going to get it. Says which of the two happened rather than
+      # returning a bare true, because "the browser settled somewhere else" is
+      # something the caller has to be able to act on. (#77)
       def wait_for_size(width, height)
         @start_time = Capybara::Helpers.monotonic_time
-        @stable_count_w = @stable_count_h = 0
-        prev_size = [0, 0]
+        settled_at = @start_time
+        prev_size = nil
         loop do
           sleep 0.05
           curr_size = evaluate_script('[window.innerWidth, window.innerHeight]')
+          now = Capybara::Helpers.monotonic_time
 
-          return true if curr_size == [width, height] || stalled?(prev_size, curr_size)
+          return [curr_size, :reached] if curr_size == [width, height]
 
+          # any movement at all means the browser is still working on it
+          settled_at = now if curr_size != prev_size
           prev_size = curr_size
-          check_time!
+
+          if now - settled_at >= grace_for([width, height], curr_size)
+            KNOWN_LIMITS[[width, height]] = curr_size
+            return [curr_size, :stalled]
+          end
+          return [curr_size, :timed_out] if now - @start_time > max_wait_time
         end
       end
 
-      def check_time!
-        if (Capybara::Helpers.monotonic_time - @start_time) >
-           Capybara.current_session.config.default_max_wait_time
-          raise Capybara::WindowError,
-                'Window size not stable within '\
-                "#{Capybara.current_session.config.default_max_wait_time} seconds."
-        end
+      # Settling exactly where this browser settled the last time it was asked
+      # for this size is the limit we already know about, not a resize still on
+      # its way.
+      def grace_for(requested, curr_size)
+        KNOWN_LIMITS[requested] == curr_size ? SETTLED_TIME : STABLE_TIME
       end
 
-      def stalled?(prev_size, curr_size)
-        # some maximum or minimum is reached and size doesn't change anymore
-        @stable_count_w += 1 if prev_size[0] == curr_size[0]
-        @stable_count_h += 1 if prev_size[1] == curr_size[1]
-        @stable_count_w > 4 || @stable_count_h > 4
+      def max_wait_time
+        Capybara.current_session.config.default_max_wait_time
+      end
+
+      # Say so when the window is not the size that was asked for: a warning by
+      # default, an exception when the suite has asked for one. (#77)
+      def report_window_size(requested, achieved, outcome)
+        message = "hyper-spec: size_window could not size the window to "\
+                  "#{requested[0]}x#{requested[1]} -- #{explain(achieved, outcome)}."
+
+        raise WindowSizeError, message if RSpec.configuration.raise_on_unreachable_window_size
+
+        warn message unless REPORTED_SIZES.key?([requested, achieved, outcome])
+        REPORTED_SIZES[[requested, achieved, outcome]] = true
+        achieved
+      end
+
+      def explain(achieved, outcome)
+        settled = "the browser settled at #{achieved[0]}x#{achieved[1]}"
+        return "#{settled} and would go no further" if outcome == :stalled
+
+        "#{settled} was still not the requested size after #{max_wait_time} seconds"
       end
     end
   end

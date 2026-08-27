@@ -80,8 +80,6 @@ describe "has_and_belongs_to_many", js: true do
       regulate_all_broadcasts { |policy| policy.send_all }
       allow_change(to: :all, on: [:create, :update, :destroy]) { true }
     end
-
-    size_window(:medium)
   end
 
   it 'works' do

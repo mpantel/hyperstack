@@ -144,11 +144,22 @@ module HyperSpec
 
     alias on_client internal_evaluate_ruby
 
-    # attempt to set the window to a particular size
+    # Attempt to set the window to a particular size. Returns the size the
+    # browser actually settled on, which is not always the size that was asked
+    # for -- when it isn't, that is reported rather than silently ignored, so a
+    # spec that then fails on the layout points at the reason. (#77)
 
     def size_window(width = nil, height = nil)
-      hs_internal_resize_to(*determine_size(width, height))
-    rescue StandardError
+      requested = determine_size(width, height)
+      achieved, outcome = hs_internal_resize_to(*requested)
+      return achieved if outcome == :reached
+
+      report_window_size(requested, achieved, outcome)
+    rescue Capybara::NotSupportedByDriverError
+      # a driver with no window to size (rack_test, for one). Nothing to do,
+      # and nothing worth reporting either. Note this is deliberately NOT a
+      # blanket `rescue StandardError`, which used to swallow every window
+      # problem there is, including the ones raised on purpose. (#77)
       true
     end
 
