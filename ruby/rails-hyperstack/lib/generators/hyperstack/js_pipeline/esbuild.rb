@@ -39,184 +39,10 @@ module Rails
       # validated hyper-component reference). IIFE bundles set React globals;
       # Opal stays on sprockets.
       def add_esbuild_setup
-        create_file 'app/javascript/react_runtime.js', <<-'JAVASCRIPT'
-// Client React runtime (esbuild -> app/assets/builds, #19). Hyperstack's Opal
-// code reads React/ReactDOM/etc. as JS globals, so bundle them and hoist to
-// window. Opal stays on sprockets (//= require hyperstack-loader).
-import React from "react";
-import ReactDOM from "react-dom";
-import * as ReactDOMClient from "react-dom/client";
-import * as ReactDOMServer from "react-dom/server";
-import createReactClass from "create-react-class";
-import * as History from "history";
-import * as ReactRouter from "react-router";
-import * as ReactRouterDOM from "react-router-dom";
-
-// React 18+ (#18/#19): ReactDOM.render/unmountComponentAtNode are gone; the
-// replacement createRoot/hydrateRoot live in the react-dom/client entry. In
-// React 18 they ALSO appear on react-dom but warn unless the call routes through
-// the client entry; in React 19 they're removed from react-dom entirely (only
-// flushSync remains on the top-level). Import them from react-dom/client and
-// expose them on ReactDOM so both consumers that read window.ReactDOM.createRoot
-// — Hyperstack's mount path AND react-rails' react_ujs — get the warning-free
-// client implementation on every React >= 18, with no internals/flag hack.
-//
-// Cache one root per container (keyed by `__hyperstackReactRoot`, the same key
-// Hyperstack's mount/unmount uses): React errors ("already passed to createRoot")
-// if createRoot is called twice on the same node, which happens when both
-// react-rails' react_ujs.mountComponents AND Hyperstack's mount path target it.
-// Unmount deletes the key, so a fresh root is created after unmount.
-ReactDOM.createRoot = function (container, options) {
-  if (container && container.__hyperstackReactRoot) { return container.__hyperstackReactRoot; }
-  var root = ReactDOMClient.createRoot(container, options);
-  if (container) { container.__hyperstackReactRoot = root; }
-  return root;
-};
-ReactDOM.hydrateRoot = ReactDOMClient.hydrateRoot;
-
-Object.assign(window, {
-  React, ReactDOM, ReactDOMServer, createReactClass, History, ReactRouter, ReactRouterDOM
-});
-// add additional npm packages here, e.g.:  import Foo from "foo"; window.Foo = Foo;
-        JAVASCRIPT
-        create_file 'app/javascript/react_server_runtime.js', <<-'JAVASCRIPT'
-// Server/prerender React runtime (esbuild). Runs in mini_racer/V8 which has no
-// window, so set globals on the object Opal resolves at boot (Opal.global), and
-// use react-dom/server.browser (string renderToString, no Node streams). #19/#6.
-// MUST be first: react-dom/server.browser references platform APIs at module
-// load that bare V8 lacks — a TextEncoder (React 18) and a MessageChannel
-// (React 19 scheduler). ES imports evaluate in source order, so this installs
-// the polyfills before the React import below runs. (#18/#19)
-import "./text_encoder_polyfill";
-import React from "react";
-import ReactDOMServer from "react-dom/server.browser";
-import createReactClass from "create-react-class";
-import * as History from "history";
-import * as ReactRouter from "react-router";
-import * as ReactRouterDOM from "react-router-dom";
-
-var g = (typeof Opal !== "undefined" && Opal.global) ? Opal.global : globalThis;
-Object.assign(g, {
-  React, ReactDOMServer, createReactClass, History, ReactRouter, ReactRouterDOM
-});
-        JAVASCRIPT
-        create_file 'app/javascript/text_encoder_polyfill.js', <<-'JAVASCRIPT'
-// React SSR (#18/#19): react-dom/server.browser references Web/Node platform
-// APIs at module-load time that the prerender bundle's mini_racer/V8 isolate
-// (bare V8) lacks — TextEncoder/TextDecoder (React 18) and MessageChannel
-// (React 19 scheduler) — so the import throws `ReferenceError: <API> is not
-// defined`. Imported first in react_server_runtime.js so these are installed
-// before React's module body runs. TextEncoder/TextDecoder are UTF-8 only; each
-// polyfill is guarded, so it is a no-op where the platform already provides it.
-if (typeof globalThis.TextEncoder === "undefined") {
-  globalThis.TextEncoder = class TextEncoder {
-    get encoding() { return "utf-8"; }
-    encode(input) {
-      var str = String(input === undefined ? "" : input);
-      var bytes = [];
-      for (var i = 0; i < str.length; i++) {
-        var c = str.charCodeAt(i);
-        if (c < 0x80) {
-          bytes.push(c);
-        } else if (c < 0x800) {
-          bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
-        } else if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
-          var c2 = str.charCodeAt(i + 1);
-          if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-            c = 0x10000 + ((c & 0x3ff) << 10) + (c2 & 0x3ff);
-            i++;
-            bytes.push(
-              0xf0 | (c >> 18),
-              0x80 | ((c >> 12) & 0x3f),
-              0x80 | ((c >> 6) & 0x3f),
-              0x80 | (c & 0x3f)
-            );
-          } else {
-            bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
-          }
-        } else {
-          bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
-        }
-      }
-      return new Uint8Array(bytes);
-    }
-  };
-}
-
-if (typeof globalThis.TextDecoder === "undefined") {
-  globalThis.TextDecoder = class TextDecoder {
-    get encoding() { return "utf-8"; }
-    decode(input) {
-      if (input == null) return "";
-      var bytes = input instanceof Uint8Array ? input : new Uint8Array(input.buffer || input);
-      var str = "";
-      var i = 0;
-      while (i < bytes.length) {
-        var c = bytes[i++];
-        if (c < 0x80) {
-          str += String.fromCharCode(c);
-        } else if (c < 0xe0) {
-          str += String.fromCharCode(((c & 0x1f) << 6) | (bytes[i++] & 0x3f));
-        } else if (c < 0xf0) {
-          str += String.fromCharCode(
-            ((c & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f)
-          );
-        } else {
-          var cp =
-            ((c & 0x07) << 18) |
-            ((bytes[i++] & 0x3f) << 12) |
-            ((bytes[i++] & 0x3f) << 6) |
-            (bytes[i++] & 0x3f);
-          cp -= 0x10000;
-          str += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff));
-        }
-      }
-      return str;
-    }
-  };
-}
-
-// React 19 (#19): react-dom/server's scheduler instantiates a MessageChannel at
-// module-load time to schedule async work. The synchronous string renderers
-// (renderToString/renderToStaticMarkup) complete within the call and never pump
-// the channel, so a no-op port pair is sufficient — it only has to exist so the
-// module body doesn't throw `MessageChannel is not defined` in the bare V8
-// isolate. (A real browser already provides MessageChannel, so this is guarded.)
-if (typeof globalThis.MessageChannel === "undefined") {
-  var noop = function () {};
-  var makePort = function () {
-    return {
-      onmessage: null,
-      postMessage: noop,
-      addEventListener: noop,
-      removeEventListener: noop,
-      start: noop,
-      close: noop,
-    };
-  };
-  globalThis.MessageChannel = class MessageChannel {
-    constructor() {
-      this.port1 = makePort();
-      this.port2 = makePort();
-    }
-  };
-}
-        JAVASCRIPT
-        create_file 'esbuild.config.js', <<-'JAVASCRIPT'
-// esbuild build (#19). IIFE format (not esm) so the bundles set the window /
-// Opal.global React globals immediately. Output -> app/assets/builds (served by
-// sprockets). jsbundling-rails runs this via the package.json "build" script.
-require('esbuild').build({
-  entryPoints: [
-    'app/javascript/react_runtime.js',        // client: window globals
-    'app/javascript/react_server_runtime.js', // prerender (V8): Opal.global globals
-  ],
-  bundle: true,
-  outdir: 'app/assets/builds',
-  define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production') },
-  logLevel: 'info',
-}).catch(() => process.exit(1));
-        JAVASCRIPT
+        create_file 'app/javascript/react_runtime.js', esbuild_template('react_runtime.js')
+        create_file 'app/javascript/react_server_runtime.js', esbuild_template('react_server_runtime.js')
+        create_file 'app/javascript/text_encoder_polyfill.js', esbuild_template('text_encoder_polyfill.js')
+        create_file 'esbuild.config.js', esbuild_template('esbuild.config.js')
         # let sprockets precompile/serve the esbuild output
         manifest = Rails.root.join('app', 'assets', 'config', 'manifest.js')
         if File.exist?(manifest) && File.readlines(manifest).grep(%r{link_tree \.\./builds}).empty?
@@ -323,6 +149,17 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
       # Default stays ^19.0.0, so an unparameterised install is unchanged.
       def react_npm_version
         ENV['REACT_NPM_VERSION'] || '^19.0.0'
+      end
+
+      # The esbuild scaffolding, verbatim from lib/generators/hyperstack/js_pipeline/templates.
+      #
+      # These are FILES rather than heredocs because they have a second consumer:
+      # ruby/test_app_react_source.rb places the same four files into each gem's
+      # spec/test_app when a matrix cell selects HYPERSTACK_REACT_SOURCE=npm (#40).
+      # As heredocs the two copies could drift, and the suite would then be proving
+      # a runtime we do not actually generate.
+      def esbuild_template(name)
+        File.read(File.expand_path("templates/#{name}", __dir__), encoding: 'UTF-8')
       end
 
       def gem_in_gemfile?(name)

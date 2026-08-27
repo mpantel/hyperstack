@@ -16,3 +16,11 @@
 /ruby/**/spec/test_app/db/schema.rb
 # yarn download cache, kept in-project so GitLab CI can cache it (#55)
 /.yarn-cache/
+# esbuild scaffolding written into a gem's spec/test_app at `rake spec:prepare`
+# when the cell selects HYPERSTACK_REACT_SOURCE=npm (#40). The single tracked
+# copy lives in ruby/test_app_esbuild; these are placed copies, not sources.
+/ruby/**/spec/test_app/app/javascript/
+/ruby/**/spec/test_app/esbuild.config.js
+# npm-path backup of the files the esbuild wiring rewrites in place (#40); the
+# gem path restores from it, so the React source stays a per-run choice locally.
+/ruby/**/spec/test_app/.react_source_backup/

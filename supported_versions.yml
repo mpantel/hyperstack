@@ -90,3 +90,36 @@ cells:
       # both read this, so the app is scaffolded and precompiled with esbuild +
       # jsbundling instead. Declared rather than inferred, like every other cell.
       HYPERSTACK_JS_PIPELINE: esbuild
+
+  # The React 19 cell (#40). React comes from npm, bundled by esbuild into every
+  # gem's spec/test_app -- selected by HYPERSTACK_REACT_SOURCE=npm, applied by
+  # ruby/test_app_react_source.rb at `rake spec:prepare`. This is the only way to
+  # reach React 19: react-rails tops out at 3.3 / React 18.2, so before this cell
+  # the React axis was frozen at 18 no matter what the table said.
+  #
+  # react-rails 3.3 is STILL required even though React does not come from it: it
+  # also ships react_ujs, the mount/unmount shim rails-hyperstack.rb js_imports
+  # for every app, and that has to match the React major. Pinning only the npm
+  # React and leaving react-rails at the gemspec default (the React 16 era)
+  # produced 185 x "Minified React error #525" across the suite. Both halves are
+  # needed.
+  #
+  # REACT_NPM_VERSION is pinned to the 19.2 series, not `^19.0.0`: cell_contract_spec
+  # asserts the browser's window.React.version matches `react:` below, and a
+  # caret range would silently float onto 19.3 and fail it.
+  #
+  # HYPERSTACK_JS_PIPELINE is esbuild here, unlike the other rails61 cells: it is
+  # what rails-hyperstack's harness and the install generator read, so the app
+  # THEY generate is built the same way the committed test_apps now are.
+  - id: rails61-react19
+    ruby:        "3.4"
+    rails:       "6.1"
+    opal:        "1.8"
+    react_rails: "3.3"
+    pipeline:    sprockets
+    react:       "19.2"   # derived: npm via esbuild, not react-rails' bundled 18.2
+    env:
+      REACT_RAILS_VERSION: "~> 3.3"
+      HYPERSTACK_REACT_SOURCE: "npm"
+      REACT_NPM_VERSION: "~19.2.0"
+      HYPERSTACK_JS_PIPELINE: esbuild
