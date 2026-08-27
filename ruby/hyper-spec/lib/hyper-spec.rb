@@ -177,6 +177,32 @@ RSpec.configure do |config|
 
     RSpec.configuration.reset_between_examples = HyperSpec.reset_between_examples.pop
   end
+  # Put back whatever `before(:all)` (and any earlier `before(:each)`) put in the
+  # mount buffers, so a retried example starts from the same state as its first
+  # attempt.
+  #
+  # rspec-retry re-runs a failed example in the SAME example-group instance
+  # (rspec_ext.rb calls `ex.run` again), so its instance variables survive the
+  # attempt that failed -- and both mount buffers are CONSUMED by mounting:
+  # add_block_with_helpers nils @_hyperspec_private_client_code once it has
+  # compiled it into a page, and send_params_to_controller_via_cache nils
+  # @_hyperspec_private_html_block. Every retry after the first therefore built
+  # its page WITHOUT them, so everything the spec had put there -- `isomorphic
+  # do`, `before_mount`, `insert_html`, `add_class` -- was silently gone.
+  #
+  # The reported failure is the last attempt's, which is why this surfaced as
+  # "uninitialized constant <SomeModel>" that no amount of polling resolves,
+  # with the real first-attempt failure hidden behind it. See #68.
+  config.before(:each) do
+    if defined?(@_hyperspec_private_mount_buffers)
+      @_hyperspec_private_client_code, @_hyperspec_private_html_block =
+        @_hyperspec_private_mount_buffers
+    else
+      @_hyperspec_private_mount_buffers =
+        [@_hyperspec_private_client_code, @_hyperspec_private_html_block]
+    end
+  end
+
   config.before(:each) do |example|
     insure_page_loaded(true) if example.metadata[:js] && !HyperSpec.reset_between_examples?
   end

@@ -80,6 +80,15 @@ module HyperSpec
       key =               "/#{self.class.route_root}/#{params[:id]}"
       test_params =       Internal::Controller.cache_read(key)
 
+      # A miss used to surface as `undefined method '[]' for nil`, which says
+      # nothing about what went wrong.  It means the payload the spec wrote is
+      # not on disk: either another process overwrote the entry (see
+      # Internal::Controller.test_id and #68) or it aged past the cache's
+      # expiry before the browser asked for the page.
+      raise "hyper-spec: no mount payload cached for #{key}. The entry was "\
+            'overwritten or expired between the spec writing it and the '\
+            'browser requesting the page.' unless test_params
+
       @component_name =   test_params[0]
       @component_params = test_params[1]
       @html_block =       test_params[2]
