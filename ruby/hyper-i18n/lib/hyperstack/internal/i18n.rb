@@ -24,10 +24,7 @@ module Hyperstack
           else
             Translate
               .run(attribute: attribute, opts: opts)
-              .then do |translation|
-                Store.translations[attribute] = translation
-                Store.mutate.translations(Store.translations)
-              end
+              .then { |translation| cache_translation(attribute, translation) }
 
             opts[:default] || ''
           end
@@ -53,8 +50,7 @@ module Hyperstack
             Translate
               .run(attribute: attribute, opts: opts)
               .then do |translation|
-                Store.translations[attribute] = translation
-                Store.mutate.translations(Store.translations)
+                cache_translation(attribute, translation)
                 translation
               end
           end
@@ -93,10 +89,7 @@ module Hyperstack
             Localize
               .run(date_or_time: date_or_time, format: format, opts: {})
               .then do |localization|
-                Store.localizations[date_or_time.to_s] ||= {}
-                Store.localizations[date_or_time.to_s][format] = localization
-
-                Store.mutate.localizations(Store.localizations)
+                cache_localization(date_or_time.to_s, format, localization)
               end
 
             opts[:default] || ''
@@ -137,6 +130,32 @@ module Hyperstack
           Store.localizations || {}
         rescue StandardError
           {}
+        end
+
+        # Safe write access to the i18n stores. #1 guarded the *synchronous*
+        # read path, but the .then callbacks in t/t_async/l fire after the
+        # operation resolves — a guard at call time cannot protect a callback
+        # that runs later, so an uninitialized Store raised the same
+        # "undefined method 'translations' for nil", now inside a promise
+        # chain where nothing catches it. Skip the cache update instead. See
+        # #42 (follow-up to #1).
+        def cache_translation(attribute, translation)
+          return unless Store.translations
+
+          Store.translations[attribute] = translation
+          Store.mutate.translations(Store.translations)
+        rescue StandardError
+          nil
+        end
+
+        def cache_localization(key, format, localization)
+          return unless Store.localizations
+
+          Store.localizations[key] ||= {}
+          Store.localizations[key][format] = localization
+          Store.mutate.localizations(Store.localizations)
+        rescue StandardError
+          nil
         end
 
         def no_initial_data?
