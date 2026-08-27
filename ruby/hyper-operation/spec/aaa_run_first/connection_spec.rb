@@ -91,6 +91,43 @@ require 'spec_helper'
       expect(described_class.read('0', 'path')).to eq([])
     end
 
+    # Every example above queues the String 'data', which any YAML coder will
+    # take. A real broadcast payload is an ActiveSupport::HashWithIndifferentAccess
+    # of record params, and on Rails 7.1+ ActiveRecord::Coders::YAMLColumn dumps
+    # through YAML.safe_dump -- which refuses any class outside
+    # `config.active_record.yaml_column_permitted_classes`. That defaults to
+    # `[Symbol]`, so queuing raised Psych::DisallowedClass on a stock app: fatal
+    # for :simple_poller (which queues everything) and, for :action_cable, fatal
+    # for any broadcast that beat the client's websocket handshake. The test_app
+    # widens the global list, so pin it back to the Rails default here -- the
+    # column has to carry its own permissions. (#44)
+    #
+    # Gated on 7.1, like the coder itself, because there is nothing to assert
+    # before that: 6.1/7.0's YAMLColumn takes no per-column `permitted_classes`
+    # and dumps with a plain `YAML.dump`, consulting the global list only when
+    # *loading*. (So those versions have the mirror-image gap -- a payload
+    # writes fine and raises on read back -- but it can only be closed by
+    # widening `ActiveRecord::Base.yaml_column_permitted_classes` application
+    # side, which is exactly what this fix exists to avoid needing.) The
+    # module-level `ActiveRecord.yaml_column_permitted_classes` stubbed here
+    # also does not exist until 7.0, so on the rails61 cells
+    # `verify_partial_doubles` would reject the stub outright.
+    if adapter == :active_record && ::ActiveRecord.version >= Gem::Version.new('7.1')
+      it 'queues a realistic payload under the default yaml_column_permitted_classes' do
+        allow(ActiveRecord).to receive(:yaml_column_permitted_classes).and_return([Symbol])
+        payload = ['create', ActiveSupport::HashWithIndifferentAccess.new(
+          'channel' => 'TestChannel',
+          'record'  => { 'id' => 1, 'name' => 'sample1' },
+          'sent_at' => Time.at(0).utc
+        )]
+
+        described_class.open('TestChannel', '0')
+        described_class.send_to_channel('TestChannel', payload)
+
+        expect(described_class.read('0', 'path')).to eq([payload])
+      end
+    end
+
     it 'will update the expiration time after reading' do
       described_class.open('TestChannel', '0')
       described_class.send_to_channel('TestChannel', 'data')
