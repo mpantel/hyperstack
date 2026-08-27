@@ -534,6 +534,11 @@ build-cell-image:
         - supported_versions.yml
         - ruby/*/*.gemspec
         - ruby/*/Gemfile
+        # The pinned gems spec:prepare needs in GEM_HOME, baked in since #73.
+        # Staged by prepare-context.sh like the Gemfiles above, so editing it
+        # has to rebuild for the same reason: otherwise the pins advance while
+        # the images keep serving the old ones.
+        - ruby/rails-hyperstack/spec_prepare_gems.rb
         - docker/cell-image/**/*
     - when: manual   # always available on demand
   # No dind service and no DOCKER_HOST: the group runners mount the host docker

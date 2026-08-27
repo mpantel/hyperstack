@@ -35,4 +35,11 @@ for dir in "$ROOT"/ruby/*/; do
   done
 done
 
+# The image also bakes the gems `rake spec:prepare` installs into GEM_HOME
+# (#73), and it takes the list from this file so the pins are defined once. It
+# is a dependency definition like the Gemfiles above -- editing it SHOULD
+# invalidate the image, and nothing else in the repo touches it.
+mkdir -p "$OUT/ruby/rails-hyperstack"
+cp "$ROOT/ruby/rails-hyperstack/spec_prepare_gems.rb" "$OUT/ruby/rails-hyperstack/"
+
 echo "staged $(find "$OUT" -type f | wc -l) files into $OUT"
