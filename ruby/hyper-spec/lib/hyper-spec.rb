@@ -225,6 +225,12 @@ RSpec.configure do |config|
 
   config.add_setting :debugger_width, default: nil
 
+  # When the browser will not give size_window the size it asked for, warn (the
+  # default) or raise HyperSpec::WindowSizeError. Suites that deliberately probe
+  # the browser's limits want the warning; suites whose layout assertions depend
+  # on the size they asked for may prefer to fail on the spot. (#77)
+  config.add_setting :raise_on_unreachable_window_size, default: false
+
   config.before(:each) do
     if defined?(Hyperstack)
       Hyperstack.class_eval do
