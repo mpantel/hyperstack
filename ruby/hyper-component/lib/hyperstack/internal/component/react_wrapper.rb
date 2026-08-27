@@ -372,7 +372,57 @@ module Hyperstack
               props[Hyperstack::Component::ReactAPI.html_attr?(lower_camelize(key)) ? lower_camelize(key) : key] = value
             end
           end
+          normalize_textarea_default_value(props) if type.to_s == 'textarea'
           props
+        end
+
+        # An uncontrolled <textarea> must ignore later changes to its default value (#62).
+        #
+        # It does not, and the reason is an identity check inside react. React decides
+        # whether to set the element's DIRTY VALUE FLAG at mount by comparing the child
+        # text content it just rendered against the value it stashed in
+        # `_wrapperState.initialValue`:
+        #
+        #     initWrapperState:   initialValue = getToStringValue(props.defaultValue)  // UNCOERCED
+        #     getHostProps:       children     = toString(initialValue)                // '' + value
+        #     postMountWrapper:   if (textContent === _wrapperState.initialValue) node.value = textContent
+        #
+        # The two sides are produced differently and compared with `===`, so it only holds
+        # when the default value is already a javascript string PRIMITIVE. A bare opal
+        # string literal is one, which is why this looks fine in a toy example; but
+        # anything with a `to_s` -- a value object, an observable, hyper-model's
+        # DummyValue -- is an object, and so is an opal String that has been boxed on its
+        # way through (which is what a reactive record attribute gives you). For those the
+        # check fails, react skips `node.value = textContent`, and the flag is never set.
+        #
+        # That flag is the whole ballgame. While it is clear, a textarea's value is tied
+        # to its children, and react writes `node.defaultValue = ...` (which IS the child
+        # text content) on every subsequent render -- so each new default value lands
+        # straight in the visible value. <input> is immune because its own
+        # postMountWrapper compares against `node.value` and assigns whenever the two
+        # differ, which sets the flag at mount whatever the value's type.
+        #
+        # Handing react a plain string is enough: the identity check then holds, the flag
+        # is set at mount, and the textarea ignores later writes exactly like the input
+        # beside it. Only textarea is touched -- select's defaultValue may legitimately be
+        # an Array (`multiple`), which must not be stringified.
+        def self.normalize_textarea_default_value(props)
+          return unless RUBY_ENGINE == 'opal'
+          return unless props.key?('defaultValue')
+
+          value = props['defaultValue']
+          return if `typeof value === 'string'`
+          # A value still being fetched has no string to give yet, and asking it for one
+          # notifies the loading machinery -- which is precisely what the defaultValue
+          # handling goes out of its way to avoid (see hyper_react/input_tags.rb). React
+          # renders it as '' either way, and the element picks the real value up when the
+          # data lands.
+          return if value.respond_to?(:loading?) && value.loading?
+
+          # `to_s` on its own is not enough: it can hand back a BOXED opal String, which is
+          # still `typeof` 'object' and still fails react's `===`. Concatenating with ''
+          # is what forces an actual primitive.
+          props['defaultValue'] = `'' + #{value.to_s}`
         end
 
         private
