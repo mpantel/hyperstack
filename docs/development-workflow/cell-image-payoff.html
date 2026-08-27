@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  CI timing comparison for the prebaked per-cell dependency images (#57).
+
+  Measured 2026-08-27 on ru/hyperstack pipelines:
+    6594  edge, base24 + restored gem cache   (before)
+    6639  edge, prebaked cell images          (after)
+    6645  MR !101, prebaked cell images at 8-12 concurrent jobs
+          (cited for rails-hyperstack, to rule out runner contention)
+
+  Section timings come from each job's section_start/section_end trace markers;
+  the per-phase figures inside step_script come from the traces' per-line
+  timestamps. Only successful attempts are counted, one per job name.
+
+  The rails-hyperstack regression this documents is tracked as #73.
+  Self-contained apart from the Google Fonts link; falls back cleanly offline.
+-->
+<title>Cell Image Payoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #f2f5f6;
+    --surface: #ffffff;
+    --surface-2: #e9eef0;
+    --border: #d4dcdf;
+    --rule: #e5ebed;
+    --ink: #12181a;
+    --ink-2: #3b4a4f;
+    --muted: #64757b;
+    --fast: #0a6a58;
+    --fast-soft: #9fd6c8;
+    --slow: #96501a;
+    --slow-soft: #e6bd94;
+    --shadow: 0 1px 2px rgba(18, 24, 26, .06), 0 8px 24px -18px rgba(18, 24, 26, .5);
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0e1214;
+      --surface: #161c1f;
+      --surface-2: #1e262a;
+      --border: #2b3539;
+      --rule: #232c30;
+      --ink: #e3eaec;
+      --ink-2: #b6c5c9;
+      --muted: #8d9fa5;
+      --fast: #4ac9a8;
+      --fast-soft: #1e5f51;
+      --slow: #dc9455;
+      --slow-soft: #6b4322;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 24px -18px rgba(0, 0, 0, .9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0e1214;
+    --surface: #161c1f;
+    --surface-2: #1e262a;
+    --border: #2b3539;
+    --rule: #232c30;
+    --ink: #e3eaec;
+    --ink-2: #b6c5c9;
+    --muted: #8d9fa5;
+    --fast: #4ac9a8;
+    --fast-soft: #1e5f51;
+    --slow: #dc9455;
+    --slow-soft: #6b4322;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 24px -18px rgba(0, 0, 0, .9);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 2.5rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 3.75rem);
+  }
+
+  .prose { max-width: 66ch; display: flex; flex-direction: column; gap: 1rem; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .75rem;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -.022em;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    line-height: 1.25;
+    letter-spacing: -.012em;
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--mono);
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  p { margin: 0; color: var(--ink-2); }
+  .lede { font-size: 1.075rem; color: var(--ink-2); }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: .875em;
+    background: var(--surface-2);
+    padding: .1em .35em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+  .fast { color: var(--fast); }
+  .slow { color: var(--slow); }
+
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+
+  /* ---- summary tiles ---- */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .tile {
+    background: var(--surface);
+    padding: 1.15rem 1.25rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+
+  .tile-label {
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .tile-figures {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: .35rem;
+    flex-wrap: wrap;
+  }
+
+  .was { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .arrow { color: var(--muted); }
+  .now { color: var(--ink); font-weight: 600; font-size: 1.35rem; }
+  .unit { color: var(--muted); font-size: .8rem; }
+
+  .tile-delta {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: .95rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .tile-sub { font-size: .78rem; color: var(--muted); margin: 0; line-height: 1.45; }
+
+  /* ---- tables ---- */
+  .scroller {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface);
+    text-align: right;
+    font-family: var(--mono);
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: .85rem .7rem .6rem;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  thead th.lead { text-align: left; padding-left: 1.1rem; }
+  thead th.span-head {
+    text-align: center;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: .35rem;
+    color: var(--ink);
+    letter-spacing: .08em;
+  }
+  thead tr.upper th { top: 0; }
+  thead tr.lower th { top: 2.05rem; }
+  .divider { border-left: 1px solid var(--rule); }
+
+  tbody td {
+    padding: .42rem .7rem;
+    border-bottom: 1px solid var(--rule);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  tbody tr:hover td { background: var(--surface-2); }
+
+  tr.group th {
+    text-align: left;
+    padding: .95rem 1.1rem .35rem;
+    font-family: var(--mono);
+    font-size: .82rem;
+    font-weight: 600;
+    letter-spacing: .01em;
+    color: var(--ink);
+    background: var(--surface);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  td.cell {
+    text-align: left;
+    padding-left: 1.9rem;
+    font-family: var(--mono);
+    font-size: .8rem;
+    color: var(--ink-2);
+  }
+
+  .note {
+    display: inline-block;
+    margin-left: .55rem;
+    font-family: var(--sans);
+    font-size: .68rem;
+    letter-spacing: .01em;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0 .5em;
+    vertical-align: 1px;
+  }
+
+  .num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-2);
+  }
+  .num.dim { color: var(--muted); }
+  .num.strong { color: var(--ink); font-weight: 600; }
+
+  td.delta { padding-right: 1.1rem; }
+
+  .pct {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: .8rem;
+    margin-right: .6rem;
+  }
+
+  .bar {
+    display: inline-block;
+    position: relative;
+    width: 104px;
+    height: 7px;
+    vertical-align: middle;
+    background: linear-gradient(to right, transparent calc(50% - .5px), var(--border) calc(50% - .5px), var(--border) calc(50% + .5px), transparent calc(50% + .5px));
+  }
+
+  .fill { position: absolute; top: 0; height: 7px; border-radius: 1px; }
+  .fill.fast { background: var(--fast-soft); }
+  .fill.slow { background: var(--slow-soft); }
+
+  tr.total td {
+    border-top: 2px solid var(--border);
+    border-bottom: none;
+    padding-top: .75rem;
+    padding-bottom: .9rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  tr.total td:first-child {
+    text-align: left;
+    padding-left: 1.1rem;
+    font-family: var(--mono);
+    font-size: .8rem;
+  }
+
+  /* ---- waterfall ---- */
+  .steps { display: flex; flex-direction: column; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .step {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: baseline;
+    padding: .7rem 1.1rem;
+  }
+  .step-name { font-family: var(--mono); font-size: .82rem; color: var(--ink); }
+  .step-name span { color: var(--muted); font-family: var(--sans); font-size: .78rem; margin-left: .5rem; }
+  .step-fig { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--muted); white-space: nowrap; }
+  .step-fig b { color: var(--ink); font-weight: 600; }
+  .step.indent .step-name { padding-left: 1.4rem; }
+  .step.head { background: var(--surface-2); }
+
+  ul { margin: 0; padding-left: 1.15rem; color: var(--ink-2); display: flex; flex-direction: column; gap: .5rem; }
+  li::marker { color: var(--muted); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 1.25rem;
+    font-size: .82rem;
+    color: var(--muted);
+    max-width: 72ch;
+  }
+  footer p + p { margin-top: .6rem; }
+
+  @media (max-width: 640px) {
+    thead tr.lower th { top: 2.4rem; }
+    .bar { width: 68px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="prose">
+    <p class="eyebrow">ru/hyperstack &middot; CI &middot; issue #57</p>
+    <h1>Cell Image Payoff</h1>
+    <p class="lede">What the prebaked per-cell dependency images actually bought, job by job. Two full green matrices on <code>edge</code>: pipeline <strong>6594</strong> (base24 + restored gem cache) against <strong>6639</strong> (prebaked cell images, no gem cache), 49 successful jobs each.</p>
+  </header>
+
+  <section>
+    <div class="tile">
+        <p class="tile-label">Wall clock</p>
+        <p class="tile-figures"><span class="was">25.9</span><span class="arrow" aria-hidden="true">&rarr;</span><span class="now">22.8</span> <span class="unit">min</span></p>
+        <p class="tile-delta fast">-12%</p>
+        <p class="tile-sub">one pipeline, start to last job</p>
+      </div>
+<div class="tile">
+        <p class="tile-label">Runner time</p>
+        <p class="tile-figures"><span class="was">436.9</span><span class="arrow" aria-hidden="true">&rarr;</span><span class="now">278.1</span> <span class="unit">job-min</span></p>
+        <p class="tile-delta fast">-36%</p>
+        <p class="tile-sub">every job added up</p>
+      </div>
+<div class="tile">
+        <p class="tile-label">Cache overhead</p>
+        <p class="tile-figures"><span class="was">169.5</span><span class="arrow" aria-hidden="true">&rarr;</span><span class="now">0.9</span> <span class="unit">job-min</span></p>
+        <p class="tile-delta fast">-99%</p>
+        <p class="tile-sub">restore_cache + archive_cache</p>
+      </div>
+<div class="tile">
+        <p class="tile-label">Test work</p>
+        <p class="tile-figures"><span class="was">203.1</span><span class="arrow" aria-hidden="true">&rarr;</span><span class="now">227.2</span> <span class="unit">job-min</span></p>
+        <p class="tile-delta slow">+12%</p>
+        <p class="tile-sub">step_script only</p>
+      </div>
+  </section>
+
+  <section class="prose">
+    <h2>The whole win is cache overhead</h2>
+    <p>Runner time fell by 159 job-minutes. Almost exactly that much &mdash; <strong>169 job-minutes</strong> &mdash; was <code>restore_cache</code> plus <code>archive_cache</code>, and it is now gone. The tests themselves did not get faster: aggregate <code>step_script</code> rose 12%.</p>
+    <p>Archiving was the expensive half and the easiest to miss: with <code>policy: pull-push</code> and <code>when: always</code>, every job re-uploaded its 258&nbsp;MB of gems whether or not anything had changed &mdash; <strong>150s per job on average</strong>, against 57s to restore. That is why the small gems collapsed: for hyper-trace, cache traffic <em>was</em> the job.</p>
+  </section>
+
+  <section>
+    <h3>Runner seconds by section, all 49 jobs</h3>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr class="lower">
+            <th class="lead" scope="col">Section</th>
+            <th scope="col">6594 before</th>
+            <th scope="col">6639 after</th>
+            <th scope="col">Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="cell">step_script</td><td class="num strong">12,187</td><td class="num strong">13,629</td><td class="delta"><span class="pct slow">+12%</span></td></tr>
+          <tr><td class="cell">archive_cache</td><td class="num strong">7,362</td><td class="num strong">27</td><td class="delta"><span class="pct fast">&minus;100%</span></td></tr>
+          <tr><td class="cell">restore_cache</td><td class="num strong">2,809</td><td class="num strong">29</td><td class="delta"><span class="pct fast">&minus;99%</span></td></tr>
+          <tr><td class="cell">get_sources</td><td class="num strong">1,874</td><td class="num strong">970</td><td class="delta"><span class="pct fast">&minus;48%</span></td></tr>
+          <tr><td class="cell">prepare_script</td><td class="num strong">546</td><td class="num strong">493</td><td class="delta"><span class="pct fast">&minus;10%</span></td></tr>
+          <tr><td class="cell">cleanup_file_variables</td><td class="num strong">339</td><td class="num strong">509</td><td class="delta"><span class="pct slow">+50%</span></td></tr>
+          <tr><td class="cell">prepare_executor</td><td class="num strong">21</td><td class="num strong">24</td><td class="delta"><span class="pct slow">+14%</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Every job, both pipelines</h2>
+    <p class="prose">Seconds. <strong>work</strong> is <code>step_script</code> &mdash; installing, preparing and running the specs. <strong>cache</strong> is <code>restore_cache</code> + <code>archive_cache</code>. <strong>total</strong> is the job as GitLab reports it, so it also carries executor prep and <code>get_sources</code>. Bars run left for faster, right for slower.</p>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr class="upper">
+            <th class="lead" scope="col"></th>
+            <th class="span-head divider" colspan="3" scope="colgroup">6594 &mdash; base24 + cache</th>
+            <th class="span-head divider" colspan="3" scope="colgroup">6639 &mdash; cell image</th>
+            <th class="span-head" scope="col"></th>
+          </tr>
+          <tr class="lower">
+            <th class="lead" scope="col">Cell</th>
+            <th class="divider" scope="col">work</th>
+            <th scope="col">cache</th>
+            <th scope="col">total</th>
+            <th class="divider" scope="col">work</th>
+            <th scope="col">cache</th>
+            <th scope="col">total</th>
+            <th scope="col">&Delta; total</th>
+          </tr>
+        </thead>
+        <tbody>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-component</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">601</td><td class="num dim">254</td><td class="num strong">969</td><td class="num">638</td><td class="num dim">0</td><td class="num strong">670</td><td class="delta"><span class="pct fast">-31%</span><span class="bar"><span class="fill fast" style="right:50%;width:17.1%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">601</td><td class="num dim">254</td><td class="num strong">968</td><td class="num">642</td><td class="num dim">0</td><td class="num strong">675</td><td class="delta"><span class="pct fast">-30%</span><span class="bar"><span class="fill fast" style="right:50%;width:16.8%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">608</td><td class="num dim">247</td><td class="num strong">968</td><td class="num">651</td><td class="num dim">0</td><td class="num strong">682</td><td class="delta"><span class="pct fast">-30%</span><span class="bar"><span class="fill fast" style="right:50%;width:16.4%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">608</td><td class="num dim">247</td><td class="num strong">969</td><td class="num">636</td><td class="num dim">0</td><td class="num strong">670</td><td class="delta"><span class="pct fast">-31%</span><span class="bar"><span class="fill fast" style="right:50%;width:17.1%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-i18n</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">99</td><td class="num dim">198</td><td class="num strong">404</td><td class="num">108</td><td class="num dim">0</td><td class="num strong">226</td><td class="delta"><span class="pct fast">-44%</span><span class="bar"><span class="fill fast" style="right:50%;width:24.5%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">99</td><td class="num dim">154</td><td class="num strong">284</td><td class="num">241</td><td class="num dim">0</td><td class="num strong">295</td><td class="delta"><span class="pct slow">+4%</span><span class="bar"><span class="fill slow" style="left:50%;width:2.2%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">100</td><td class="num dim">92</td><td class="num strong">224</td><td class="num">206</td><td class="num dim">0</td><td class="num strong">282</td><td class="delta"><span class="pct slow">+26%</span><span class="bar"><span class="fill slow" style="left:50%;width:14.4%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">100</td><td class="num dim">101</td><td class="num strong">230</td><td class="num">241</td><td class="num dim">0</td><td class="num strong">295</td><td class="delta"><span class="pct slow">+28%</span><span class="bar"><span class="fill slow" style="left:50%;width:15.7%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-model</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">860</td><td class="num dim">116</td><td class="num strong">996</td><td class="num">776</td><td class="num dim">0</td><td class="num strong">808</td><td class="delta"><span class="pct fast">-19%</span><span class="bar"><span class="fill fast" style="right:50%;width:10.5%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">854</td><td class="num dim">131</td><td class="num strong">1024</td><td class="num">779</td><td class="num dim">0</td><td class="num strong">810</td><td class="delta"><span class="pct fast">-21%</span><span class="bar"><span class="fill fast" style="right:50%;width:11.6%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18<span class="note" title="after = retry attempt">after = retry attempt</span></td><td class="num">751</td><td class="num dim">200</td><td class="num strong">972</td><td class="num">416</td><td class="num dim">0</td><td class="num strong">423</td><td class="delta"><span class="pct fast">-56%</span><span class="bar"><span class="fill fast" style="right:50%;width:31.4%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16<span class="note" title="before = retry attempt">before = retry attempt</span></td><td class="num">390</td><td class="num dim">45</td><td class="num strong">456</td><td class="num">784</td><td class="num dim">0</td><td class="num strong">810</td><td class="delta"><span class="pct slow">+78%</span><span class="bar"><span class="fill slow" style="left:50%;width:43.1%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-operation:part1</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">261</td><td class="num dim">168</td><td class="num strong">507</td><td class="num">279</td><td class="num dim">0</td><td class="num strong">407</td><td class="delta"><span class="pct fast">-20%</span><span class="bar"><span class="fill fast" style="right:50%;width:11.0%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">261</td><td class="num dim">167</td><td class="num strong">506</td><td class="num">318</td><td class="num dim">0</td><td class="num strong">367</td><td class="delta"><span class="pct fast">-27%</span><span class="bar"><span class="fill fast" style="right:50%;width:15.3%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">225</td><td class="num dim">112</td><td class="num strong">504</td><td class="num">306</td><td class="num dim">0</td><td class="num strong">367</td><td class="delta"><span class="pct fast">-27%</span><span class="bar"><span class="fill fast" style="right:50%;width:15.1%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">262</td><td class="num dim">167</td><td class="num strong">478</td><td class="num">296</td><td class="num dim">0</td><td class="num strong">361</td><td class="delta"><span class="pct fast">-24%</span><span class="bar"><span class="fill fast" style="right:50%;width:13.6%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-operation:part2</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">212</td><td class="num dim">198</td><td class="num strong">456</td><td class="num">295</td><td class="num dim">0</td><td class="num strong">361</td><td class="delta"><span class="pct fast">-21%</span><span class="bar"><span class="fill fast" style="right:50%;width:11.6%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">217</td><td class="num dim">193</td><td class="num strong">454</td><td class="num">296</td><td class="num dim">0</td><td class="num strong">361</td><td class="delta"><span class="pct fast">-20%</span><span class="bar"><span class="fill fast" style="right:50%;width:11.4%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">215</td><td class="num dim">195</td><td class="num strong">447</td><td class="num">296</td><td class="num dim">0</td><td class="num strong">359</td><td class="delta"><span class="pct fast">-20%</span><span class="bar"><span class="fill fast" style="right:50%;width:10.9%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">172</td><td class="num dim">146</td><td class="num strong">447</td><td class="num">296</td><td class="num dim">0</td><td class="num strong">360</td><td class="delta"><span class="pct fast">-19%</span><span class="bar"><span class="fill fast" style="right:50%;width:10.8%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-router</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">142</td><td class="num dim">269</td><td class="num strong">480</td><td class="num">116</td><td class="num dim">0</td><td class="num strong">154</td><td class="delta"><span class="pct fast">-68%</span><span class="bar"><span class="fill fast" style="right:50%;width:37.7%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">118</td><td class="num dim">251</td><td class="num strong">424</td><td class="num">116</td><td class="num dim">0</td><td class="num strong">157</td><td class="delta"><span class="pct fast">-63%</span><span class="bar"><span class="fill fast" style="right:50%;width:35.0%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">118</td><td class="num dim">251</td><td class="num strong">424</td><td class="num">113</td><td class="num dim">0</td><td class="num strong">151</td><td class="delta"><span class="pct fast">-64%</span><span class="bar"><span class="fill fast" style="right:50%;width:35.8%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">119</td><td class="num dim">259</td><td class="num strong">430</td><td class="num">113</td><td class="num dim">0</td><td class="num strong">151</td><td class="delta"><span class="pct fast">-65%</span><span class="bar"><span class="fill fast" style="right:50%;width:36.0%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-spec</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">246</td><td class="num dim">239</td><td class="num strong">527</td><td class="num">230</td><td class="num dim">0</td><td class="num strong">283</td><td class="delta"><span class="pct fast">-46%</span><span class="bar"><span class="fill fast" style="right:50%;width:25.7%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">246</td><td class="num dim">239</td><td class="num strong">540</td><td class="num">230</td><td class="num dim">0</td><td class="num strong">271</td><td class="delta"><span class="pct fast">-50%</span><span class="bar"><span class="fill fast" style="right:50%;width:27.7%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">246</td><td class="num dim">239</td><td class="num strong">531</td><td class="num">227</td><td class="num dim">0</td><td class="num strong">271</td><td class="delta"><span class="pct fast">-49%</span><span class="bar"><span class="fill fast" style="right:50%;width:27.2%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">238</td><td class="num dim">285</td><td class="num strong">562</td><td class="num">226</td><td class="num dim">0</td><td class="num strong">271</td><td class="delta"><span class="pct fast">-52%</span><span class="bar"><span class="fill fast" style="right:50%;width:28.8%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-state</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">81</td><td class="num dim">286</td><td class="num strong">412</td><td class="num">71</td><td class="num dim">0</td><td class="num strong">93</td><td class="delta"><span class="pct fast">-77%</span><span class="bar"><span class="fill fast" style="right:50%;width:43.0%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">81</td><td class="num dim">286</td><td class="num strong">411</td><td class="num">69</td><td class="num dim">0</td><td class="num strong">98</td><td class="delta"><span class="pct fast">-76%</span><span class="bar"><span class="fill fast" style="right:50%;width:42.3%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">81</td><td class="num dim">286</td><td class="num strong">409</td><td class="num">67</td><td class="num dim">0</td><td class="num strong">93</td><td class="delta"><span class="pct fast">-77%</span><span class="bar"><span class="fill fast" style="right:50%;width:42.9%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">86</td><td class="num dim">298</td><td class="num strong">497</td><td class="num">70</td><td class="num dim">0</td><td class="num strong">100</td><td class="delta"><span class="pct fast">-80%</span><span class="bar"><span class="fill fast" style="right:50%;width:44.4%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-store</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">210</td><td class="num dim">251</td><td class="num strong">514</td><td class="num">157</td><td class="num dim">0</td><td class="num strong">183</td><td class="delta"><span class="pct fast">-64%</span><span class="bar"><span class="fill fast" style="right:50%;width:35.8%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">165</td><td class="num dim">220</td><td class="num strong">474</td><td class="num">157</td><td class="num dim">0</td><td class="num strong">183</td><td class="delta"><span class="pct fast">-61%</span><span class="bar"><span class="fill fast" style="right:50%;width:34.1%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">167</td><td class="num dim">218</td><td class="num strong">471</td><td class="num">155</td><td class="num dim">0</td><td class="num strong">181</td><td class="delta"><span class="pct fast">-62%</span><span class="bar"><span class="fill fast" style="right:50%;width:34.2%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">165</td><td class="num dim">232</td><td class="num strong">482</td><td class="num">163</td><td class="num dim">0</td><td class="num strong">180</td><td class="delta"><span class="pct fast">-63%</span><span class="bar"><span class="fill fast" style="right:50%;width:34.8%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyper-trace</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">51</td><td class="num dim">254</td><td class="num strong">349</td><td class="num">21</td><td class="num dim">0</td><td class="num strong">49</td><td class="delta"><span class="pct fast">-86%</span><span class="bar"><span class="fill fast" style="right:50%;width:47.8%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">54</td><td class="num dim">251</td><td class="num strong">348</td><td class="num">21</td><td class="num dim">0</td><td class="num strong">51</td><td class="delta"><span class="pct fast">-85%</span><span class="bar"><span class="fill fast" style="right:50%;width:47.4%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">51</td><td class="num dim">254</td><td class="num strong">348</td><td class="num">20</td><td class="num dim">0</td><td class="num strong">52</td><td class="delta"><span class="pct fast">-85%</span><span class="bar"><span class="fill fast" style="right:50%;width:47.3%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">51</td><td class="num dim">254</td><td class="num strong">348</td><td class="num">24</td><td class="num dim">0</td><td class="num strong">48</td><td class="delta"><span class="pct fast">-86%</span><span class="bar"><span class="fill fast" style="right:50%;width:47.9%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">hyperstack-config</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">169</td><td class="num dim">293</td><td class="num strong">534</td><td class="num">164</td><td class="num dim">0</td><td class="num strong">203</td><td class="delta"><span class="pct fast">-62%</span><span class="bar"><span class="fill fast" style="right:50%;width:34.4%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">148</td><td class="num dim">308</td><td class="num strong">498</td><td class="num">164</td><td class="num dim">0</td><td class="num strong">205</td><td class="delta"><span class="pct fast">-59%</span><span class="bar"><span class="fill fast" style="right:50%;width:32.7%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">150</td><td class="num dim">308</td><td class="num strong">497</td><td class="num">162</td><td class="num dim">0</td><td class="num strong">204</td><td class="delta"><span class="pct fast">-59%</span><span class="bar"><span class="fill fast" style="right:50%;width:32.8%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">168</td><td class="num dim">334</td><td class="num strong">538</td><td class="num">164</td><td class="num dim">0</td><td class="num strong">205</td><td class="delta"><span class="pct fast">-62%</span><span class="bar"><span class="fill fast" style="right:50%;width:34.4%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">rails-hyperstack</th></tr>
+<tr><td class="cell">rails61-react16</td><td class="num">397</td><td class="num dim">96</td><td class="num strong">514</td><td class="num">591</td><td class="num dim">0</td><td class="num strong">646</td><td class="delta"><span class="pct slow">+26%</span><span class="bar"><span class="fill slow" style="left:50%;width:14.3%"></span></span></td></tr>
+<tr><td class="cell">rails61-react17</td><td class="num">359</td><td class="num dim">59</td><td class="num strong">455</td><td class="num">591</td><td class="num dim">0</td><td class="num strong">644</td><td class="delta"><span class="pct slow">+42%</span><span class="bar"><span class="fill slow" style="left:50%;width:23.1%"></span></span></td></tr>
+<tr><td class="cell">rails61-react18</td><td class="num">351</td><td class="num dim">61</td><td class="num strong">455</td><td class="num">591</td><td class="num dim">0</td><td class="num strong">644</td><td class="delta"><span class="pct slow">+42%</span><span class="bar"><span class="fill slow" style="left:50%;width:23.1%"></span></span></td></tr>
+<tr><td class="cell">rails72-react16</td><td class="num">161</td><td class="num dim">62</td><td class="num strong">266</td><td class="num">333</td><td class="num dim">0</td><td class="num strong">400</td><td class="delta"><span class="pct slow">+50%</span><span class="bar"><span class="fill slow" style="left:50%;width:28.0%"></span></span></td></tr>
+<tr class="group"><th colspan="8" scope="rowgroup">supported-versions</th></tr>
+<tr><td class="cell">— (base24)<span class="note" title="keeps its cache by design">keeps its cache by design</span></td><td class="num">72</td><td class="num dim">143</td><td class="num strong">223</td><td class="num">3</td><td class="num dim">56</td><td class="num strong">113</td><td class="delta"><span class="pct fast">-49%</span><span class="bar"><span class="fill fast" style="right:50%;width:27.4%"></span></span></td></tr>
+<tr class="total"><td>49 jobs</td><td class="num">12187</td><td class="num dim">10171</td><td class="num strong">25224</td><td class="num">13629</td><td class="num dim">56</td><td class="num strong">15873</td><td class="delta"><span class="pct fast">-37%</span><span class="bar"><span class="fill fast" style="right:50%;width:20.6%"></span></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="prose">
+    <h2>One job went the other way &mdash; but only three of its cells</h2>
+    <p><code>rails-hyperstack</code> is now the <strong>longest job in the pipeline</strong> at 644s, up from 455s, and it sets the critical path the other 48 jobs finish inside. It lost its 59s of cache overhead like everyone else and still ended up 189s worse, so the regression is entirely inside <code>step_script</code>.</p>
+    <p>A third pipeline pins it down. Pipeline <strong>6645</strong> ran the same matrix at less than half the concurrency &mdash; 8 to 12 parallel jobs where 6639 had 23 &mdash; and the three <code>rails61</code> cells still took <strong>637&ndash;646s</strong>. Runner contention is not the explanation. In the same run <code>rails72-react16</code> came in at <strong>216s</strong>, faster than its 266s before the change, so that cell never regressed at all; its 400s in 6639 was contention.</p>
+    <p>What the rails61 cells do and rails72 does not is one branch of <code>spec:prepare</code>: the <code>rails_version &lt; '7'</code> block, which <code>gem install</code>s pinned old builds of zeitwerk, net-imap, concurrent-ruby and nokogiri before generating the app. That branch is the regression.</p>
+  </section>
+
+  <section>
+    <h3>rails-hyperstack, rails61-react17, section by section</h3>
+    <div class="steps">
+      <div class="step head">
+        <span class="step-name">job total</span>
+        <span class="step-fig">455s &rarr; <b class="slow">644s</b></span>
+      </div>
+      <div class="step"><span class="step-name">restore_cache + archive_cache</span><span class="step-fig">59s &rarr; <b class="fast">0s</b></span></div>
+      <div class="step"><span class="step-name">get_sources</span><span class="step-fig">30s &rarr; <b>27s</b></span></div>
+      <div class="step"><span class="step-name">step_script</span><span class="step-fig">359s &rarr; <b class="slow">591s</b></span></div>
+      <div class="step indent"><span class="step-name">bundle install <span>the repo&rsquo;s own gems</span></span><span class="step-fig">12s &rarr; <b class="fast">9s</b></span></div>
+      <div class="step indent"><span class="step-name">rake spec:prepare <span>generates a Rails app</span></span><span class="step-fig">284s &rarr; <b class="slow">523s</b></span></div>
+      <div class="step indent"><span class="step-name">rake spec <span>the specs themselves</span></span><span class="step-fig">88s &rarr; <b class="fast">53s</b></span></div>
+    </div>
+  </section>
+
+  <section class="prose">
+    <h2>Why a gem cache cannot fix it</h2>
+    <p>The cost sits in <code>spec:prepare</code>, which builds a throwaway Rails app from scratch. Inside it, the same work got slower on the cell image:</p>
+    <ul>
+      <li><strong>nokogiri 1.15.6</strong>, built from source both times: <span class="fast">78s</span> &rarr; <span class="slow">202s</span></li>
+      <li><strong>sassc and byebug</strong> native extensions: <span class="fast">43s</span> &rarr; <span class="slow">71s</span></li>
+      <li><strong>gem install rails</strong> itself: 9.4s &rarr; 9.7s &mdash; unchanged, which argues against CPU contention or a slower network</li>
+      <li>and on <code>rails72-react16</code>, which skips those pinned installs entirely, nothing regressed</li>
+    </ul>
+    <p>None of it is reachable by the cache we removed. <code>spec:prepare</code> shells out under <code>Bundler.with_unbundled_env</code> and runs plain <code>gem install</code>, so those gems land in <code>GEM_HOME</code>, never in <code>local_gems</code> &mdash; the only path the cache ever held. The proof is in the before column: the cache was warm and restoring, and nokogiri still compiled from source every run.</p>
+    <p>Re-enabling that cache for this one job would restore its 59s of upload cost and recover none of the 232s. What would work is prebaking the four pinned gems into the cell image, exactly as #57 did for <code>local_gems</code> &mdash; the versions are literals in the Rakefile and the cell already fixes the Rails version they hang off, so a rails61 image can carry them and <code>gem install</code> becomes a no-op. A cache could only reach them by first pointing <code>GEM_HOME</code> at the project directory, which risks the image&rsquo;s own prebaked bundle for a strictly worse result.</p>
+  </section>
+
+  <footer>
+    <p><strong>Method.</strong> Section timings come from the <code>section_start</code>/<code>section_end</code> markers in each job&rsquo;s trace; per-phase figures inside <code>step_script</code> come from the traces&rsquo; per-line timestamps. Only successful attempts are counted, one per job name.</p>
+    <p><strong>Caveats.</strong> Two rows are retries rather than clean runs and understate their work: hyper-model rails61-react18 after (423s), hyper-model rails72-react16 before (456s). The table is one pipeline against one pipeline &mdash; two other pre-change matrices came in at 30.0 and 45.8 minutes wall clock, so the wall-clock figure carries real variance, while the section-level cache numbers are stable across all of them. Both ran on ru-vm2 at up to 26 concurrent jobs, and <code>step_script</code> is sensitive to that contention; the cache totals are not. Pipeline 6645, cited for rails-hyperstack, ran at 8&ndash;17 concurrent jobs and finished in 21.6 minutes / 225.3 job-minutes.</p>
+  </footer>
+</div>
+</body>
+</html>
