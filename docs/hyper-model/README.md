@@ -225,6 +225,64 @@ Todo.create(assigned_to_id: some_user.id)
 
 Similar to the linkages in relationships, aggregate records are represented on the client as actual independent objects.
 
+#### Polymorphic Relationships
+
+Polymorphic relationships work isomorphically, and like any other relationship both
+sides must be declared, in code that runs on the client as well as the server:
+
+```ruby
+class Picture < ActiveRecord::Base
+  belongs_to :imageable, polymorphic: true
+end
+
+class Employee < ActiveRecord::Base
+  has_many :pictures, as: :imageable
+end
+
+class Product < ActiveRecord::Base
+  has_many :pictures, as: :imageable
+end
+```
+
+While the type of `picture.imageable` is unknown the client returns a placeholder that
+responds to any method with itself, and fetches the real record (its `imageable_id` and
+`imageable_type`) in the background. That means `picture.imageable.name` costs a second
+round trip the first time, because the client cannot know which model it is reading until
+the type comes back.
+
+There is no need to hide a polymorphic `belongs_to` from the client. Guarding it with
+`unless RUBY_ENGINE == 'opal'` (a workaround seen in older applications) leaves the client
+without the relationship, and what you get back depends on the order in which your code
+happens to touch things -- see *Automatically Created Inverse Relationships* below.
+
+#### Automatically Created Inverse Relationships
+
+If only one side of a relationship is declared, HyperModel will create the missing side
+when it first needs the inverse, and log a warning:
+
+```text
+**** warning dynamically adding relationship: Picture.belongs_to :imageable, polymorphic: true
+- declare it in Picture to avoid this: until this inverse is resolved the relationship
+does not exist on the client.
+```
+
+This is a compatibility fallback so that a partially declared model still works. It is not
+a substitute for declaring both sides, and code should not be written to depend on it:
+
++ The missing side does not exist until something resolves the inverse of the side that
+  *is* declared. Until that happens, reading the undeclared relationship does not raise --
+  it falls through to the attribute reader and fetches from the server as if it were a
+  plain column, so the client gets back a hash of the target's attributes rather than a
+  model, and calling a model method on it fails with `undefined method`.
++ Which side is missing changes what you lose. For a polymorphic `belongs_to` guarded away
+  from the client, `owner` only becomes usable after some `has_many ..., as: :owner`
+  collection has been walked.
++ The reconstructed relationship is built from naming conventions (`foreign_key`, the
+  pluralized model name, the `as:` name). Anything you would have passed explicitly, such
+  as a `class_name:`, is not recovered.
+
+Treat the warning as a prompt to declare the other side rather than as normal output.
+
 #### Defining server methods
 
 Normally an application defined instance method will run on the client and the server:
