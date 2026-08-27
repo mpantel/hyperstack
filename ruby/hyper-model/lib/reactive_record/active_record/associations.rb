@@ -174,15 +174,29 @@ module ActiveRecord
         # instead of raising an error go ahead and create the inverse relationship if it does not exist.
         # https://github.com/hyperstack-org/hyperstack/issues/89
         if macro == :belongs_to
-          Hyperstack::Component::IsomorphicHelpers.log "**** warning dynamically adding relationship: #{the_klass}.has_many :#{@owner_class.name.underscore.pluralize}, foreign_key: #{@association_foreign_key}", :warning
+          warn_dynamically_adding the_klass, "has_many :#{@owner_class.name.underscore.pluralize}, foreign_key: #{@association_foreign_key}"
           the_klass.has_many @owner_class.name.underscore.pluralize, foreign_key: @association_foreign_key
         elsif options[:as]
-          Hyperstack::Component::IsomorphicHelpers.log "**** warning dynamically adding relationship: #{the_klass}.belongs_to :#{options[:as]}, polymorphic: true", :warning
+          warn_dynamically_adding the_klass, "belongs_to :#{options[:as]}, polymorphic: true"
           the_klass.belongs_to options[:as], polymorphic: true
         else
-          Hyperstack::Component::IsomorphicHelpers.log "**** warning dynamically adding relationship: #{the_klass}.belongs_to :#{@owner_class.name.underscore}, foreign_key: #{@association_foreign_key}", :warning
+          warn_dynamically_adding the_klass, "belongs_to :#{@owner_class.name.underscore}, foreign_key: #{@association_foreign_key}"
           the_klass.belongs_to @owner_class.name.underscore, foreign_key: @association_foreign_key
         end
+      end
+
+      # The relationship above is only added once something resolves this inverse, so
+      # until then reading it on the client falls through to the attribute reader and
+      # yields the target's column hash instead of a model.  Say so, so the warning
+      # names its own fix rather than reading as normal output.  See the "Automatically
+      # Created Inverse Relationships" section of the HyperModel docs.
+      def warn_dynamically_adding(the_klass, declaration)  # private
+        Hyperstack::Component::IsomorphicHelpers.log(
+          "**** warning dynamically adding relationship: #{the_klass}.#{declaration} "\
+          "- declare it in #{the_klass} to avoid this: until this inverse is resolved "\
+          "the relationship does not exist on the client.",
+          :warning
+        )
       end
 
       def klass(model = nil)
