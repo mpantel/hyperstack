@@ -40,15 +40,12 @@ ARG HYPERSTACK_JS_PIPELINE=""
 # rejects outright.
 ARG HYPERSTACK_COMPONENTS=""
 
-# Only RBENV_VERSION is exported unconditionally; the version selectors must NOT
-# be present-but-empty. The gemspecs choose like this:
-#
-#   *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
-#
-# and an empty string is TRUTHY in Ruby, so an exported RAILS_VERSION="" takes
-# the ENV branch and yields [""] -> "Illformed requirement". The empty ARG
-# defaults exist so a cell that omits a variable falls back to the gemspec
-# default, which means they have to be unset rather than exported empty.
+# An empty version selector is safe to export: the gemspecs read them through
+# Hyperstack.version_selector (ruby/version_selector.rb), which treats blank as
+# unset and falls back to the gemspec default. That guard used to live here, as a
+# loop that unset every empty variable before each RUN that evaluates a gemspec,
+# on the theory that '' is truthy in Ruby -- true, but the place to know it is
+# the selector, not every consumer of the table. (#78)
 ENV RBENV_VERSION=${RBENV_VERSION}
 
 USER root
@@ -74,9 +71,6 @@ RUN git init -q . && git config user.email ci@hyperstack && git config user.name
 # One `local_gems` shared by every gem, exactly as CI does it
 # (`bundle config set --local path ../../local_gems`).
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION REACT_RAILS_VERSION SQLITE3_VERSION; do \
-      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
-    done; \
     env | grep -E '^(RBENV|RAILS|OPAL|REACT|SQLITE3)' || echo 'no version selectors set (gemspec defaults)'; \
     gem install bundler -v '~> 4.0'; \
     for gem in ${HYPERSTACK_COMPONENTS}; do \
@@ -104,14 +98,7 @@ ENV HYPERSTACK_PREBAKED_GEMS=/hyperstack/local_gems
 # commands and spec:prepare consumes the same list, so there is no second place
 # for the pins to drift (#51). It resolves the rails version from this cell's
 # freshly-installed bundle, so image and job install the same rails.
-#
-# The version selectors have to be re-exported the same way as above: this is a
-# separate RUN, and `bundle info` re-evaluates the Gemfile/gemspec.
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
-             REACT_RAILS_VERSION SQLITE3_VERSION; do \
-      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
-    done; \
     cd /hyperstack; \
     ruby ruby/rails-hyperstack/spec_prepare_gems.rb > /tmp/prepare-gems.sh; \
     cat /tmp/prepare-gems.sh; \
@@ -131,15 +118,12 @@ ENV HYPERSTACK_PREBAKED_SPEC_GEMS=1
 # install, then deletes the app and keeps what it left behind. ~95s off every
 # rails61 job; see the table in that script. (#75)
 #
-# HYPERSTACK_JS_PIPELINE joins the export dance here because warm-app.sh asks
-# spec_prepare_gems.rb which pipeline this cell is, and that reads the variable.
+# HYPERSTACK_JS_PIPELINE needed no guard even before #78: spec_prepare_gems.rb,
+# which warm-app.sh asks which pipeline this cell is, already reads it as
+# `ENV['HYPERSTACK_JS_PIPELINE'] unless ...to_s.empty?`.
 ENV HYPERSTACK_PREBAKED_YARN_CACHE=/hyperstack/yarn-cache
 COPY --chown=ubuntu:ubuntu docker /hyperstack/docker
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
-             REACT_RAILS_VERSION SQLITE3_VERSION HYPERSTACK_JS_PIPELINE; do \
-      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
-    done; \
     YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE" \
       bash /hyperstack/docker/cell-image/warm-app.sh; \
     du -sh /hyperstack/yarn-cache

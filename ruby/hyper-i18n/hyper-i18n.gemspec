@@ -3,6 +3,7 @@
 lib = File.expand_path('../lib', __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'hyperstack/i18n/version'
+require_relative '../version_selector'
 
 Gem::Specification.new do |spec|
   spec.name          = 'hyper-i18n'
@@ -23,7 +24,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'hyper-operation', Hyperstack::I18n::VERSION
   spec.add_dependency 'i18n'
 
-  spec.add_development_dependency 'rails', *(ENV['RAILS_VERSION'] ? [ENV['RAILS_VERSION']] : ['>= 5.0.0', '< 7.0'])
+  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
   spec.add_development_dependency 'bundler'
   # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-model', Hyperstack::I18n::VERSION
@@ -32,14 +33,10 @@ Gem::Specification.new do |spec|
   # Opal reaches sprockets through opal-rails by default; a cell that sets
   # OPAL_SPROCKETS_VERSION swaps in opal-sprockets, the only route on Rails 8
   # (opal-rails 2.x is capped at `rails < 7.3`). See supported_versions.yml. (#20)
-  # A BLANK selector means unset: '' is truthy in Ruby, and the cell image
-  # exposes every unselected ARG as an empty env var, which would otherwise
-  # become the requirement "" -> "Illformed requirement". (#78 does this for
-  # every selector.)
-  if (opal_sprockets_version = ENV['OPAL_SPROCKETS_VERSION'].to_s.strip) != ''
-    spec.add_development_dependency 'opal-sprockets', opal_sprockets_version
+  if (opal_sprockets = Hyperstack.version_selector('OPAL_SPROCKETS_VERSION')).any?
+    spec.add_development_dependency 'opal-sprockets', *opal_sprockets
   else
-    spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
+    spec.add_development_dependency 'opal-rails', *Hyperstack.version_selector('OPAL_RAILS_VERSION', '~> 2.0')
   end
   spec.add_development_dependency 'pry'
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
@@ -47,7 +44,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rspec'
   spec.add_development_dependency 'rspec-rails'# , '~> 6.1.0'
   spec.add_development_dependency 'rubocop' #, '~> 0.51.0'
-  spec.add_development_dependency 'sqlite3', (v = ENV['SQLITE3_VERSION'].to_s.strip).empty? ? '< 2' : v # see https://github.com/rails/rails/issues/35153
+  spec.add_development_dependency 'sqlite3', *Hyperstack.version_selector('SQLITE3_VERSION', '< 2') # see https://github.com/rails/rails/issues/35153
   spec.add_development_dependency 'concurrent-ruby', '1.3.4' # not needed after rails 7.1  https://www.devgem.io/posts/resolving-the-activesupport-logger-issue-in-rails-applications-a-step-by-step-guide
 
 end

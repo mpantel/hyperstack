@@ -19,6 +19,10 @@ CONTEXT="$ROOT/tmp/cell-context"
 # mean "use the gemspec default" -- matching how the test jobs behave.
 eval "$(cd "$ROOT" && HYPERSTACK_CELL="$CELL" rake hyperstack:cell:env)"
 
+# The -n test is no longer what keeps an empty version selector out of a gemspec
+# -- Hyperstack.version_selector treats blank as unset (#78). It still matters for
+# RBENV_VERSION, whose ARG carries a real default that an empty --build-arg would
+# override with nothing; for the rest it is now belt-and-braces.
 ARGS=()
 for v in RBENV_VERSION RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
          REACT_RAILS_VERSION SQLITE3_VERSION HYPERSTACK_JS_PIPELINE; do

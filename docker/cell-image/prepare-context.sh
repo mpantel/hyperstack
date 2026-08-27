@@ -18,6 +18,12 @@ mkdir -p "$OUT/ruby"
 cp "$ROOT/HYPERSTACK_VERSION" "$OUT/" 2>/dev/null || true
 cp "$ROOT/ruby/version.rb"    "$OUT/ruby/" 2>/dev/null || true
 
+# Every gemspec `require_relative`s this one for its version selectors (#78), so
+# unlike the two above it is not optional: without it not one gemspec evaluates
+# and the bundle layer fails with a require error that says nothing about the
+# build context. Fail here instead, where the cause is in view.
+cp "$ROOT/ruby/version_selector.rb" "$OUT/ruby/"
+
 for dir in "$ROOT"/ruby/*/; do
   gem="$(basename "$dir")"
   [ -f "$dir/Gemfile" ] && [ -f "$dir/$gem.gemspec" ] || continue
