@@ -247,89 +247,33 @@ describe 'Hyperstack::Operation execution (server side)' do
   end
 end
 
-# The client-side steps below run as a single shared-session RSpec::Steps
-# sequence inside one long-lived browser.  The helpers they rely on
-# (get_round_tuit and the DontCallMe / HelloCounter modules) used to be defined
-# once via `before(:step) { on_client { ... } }`.  In this spec `on_client` is
-# aliased to `before_mount`, which only injects code into the page at *mount*
-# time, and because rspec-steps runs the whole sequence within a single example
-# the injection effectively happens just once (on the first step's mount).  The
-# definitions then have to survive in the browser for the rest of the sequence.
-#
-# If anything makes hyper-spec re-mount/reload the page mid-sequence the page is
-# replaced and the helpers are gone, so a later step blows up with
-# `undefined method 'get_round_tuit'`.  insure_page_loaded reloads whenever
-# `Opal` momentarily looks absent (a transient `evaluate_script` failure is
-# swallowed and treated as "Opal missing"), and the async `after(0.2)` timer in
-# get_round_tuit widens the window for such a transient -- hence the
-# intermittent, timing-sensitive flake.
-#
-# Fix: instead of relying on one-time mount injection, (re)define the helpers
-# immediately before *every* client evaluation.  We first run insure_page_loaded
-# (performing any pending (re)mount up front), then execute the helper
-# definitions as their own top-level script -- so get_round_tuit lands as a
-# private method on Object and the DontCallMe / HelloCounter modules are top
-# level, exactly as the operation step blocks expect.  By the time the real
-# evaluation runs, Opal is already loaded so its own insure_page_loaded is a
-# no-op and cannot wipe the freshly-defined helpers.  This covers both
-# evaluation paths used below (expect_evaluate_ruby / expect_promise blocks and
-# `expect { }.on_client_to`), since both funnel through `evaluate_ruby`.
-#
-# (Defining the helpers as a separate top-level script rather than prepending
-# their source to the evaluated expression matters: internal_evaluate_ruby wraps
-# the evaluated code in `(...).tap { ... }`, and a `def`/`module` nested inside
-# that expression is not installed on Object, so a later step block running on
-# the operation instance would not see get_round_tuit.)
-module HyperspecOperationClientHelpers
-  CLIENT_HELPERS = <<~RUBY
-    def get_round_tuit(value)
-      Promise.new.tap { |p| after(0.2) { value == :reject ? p.reject("promise rejected") : p.resolve(value) } }
-             .then { |v| value == :exception ? raise("exception raised") : v }
-    end
-    module DontCallMe
-      def called?
-        @called
-      end
-      def dont_call_me
-        @called = true
-      end
-    end
-    module HelloCounter
-      def hello_count
-        @called || 0
-      end
-      def say_hello
-        @called ||= 0
-        @called += 1
-      end
-    end
-  RUBY
-
-  module Prepended
-    # Both client-eval entry points used below (expect_evaluate_ruby /
-    # expect_promise and `expect { }.on_client_to`) funnel through
-    # `evaluate_ruby`, so that is the seam we hook.  (Note: `evaluate_ruby` is an
-    # alias of internal_evaluate_ruby, and the alias binds to the original method
-    # body -- overriding internal_evaluate_ruby would NOT be seen by callers that
-    # invoke the alias, so we must override `evaluate_ruby` itself.)
-    def evaluate_ruby(*args, &block)
-      # Perform any pending (re)mount first, then (re)define the helpers as a
-      # standalone top-level script so they are always present for the
-      # evaluation that super is about to run.
-      insure_page_loaded
-      page.execute_script(opal_compile(CLIENT_HELPERS))
-      super(*args, &block)
-    end
-  end
-
-  def self.included(base)
-    base.prepend(Prepended)
-  end
-end
-
 RSpec::Steps.steps 'Hyperstack::Operation execution (client side)', js: true do
 
-  include HyperspecOperationClientHelpers
+  before(:step) do
+    on_client do
+      def get_round_tuit(value)
+        Promise.new.tap { |p| after(0.2) { value == :reject ? p.reject("promise rejected") : p.resolve(value) } }
+               .then { |v| value == :exception ? raise("exception raised") : v }
+      end
+      module DontCallMe
+        def called?
+          @called
+        end
+        def dont_call_me
+          @called = true
+        end
+      end
+      module HelloCounter
+        def hello_count
+          @called || 0
+        end
+        def say_hello
+          @called ||= 0
+          @called += 1
+        end
+      end
+    end
+  end
 
   it "will execute some steps" do
     expect_evaluate_ruby do

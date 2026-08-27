@@ -193,13 +193,20 @@ RSpec.configure do |config|
   # The reported failure is the last attempt's, which is why this surfaced as
   # "uninitialized constant <SomeModel>" that no amount of polling resolves,
   # with the real first-attempt failure hidden behind it. See #68.
+  #
+  # The mounted buffers (#71) are restored too, and for them the snapshot is always
+  # empty: a retry starts on a page of its own, so what a previous attempt had put
+  # on the client must not be replayed into it.
   config.before(:each) do
     if defined?(@_hyperspec_private_mount_buffers)
-      @_hyperspec_private_client_code, @_hyperspec_private_html_block =
-        @_hyperspec_private_mount_buffers
+      @_hyperspec_private_client_code, @_hyperspec_private_html_block,
+        @_hyperspec_private_mounted_client_code,
+        @_hyperspec_private_mounted_html_block = @_hyperspec_private_mount_buffers
     else
       @_hyperspec_private_mount_buffers =
-        [@_hyperspec_private_client_code, @_hyperspec_private_html_block]
+        [@_hyperspec_private_client_code, @_hyperspec_private_html_block,
+         @_hyperspec_private_mounted_client_code,
+         @_hyperspec_private_mounted_html_block]
     end
   end
 

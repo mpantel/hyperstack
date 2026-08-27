@@ -84,6 +84,14 @@ module HyperSpec
       yield
       if page.instance_variable_get('@hyper_spec_mounted')
         internal_evaluate_ruby(&block)
+        # Evaluating it puts the definitions on the page that is up NOW. isomorphic
+        # promises they are on the client, not that they were on one particular
+        # page, so record them for replay into any page mounted later -- otherwise a
+        # reload mid-example silently takes them away again. This matters most in an
+        # RSpec::Steps sequence, where a `before(:step) { isomorphic { ... } }` takes
+        # the mount branch on the first step and this branch on every step after.
+        # (#71)
+        remember_mounted_client_code(add_opal_block('', block))
       else
         before_mount(&block)
       end
