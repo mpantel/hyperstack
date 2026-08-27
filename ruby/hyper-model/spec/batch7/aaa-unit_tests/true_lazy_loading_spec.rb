@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'tmpdir'
 
 # This spec tests the TRUE lazy loading optimization
 # where model files are loaded on-demand instead of during initialization
@@ -90,6 +91,38 @@ describe "ActiveRecord::Base true lazy loading" do
 
       it "returns false if model file doesn't exist" do
         expect(lazy_hash.key?('NonexistentModel')).to be_falsey
+      end
+
+      # key? is the second gate ServerDataCache.get_model consults, so it has to
+      # answer the same question the first one does: is this name a public model,
+      # or a genuinely loaded constant? It used to fall back to
+      # `Object.const_defined?`, which under Zeitwerk is true for every class in
+      # app/* -- making every one of them "public" and autoloadable by a client
+      # string. Register the constant the way Zeitwerk does and pin it. (#60)
+      it "returns false for a constant with a pending autoload" do
+        probe_loaded = false
+        Dir.mktmpdir('hyperstack-autoload-probe') do |dir|
+          file = File.join(dir, 'lazy_hash_zeitwerk_probe.rb')
+          File.write(file, "class LazyHashZeitwerkProbe; end\n")
+          Object.autoload(:LazyHashZeitwerkProbe, file)
+          begin
+            expect(Object.const_defined?('LazyHashZeitwerkProbe')).to be_truthy
+            expect(lazy_hash.key?('LazyHashZeitwerkProbe')).to be_falsey
+            probe_loaded = Object.autoload?(:LazyHashZeitwerkProbe).nil?
+          ensure
+            begin
+              Object.send(:remove_const, :LazyHashZeitwerkProbe)
+            rescue NameError
+              nil
+            end
+          end
+        end
+        expect(probe_loaded).to be false
+      end
+
+      it "returns true for a genuinely loaded constant that has no model file" do
+        stub_const('AlreadyLoadedProbeModel', Class.new)
+        expect(lazy_hash.key?('AlreadyLoadedProbeModel')).to be_truthy
       end
     end
 

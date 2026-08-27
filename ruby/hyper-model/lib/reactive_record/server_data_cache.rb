@@ -1,4 +1,5 @@
 require 'set'
+require_relative 'constant_gate'
 module ReactiveRecord
 
   # requested cache items I think is there just so prerendering with multiple components works.
@@ -114,16 +115,12 @@ module ReactiveRecord
 
         # Whether `str` names a constant that is *genuinely* loaded — defined with
         # no pending autoload. Plain `const_defined?` is unsafe under Zeitwerk
-        # (Rails 7): every class under app/* has a registered autoload and so
+        # (Rails 6.1+): every class under app/* has a registered autoload and so
         # reports as "defined", which would let a client-supplied string force
-        # the load of an arbitrary class.
+        # the load of an arbitrary class. LazyColumnsHash#key? gates on the same
+        # question, so the predicate itself lives in one place. (#60)
         def self.constant_loaded?(str)
-          return false unless const_defined?(str)
-          namespace, _sep, leaf = str.rpartition('::')
-          owner = namespace.empty? ? Object : const_get(namespace)
-          !(owner.respond_to?(:autoload?) && owner.autoload?(leaf))
-        rescue NameError
-          false
+          ConstantGate.loaded?(str)
         end
 
         def self.get_model(str)

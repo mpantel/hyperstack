@@ -1,3 +1,5 @@
+require_relative '../constant_gate'
+
 module Hyperstack
   define_setting :public_model_directories, [File.join('app','hyperstack','models'), File.join('app','models','public')]
   define_setting :public_columns_hash_lazy_loading, true
@@ -334,9 +336,18 @@ module ActiveRecord
         model_name_str = model_name.to_s
         return true if @models_by_name.key?(model_name_str)
 
-        # Check if file exists for this model
-        @file_paths.any? { |fp| fp == model_name_str.underscore } ||
-          Object.const_defined?(model_name_str)
+        # Explicitly registered by server-side code (specs add models this way).
+        return true if @loaded_models.key?(model_name_str)
+
+        # A file in a public model directory makes the name legitimate whether or
+        # not it has been loaded yet -- that is the whole point of lazy loading.
+        return true if @file_paths.any? { |fp| fp == model_name_str.underscore }
+
+        # Otherwise the name only counts if the constant is *genuinely* loaded.
+        # `Object.const_defined?` was used here, which under Zeitwerk is true for
+        # every autoloadable class in the app -- so `get_model`, which gates on
+        # this, would accept any client string and then autoload it. (#60)
+        ReactiveRecord::ConstantGate.loaded?(model_name_str)
       end
 
       def keys
