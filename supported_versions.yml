@@ -26,6 +26,11 @@
 #   global default (OPAL_VERSION) and leaving a variable out takes the gemspec's
 #   default -- which is why the cell describing today's configuration has an
 #   empty env and is a no-op.
+#   A version selector left EMPTY (`RAILS_VERSION: ""`, or a bare key with no
+#   value, which YAML reads as nil) means the same thing as omitting it: take the
+#   gemspec default. The gemspecs read these through Hyperstack.version_selector,
+#   which treats blank as unset, so neither spelling can reach Bundler as the
+#   requirement '' any more. (#78)
 #
 name: hyperstack supported configurations
 cells:
