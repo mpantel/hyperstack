@@ -73,3 +73,36 @@ RUN set -eux; \
 
 # Jobs symlink this in place of restoring the cache.
 ENV HYPERSTACK_PREBAKED_GEMS=/hyperstack/local_gems
+
+# The OTHER gems a job installs: the ones rails-hyperstack's `rake spec:prepare`
+# puts in GEM_HOME before generating the test app (#73). They are not part of any
+# bundle -- spec:prepare shells out under `Bundler.with_unbundled_env` and runs
+# plain `gem install` -- so `local_gems` above never held them and the cache
+# never could. Measured on rails61-react17, they are 284-523s of every job, most
+# of it nokogiri 1.15.6 building from source, once per job, forever.
+#
+# This image runs as `ubuntu` on rbenv's GEM_HOME, which is precisely where
+# spec:prepare looks, so installing them here makes its `gem install` calls
+# no-ops. The version list is NOT repeated here: spec_prepare_gems.rb prints the
+# commands and spec:prepare consumes the same list, so there is no second place
+# for the pins to drift (#51). It resolves the rails version from this cell's
+# freshly-installed bundle, so image and job install the same rails.
+#
+# The version selectors have to be re-exported the same way as above: this is a
+# separate RUN, and `bundle info` re-evaluates the Gemfile/gemspec.
+RUN set -eux; \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION; do \
+      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
+    done; \
+    cd /hyperstack; \
+    ruby ruby/rails-hyperstack/spec_prepare_gems.rb > /tmp/prepare-gems.sh; \
+    cat /tmp/prepare-gems.sh; \
+    sh -eux /tmp/prepare-gems.sh; \
+    rm -f /tmp/prepare-gems.sh; \
+    ruby ruby/rails-hyperstack/spec_prepare_gems.rb --verify
+
+# Jobs read this as "the image carries spec:prepare's gems". spec:prepare aborts
+# if it is set and one of them is missing, rather than quietly rebuilding
+# nokogiri for three minutes and looking like a slow success -- the same rule
+# #57 applied to a missing prebaked bundle.
+ENV HYPERSTACK_PREBAKED_SPEC_GEMS=1

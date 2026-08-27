@@ -1,6 +1,7 @@
 require "bundler/gem_tasks"
 require "rspec/core/rake_task"
 require 'pry'
+require_relative 'spec_prepare_gems'
 
 RSpec::Core::RakeTask.new(:spec)
 
@@ -11,6 +12,34 @@ RSpec::Core::RakeTask.new(:spec)
 # HYPERSTACK_JS_PIPELINE overrides both. (#51)
 def hyperstack_js_pipeline
   ENV['HYPERSTACK_JS_PIPELINE'] || (hyperstack_rails_major >= 7 ? 'esbuild' : 'webpacker')
+end
+
+# Put the gems `spec:prepare` needs into GEM_HOME -- skipping every one that is
+# already there. On a cell image they are ALL already there (#73): the image
+# build ran this same list (docker/cell-image/Dockerfile), so each call becomes a
+# no-op and the ~200s nokogiri source build disappears from every rails61 job.
+#
+# HYPERSTACK_PREBAKED_SPEC_GEMS is the image declaring that it carries them. If
+# it says so and one is missing, stop: #57's rule for the prebaked bundle applies
+# here too -- a broken or stale image has to fail loudly, not masquerade as a
+# slow success while it silently recompiles nokogiri for three minutes.
+def install_spec_prepare_gems(rails_version)
+  missing = SpecPrepareGems.missing(rails_version)
+
+  if !ENV['HYPERSTACK_PREBAKED_SPEC_GEMS'].to_s.empty? && missing.any?
+    abort "image declares HYPERSTACK_PREBAKED_SPEC_GEMS but does not carry " \
+          "#{missing.map { |n, v| [n, v].compact.join(' ') }.join(', ')} -- " \
+          'rebuild the cell image (docker/cell-image/build.sh) rather than ' \
+          'installing these per job'
+  end
+
+  return if missing.empty?
+
+  missing.each { |name, version| sh(SpecPrepareGems.install_command(name, version)) }
+  # Only after an install: the surplus copies exist only because `gem install
+  # rails` just dragged them in, so on a prebaked image there is nothing to
+  # clean up and running these would just print "not installed" twice.
+  SpecPrepareGems.surplus(rails_version).each { |name, req| sh(SpecPrepareGems.uninstall_command(name, req)) }
 end
 
 def hyperstack_rails_major
@@ -32,14 +61,9 @@ namespace :spec do
       sh('rm -rf test_app')
       Bundler.with_unbundled_env do
         # sh("rails _#{rails_version}_ new test_app -T")
-        sh("gem install zeitwerk -v 2.6.18") if rails_version < '7'
-        sh("gem install nokogiri -v 1.15.6") if rails_version < '7'
-        sh("gem install net-imap -v 0.4.18") if rails_version < '7'
-        sh("gem install concurrent-ruby -v 1.3.4") if rails_version < '7'
-        sh("gem install foreman")
-        sh("gem install rails --version=#{rails_version}")
-        sh("gem uninstall net-imap --version '> 0.4.18'") if rails_version < '7'
-        sh("gem uninstall concurrent-ruby --version '> 1.3.4'") if rails_version < '7'
+        # The pinned list lives in spec_prepare_gems.rb, because the cell image
+        # bakes exactly these in and neither copy may drift from the other (#73).
+        install_spec_prepare_gems(rails_version)
         # --skip-javascript on Rails 7+: do not scaffold importmap/jsbundling,
         # which creates its own app/javascript entry point. Hyperstack serves JS
         # via sprockets, and the esbuild strategy writes its own

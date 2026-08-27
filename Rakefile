@@ -116,6 +116,19 @@ namespace :hyperstack do
       # gemspec defaults.
       (cell['env'] || {}).each { |k, v| puts "export #{k}=#{v.to_s.inspect}" }
     end
+
+    desc "Print the `gem install` lines rails-hyperstack's spec:prepare needs (baked into the cell image, #73)"
+    task :prepare_gems do
+      # The list itself lives next to the task that consumes it, so the image
+      # build and `rake spec:prepare` read one definition and cannot disagree
+      # about versions -- the drift rule #51 set for the matrix. The image build
+      # runs that file directly (docker/cell-image/Dockerfile) to keep the root
+      # Rakefile out of the docker context, where it would invalidate the
+      # bundle layer on every unrelated edit; this task is the same output for
+      # anyone asking from the repo.
+      require_relative 'ruby/rails-hyperstack/spec_prepare_gems'
+      puts SpecPrepareGems.install_commands(SpecPrepareGems.resolved_rails_version)
+    end
   end
 
   namespace :gem do
