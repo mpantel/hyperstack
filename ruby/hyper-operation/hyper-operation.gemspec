@@ -32,7 +32,18 @@ Gem::Specification.new do |spec|
   # spec.add_development_dependency 'mysql2'
   spec.add_development_dependency 'pg'
   # spec.add_development_dependency 'opal-browser', '~> 0.2.0'
-  spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
+  # Opal reaches sprockets through opal-rails by default; a cell that sets
+  # OPAL_SPROCKETS_VERSION swaps in opal-sprockets, the only route on Rails 8
+  # (opal-rails 2.x is capped at `rails < 7.3`). See supported_versions.yml. (#20)
+  # A BLANK selector means unset: '' is truthy in Ruby, and the cell image
+  # exposes every unselected ARG as an empty env var, which would otherwise
+  # become the requirement "" -> "Illformed requirement". (#78 does this for
+  # every selector.)
+  if (opal_sprockets_version = ENV['OPAL_SPROCKETS_VERSION'].to_s.strip) != ''
+    spec.add_development_dependency 'opal-sprockets', opal_sprockets_version
+  else
+    spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
+  end
   spec.add_development_dependency 'pry-rescue'
   spec.add_development_dependency 'pry-stack_explorer'
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
@@ -46,7 +57,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rspec-steps', '~> 2.1.1'
   spec.add_development_dependency 'rspec-expectations'
   spec.add_development_dependency 'rspec-wait'
-  spec.add_development_dependency 'sqlite3', '< 2' # see https://github.com/rails/rails/issues/35153
+  spec.add_development_dependency 'sqlite3', (v = ENV['SQLITE3_VERSION'].to_s.strip).empty? ? '< 2' : v # see https://github.com/rails/rails/issues/35153
   spec.add_development_dependency 'timecop', '~> 0.9.0'
   spec.add_development_dependency 'concurrent-ruby', '1.3.4' # not needed after rails 7.1  https://www.devgem.io/posts/resolving-the-activesupport-logger-issue-in-rails-applications-a-step-by-step-guide
 

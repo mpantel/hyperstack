@@ -90,7 +90,19 @@ module Rails
 
       def check_javascript_link_directory
         manifest_js_file = Rails.root.join("app", "assets", "config", "manifest.js")
-        return unless File.exist? manifest_js_file
+        # An app generated with `rails new --skip-asset-pipeline` (what Rails 8
+        # needs, to keep Propshaft out -- see rails-hyperstack's Rakefile and #20)
+        # has no manifest at all, and sprockets-rails refuses to boot without one.
+        # Write it rather than returning, which used to leave such an app with no
+        # sprockets JS at all.
+        unless File.exist? manifest_js_file
+          create_file manifest_js_file,
+                      "//= link_directory ../javascripts .js\n"\
+                      "//= link_directory ../stylesheets .css\n"\
+                      "//= link_tree ../images\n",
+                      verbose: false
+          return
+        end
         return unless File.readlines(manifest_js_file).grep(/javascripts \.js/).empty?
 
         append_file manifest_js_file, "//= link_directory ../javascripts .js\n", verbose: false

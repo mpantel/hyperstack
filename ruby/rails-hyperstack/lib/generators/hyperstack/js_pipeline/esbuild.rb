@@ -91,7 +91,17 @@ module Rails
       end
 
       def add_builds_asset_paths
-        append_file 'config/initializers/assets.rb', verbose: false do
+        # `rails new --skip-asset-pipeline` (the Rails 8 route, #20) ships no
+        # config/initializers/assets.rb, and append_file on a missing file raises
+        # -- aborting the generator mid-run, before app/hyperstack is scaffolded,
+        # while still exiting 0. Create it first.
+        assets_initializer = 'config/initializers/assets.rb'
+        unless File.exist?(File.join(destination_root, assets_initializer))
+          create_file assets_initializer,
+                      "# Be sure to restart your server when you modify this file.\n",
+                      verbose: false
+        end
+        append_file assets_initializer, verbose: false do
           <<-RUBY
 # esbuild output (#19): serve app/assets/builds via sprockets, and put it on the
 # Opal load path so the prerender bundle's `require 'react_server_runtime'`

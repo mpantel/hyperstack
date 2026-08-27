@@ -11,3 +11,9 @@ gem 'mutex_m'
 gem 'drb'
 gem 'base64'
 gem 'logger'
+
+# opal-rails pulls sprockets-rails in; the opal-sprockets route (the only one
+# Rails 8 can take -- see supported_versions.yml) does not, and Rails 7+ no
+# longer ships it with the framework. The test_app serves the Opal bundle
+# through sprockets, so declare it. (#20)
+gem 'sprockets-rails'

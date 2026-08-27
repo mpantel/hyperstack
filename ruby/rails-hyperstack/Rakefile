@@ -76,6 +76,16 @@ namespace :spec do
         # Not passed on Rails < 7, where there is no such scaffolding and the
         # Webpacker path expects the default layout. (#51)
         skip_js = hyperstack_js_pipeline == 'webpacker' ? '' : ' --skip-javascript'
+        # --skip-asset-pipeline on Rails 8: `rails new` defaults to Propshaft
+        # there, and `--asset-pipeline=sprockets` is a no-op (it still writes
+        # `gem "propshaft"` and no manifest.js). react-rails' railtie calls
+        # `Rails.application.assets.version`, which Propshaft::Assembly does not
+        # implement, so the app dies at boot with `undefined method 'version' for
+        # an instance of Propshaft::Assembly`. Hyperstack serves the Opal bundle
+        # through sprockets, so add no asset gem here and declare sprockets-rails
+        # explicitly below. Not passed on Rails < 8, where sprockets IS the
+        # default and the four older cells depend on it. (#20)
+        skip_assets = hyperstack_rails_major >= 8 ? ' --skip-asset-pipeline' : ''
         # Ruby 3.4 + Rails 6.1: activesupport's LoggerThreadSafeLevel reads
         # ::Logger at load time without requiring it, so whether `rails new`
         # boots at all depends on what is in GEM_HOME. It used to get away with
@@ -87,14 +97,39 @@ namespace :spec do
         # generator command itself -- which runs before that file exists.
         # Verified against a warmed image: exit 1 without, exit 0 with.
         rubyopt = "-rlogger #{ENV['RUBYOPT']}".strip
-        sh({ 'RUBYOPT' => rubyopt }, "rails _#{rails_version}_ new test_app -T#{skip_js}")
+        sh({ 'RUBYOPT' => rubyopt }, "rails _#{rails_version}_ new test_app -T#{skip_js}#{skip_assets}")
       end
       Bundler.with_unbundled_env do
         Dir.chdir('test_app') do
           sh('cat ../gems.rb >> Gemfile')
+          if hyperstack_rails_major >= 8
+            # --skip-asset-pipeline above added no asset gem, so ask for
+            # sprockets by name...
+            sh("echo 'gem \"sprockets-rails\"' >> Gemfile")
+            sh("echo 'gem \"sprockets\", \"~> 4.0\"' >> Gemfile")
+            # ...and write the manifest it insists on. sprockets-rails raises
+            # "Expected to find a manifest file in app/assets/config/manifest.js"
+            # at BOOT, which happens well before `rails g hyperstack:install`
+            # could create one. (#20)
+            sh('mkdir -p app/assets/config app/assets/javascripts')
+            sh(%q{printf '//= link_directory ../javascripts .js\n//= link_directory ../stylesheets .css\n//= link_tree ../images\n' > app/assets/config/manifest.js})
+            # Hyperstack's data-sync transport is action_cable, and Rails 8
+            # rejects cross-origin websocket connections by default. On CI the
+            # browser's Origin differs from the Capybara server host, so /cable is
+            # refused: the create broadcast never reaches the client and
+            # `Sample.count` stays stale -- a failure that does NOT reproduce in a
+            # `--network host` run locally. Allow it in the generated app's test
+            # env only; the install generator must not weaken real apps. (#20)
+            sh(%q{ruby -e 'f="config/environments/test.rb"; s=File.read(f); s=s.sub(/\nend\s*\z/, "\n  config.action_cable.disable_request_forgery_protection = true\nend\n") unless s.include?("disable_request_forgery_protection"); File.write(f, s)'})
+          end
           sh("echo 'gem \"opal\", \"#{opal_version}\"' >> Gemfile")
-          sh("echo 'gem \"net-imap\", \"0.4.18\"' >> Gemfile")
-          sh("echo 'gem \"concurrent-ruby\", \"1.3.4\"' >> Gemfile") # if rails_version < '7'
+          if hyperstack_rails_major < 8
+            # Both are Rails 6.1/Ruby 3.4-era pins (see the Logger note below).
+            # Rails 8 needs neither, and an exact net-imap 0.4.18 there is just an
+            # old gem held down for no reason. (#20)
+            sh("echo 'gem \"net-imap\", \"0.4.18\"' >> Gemfile")
+            sh("echo 'gem \"concurrent-ruby\", \"1.3.4\"' >> Gemfile") # if rails_version < '7'
+          end
           # react-rails (< 2.7) is incompatible with connection_pool >= 3.0
           sh("echo 'gem \"connection_pool\", \"< 3.0\"' >> Gemfile")
           # Ruby 3.4 demotes these from default gems to bundled gems, but Rails

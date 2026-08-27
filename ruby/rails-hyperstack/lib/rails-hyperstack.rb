@@ -17,7 +17,13 @@ require 'generators/hyper/generator_base'
 require 'generators/hyper/component_generator'
 require 'generators/hyper/router_generator'
 begin
-  require 'opal-rails'
+  # opal-rails on Rails < 7.3, opal-sprockets on Rails 8 -- see
+  # hyperstack-config.rb for why both are supported. (#20)
+  begin
+    require 'opal-rails'
+  rescue LoadError
+    require 'opal-sprockets'
+  end
   require 'hyper-model'
   require 'hyper-router'
   # require 'mini_racer'

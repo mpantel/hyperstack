@@ -39,7 +39,18 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   spec.add_development_dependency 'bundler'
   spec.add_development_dependency 'hyper-component', HyperSpec::VERSION
   # spec.add_development_dependency 'mini_racer'#, '< 0.8.0' # something is busted with 0.4.0 and its libv8-node dependency
-  spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
+  # Opal reaches sprockets through opal-rails by default; a cell that sets
+  # OPAL_SPROCKETS_VERSION swaps in opal-sprockets, the only route on Rails 8
+  # (opal-rails 2.x is capped at `rails < 7.3`). See supported_versions.yml. (#20)
+  # A BLANK selector means unset: '' is truthy in Ruby, and the cell image
+  # exposes every unselected ARG as an empty env var, which would otherwise
+  # become the requirement "" -> "Illformed requirement". (#78 does this for
+  # every selector.)
+  if (opal_sprockets_version = ENV['OPAL_SPROCKETS_VERSION'].to_s.strip) != ''
+    spec.add_development_dependency 'opal-sprockets', opal_sprockets_version
+  else
+    spec.add_development_dependency 'opal-rails', *(ENV['OPAL_RAILS_VERSION'] ? [ENV['OPAL_RAILS_VERSION']] : ['~> 2.0'])
+  end
   spec.add_development_dependency 'pry-rescue'
   spec.add_development_dependency 'pry-stack_explorer'
   spec.add_development_dependency 'puma'# , '<= 5.4.0'

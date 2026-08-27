@@ -48,11 +48,26 @@ else
   # because promises and features in opal-browsers are used everywhere we load them here
   require 'opal-browser'
 
-  # We need opal-rails to be loaded for Gem code to be properly included by sprockets.
-  begin
-    require 'opal-rails' if defined? Rails
-  rescue LoadError
-    puts "****** WARNING: To use Hyperstack with Rails you must include the 'opal-rails' gem in your gem file."
+  # We need the Opal sprockets processor loaded for Gem code to be properly
+  # included by sprockets (`//= require hyperstack-loader`).
+  #
+  # opal-rails is that processor plus the Rails wiring, and stays the default.
+  # It is capped at `rails < 7.3` though, so a Rails 8 app cannot have it: those
+  # bundles carry opal-sprockets alone (selected by OPAL_SPROCKETS_VERSION -- see
+  # supported_versions.yml), and the wiring opal-rails' engine provided is ported
+  # into hyperstack/rail_tie, where it activates only on this branch. (#20, #37)
+  if defined? Rails
+    begin
+      require 'opal-rails'
+    rescue LoadError
+      begin
+        require 'sprockets/railtie'
+        require 'opal-sprockets'
+      rescue LoadError
+        puts "****** WARNING: To use Hyperstack with Rails you must include the "\
+             "'opal-rails' gem (Rails < 7.3) or the 'opal-sprockets' gem (Rails 8) in your gem file."
+      end
+    end
   end
   require 'hyperstack/config_settings'
   require 'hyperstack/context'
