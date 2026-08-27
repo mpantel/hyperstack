@@ -1,5 +1,11 @@
 Rails.application.routes.draw do
-  get '(*foo)' => 'test#app'
+  # A client-side-router app wants a catch-all so deep links survive a refresh,
+  # but on Rails 8 hyper-spec registers its harness route with `routes.append`,
+  # which lands AFTER this one: without the constraint /hyper_spec_test/:id ends
+  # up here and every `mount` silently renders App instead of the component under
+  # test. (#20 -- see hyper-spec's rails_controller_helpers.rb)
+  get '(*foo)' => 'test#app',
+      constraints: ->(request) { !request.path.start_with?('/hyper_spec_test/') }
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
 

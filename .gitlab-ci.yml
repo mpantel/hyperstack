@@ -220,7 +220,7 @@ stages:
   # `rake hyperstack:matrix:check` fails if this list and the table disagree. (#51)
   parallel:
     matrix:
-      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16]
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16, rails80-react19]
 
   before_script:
     # - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
@@ -332,7 +332,7 @@ stages:
   # `rake hyperstack:matrix:check` fails if this list and the table disagree. (#51)
   parallel:
     matrix:
-      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16]
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16, rails80-react19]
 
 #  language: ruby
 #  cache:
@@ -583,7 +583,7 @@ build-cell-image:
     CELL_IMAGE_PREFIX: $CI_REGISTRY_IMAGE/cell
   parallel:
     matrix:
-      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16]
+      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails61-react19, rails72-react16, rails80-react19]
   before_script:
     - apk add --no-cache bash git ruby ruby-rake
     - docker info    # fail fast and legibly if the socket is not mounted

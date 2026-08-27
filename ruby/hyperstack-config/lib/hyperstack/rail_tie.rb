@@ -93,6 +93,46 @@ module Hyperstack
       end
     end
 
+    # --- Opal sprockets wiring, ported from opal-rails 2.x's Engine (#20, #37) ---
+    #
+    # Only for bundles that have opal-sprockets WITHOUT opal-rails, which is what
+    # a Rails 8 app must be (opal-rails 2.x is capped at `rails < 7.3`; 3.0
+    # replaces the sprockets processor with an app/opal entrypoint build). When
+    # opal-rails IS present its own engine does all of this, and doing it twice
+    # would fight over the same config, so this is skipped.
+    #
+    # It reproduces exactly what that engine gave us: config.opal (the test_apps
+    # and generated apps set config.opal.* in application.rb), each gem's Opal
+    # load path appended to the asset pipeline so `//= require hyperstack-loader`
+    # resolves, and config.opal.* pushed through to Opal::Config.
+    unless defined?(::Opal::Rails::Engine)
+      config.opal = ActiveSupport::OrderedOptions.new
+      config.opal.dynamic_require_severity = :ignore
+
+      # Keep the assets dir out of the eager/autoload paths, or Zeitwerk loads
+      # its .rb files (Opal sources) as Ruby constants. opal-rails' Engine did
+      # this by reading config.eager_load_paths in the class body; that reader
+      # exists on a Rails::Engine config but not on a Railtie's, so the trim runs
+      # on the app config instead.
+      config.before_initialize do |app|
+        app.config.eager_load_paths =
+          app.config.eager_load_paths.dup - Dir["#{app.root}/app/{assets,views}"]
+      end
+
+      # Must run after sprockets-rails' :append_assets_path, which is what
+      # populates config.assets.paths.
+      initializer 'hyperstack.opal.append_assets_path', after: :append_assets_path, group: :all do |app|
+        app.config.assets.paths.unshift(*Opal.paths) if app.config.respond_to?(:assets)
+      end
+
+      config.after_initialize do |app|
+        app.config.opal.each_pair do |key, value|
+          setter = "#{key}="
+          Opal::Config.send(setter, value) if Opal::Config.respond_to?(setter)
+        end
+      end
+    end
+
     # note in case of problems with eager load paths have a look at
     # https://github.com/opal/opal-rails/blob/master/lib/opal/rails/engine.rb
     config.hyperstack = Options.new

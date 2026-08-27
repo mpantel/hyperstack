@@ -8,7 +8,14 @@ require File.expand_path('../boot', __FILE__)
 Bundler.require(*Rails.groups(assets: %w(development test)))
 require 'opal'
 require 'opal-jquery'
-require 'opal-rails'
+# opal-rails on Rails < 7.3, opal-sprockets on Rails 8 (opal-rails 2.x is
+# capped at `rails < 7.3`). Either one registers the sprockets Opal processor;
+# the Rails wiring opal-rails' engine adds is in hyperstack/rail_tie. (#20)
+begin
+  require 'opal-rails'
+rescue LoadError
+  require 'opal-sprockets'
+end
 require 'hyper-router'
 require 'hyper-component'
 

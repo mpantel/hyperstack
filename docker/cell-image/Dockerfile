@@ -22,7 +22,12 @@ ARG RBENV_VERSION=3.4.9
 ARG RAILS_VERSION=""
 ARG OPAL_VERSION=""
 ARG OPAL_RAILS_VERSION=""
+# Set instead of OPAL_RAILS_VERSION by a cell that reaches sprockets through
+# opal-sprockets directly -- opal-rails 2.x cannot resolve on Rails 8. (#20)
+ARG OPAL_SPROCKETS_VERSION=""
 ARG REACT_RAILS_VERSION=""
+# Rails 8 needs sqlite3 2.x; the gemspecs pin `< 2` for the Rails 6.1 cells.
+ARG SQLITE3_VERSION=""
 # Which JS pipeline this cell scaffolds with. Unlike the version selectors this
 # one is a plain string with a safe default (spec_prepare_gems.rb derives it from
 # the Rails version when unset), so it can be exported unconditionally. The
@@ -69,10 +74,10 @@ RUN git init -q . && git config user.email ci@hyperstack && git config user.name
 # One `local_gems` shared by every gem, exactly as CI does it
 # (`bundle config set --local path ../../local_gems`).
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION; do \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION REACT_RAILS_VERSION SQLITE3_VERSION; do \
       eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
     done; \
-    env | grep -E '^(RBENV|RAILS|OPAL|REACT)' || echo 'no version selectors set (gemspec defaults)'; \
+    env | grep -E '^(RBENV|RAILS|OPAL|REACT|SQLITE3)' || echo 'no version selectors set (gemspec defaults)'; \
     gem install bundler -v '~> 4.0'; \
     for gem in ${HYPERSTACK_COMPONENTS}; do \
       [ -f "ruby/$gem/Gemfile" ] || continue; \
@@ -103,7 +108,8 @@ ENV HYPERSTACK_PREBAKED_GEMS=/hyperstack/local_gems
 # The version selectors have to be re-exported the same way as above: this is a
 # separate RUN, and `bundle info` re-evaluates the Gemfile/gemspec.
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION; do \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
+             REACT_RAILS_VERSION SQLITE3_VERSION; do \
       eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
     done; \
     cd /hyperstack; \
@@ -130,7 +136,8 @@ ENV HYPERSTACK_PREBAKED_SPEC_GEMS=1
 ENV HYPERSTACK_PREBAKED_YARN_CACHE=/hyperstack/yarn-cache
 COPY --chown=ubuntu:ubuntu docker /hyperstack/docker
 RUN set -eux; \
-    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION HYPERSTACK_JS_PIPELINE; do \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
+             REACT_RAILS_VERSION SQLITE3_VERSION HYPERSTACK_JS_PIPELINE; do \
       eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
     done; \
     YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE" \

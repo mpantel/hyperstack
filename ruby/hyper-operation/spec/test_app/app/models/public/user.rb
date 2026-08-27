@@ -41,7 +41,17 @@ class User < ActiveRecord::Base
 
   composed_of :data, :class_name => 'TestData', :allow_nil => true, :mapping => [['data_string', 'string'], ['data_times', 'times']]
 
-  enum test_enum: [:yes, :no]
+  # Rails 7 introduced the positional form `enum :name, values` and Rails 8
+  # removed the keyword form, which now raises ArgumentError at class-definition
+  # time -- taking this whole fixture (and every spec that touches it) with it.
+  # Isomorphic-safe: the client-side (ReactiveRecord) enum ignores its arguments,
+  # so only the server-side signature matters, and the Rails constant is only
+  # reached off-client. (#20)
+  if RUBY_ENGINE == 'opal' || ::Rails::VERSION::MAJOR < 7
+    enum test_enum: [:yes, :no]
+  else
+    enum :test_enum, [:yes, :no]
+  end
 
   def name
     "#{first_name} #{last_name}"

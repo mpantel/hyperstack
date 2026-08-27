@@ -123,3 +123,44 @@ cells:
       HYPERSTACK_REACT_SOURCE: "npm"
       REACT_NPM_VERSION: "~19.2.0"
       HYPERSTACK_JS_PIPELINE: esbuild
+
+  # The Rails 8 / Ruby 4 corner, and the first cell to move THREE axes at once --
+  # so unlike the cells above it is not a single-variable experiment. It exists
+  # because that is the combination the rails-8.0 branch line was built and
+  # released against (`backup/rails-8.0` declares exactly this cell); folding it
+  # into the matrix is what lets one gem serve that line instead of a separate
+  # branch. (#20, #15, #51)
+  #
+  # It is rails61-react19 above plus Ruby 4 and Rails 8: the React axis is reached
+  # exactly the same way (HYPERSTACK_REACT_SOURCE=npm), so React 19 is not a third
+  # thing being proved here. What IS new and selected, not inferred:
+  #
+  # * Ruby 4.0.5 via RBENV_VERSION. base24:yjit already ships it (it is that
+  #   image's default ruby), so no infrastructure change is needed -- but the
+  #   global RBENV_VERSION in .gitlab-ci.yml is 3.4.9, and only a cell's own env
+  #   can move it, which is why it is spelled out here. (#15)
+  # * Opal reaches sprockets through opal-sprockets rather than opal-rails:
+  #   opal-rails 2.x is hard-capped at `rails < 7.3` so it cannot resolve at all
+  #   on Rails 8, and opal-rails 3.0 replaces the sprockets processor with an
+  #   app/opal entrypoint build (a separate change, #37). Setting
+  #   OPAL_SPROCKETS_VERSION is what swaps the dependency; the Rails wiring
+  #   opal-rails' engine used to provide is ported into hyperstack/rail_tie and
+  #   activates only when opal-rails is absent. (#20)
+  # * SQLITE3_VERSION, because Rails 8's SQLite3 adapter needs sqlite3 2.x and the
+  #   gemspecs pin `< 2` for the Rails 6.1 cells, which cannot use it.
+  - id: rails80-react19
+    ruby:        "4.0"
+    rails:       "8.0"
+    opal:        "1.8"
+    react_rails: "3.3"       # for react_ujs; React itself comes from npm
+    pipeline:    sprockets   # Opal assets via opal-sprockets; React via esbuild
+    react:       "19.2"      # derived: npm react, pinned by REACT_NPM_VERSION
+    env:
+      RBENV_VERSION: "4.0.5"
+      RAILS_VERSION: "~> 8.0.0"
+      OPAL_SPROCKETS_VERSION: "~> 1.0"
+      SQLITE3_VERSION: ">= 2.1"
+      REACT_RAILS_VERSION: "~> 3.3"
+      HYPERSTACK_REACT_SOURCE: "npm"
+      REACT_NPM_VERSION: "~19.2.0"
+      HYPERSTACK_JS_PIPELINE: esbuild
