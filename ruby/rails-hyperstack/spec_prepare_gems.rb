@@ -86,6 +86,33 @@ module SpecPrepareGems
     system("#{query} > /dev/null 2>&1")
   end
 
+  # Gems Ruby 3.4 demoted from default gems to bundled gems, which Rails 6.1.7.x
+  # (activesupport) still requires at boot. Under `bundle exec`, bundler drops
+  # default gems that are not in the Gemfile from the load path, so without these
+  # the generated app dies with "cannot load such file -- bigdecimal". See #11.
+  #
+  # Shared because the cell image generates a throwaway app of its own to warm
+  # GEM_HOME and the yarn cache (#75), and that app has to boot for the same
+  # reason this one does.
+  def app_bundled_gems
+    %w[bigdecimal mutex_m drb base64 logger]
+  end
+
+  # Which JavaScript pipeline the generated app is scaffolded with: Webpacker for
+  # Rails < 7, esbuild + jsbundling for Rails >= 7, HYPERSTACK_JS_PIPELINE
+  # overriding both. Mirrors the generator's own choice (see
+  # generators/hyperstack/install_generator_base.rb #js_pipeline_name). (#51)
+  #
+  # Here rather than in the Rakefile because the image build has to make the same
+  # call -- it decides whether the warm-up app is scaffolded with
+  # `--skip-javascript` and whether `webpacker:install` is what fills the yarn
+  # cache (#75).
+  def js_pipeline(rails_version)
+    return ENV['HYPERSTACK_JS_PIPELINE'] unless ENV['HYPERSTACK_JS_PIPELINE'].to_s.empty?
+
+    legacy_rails?(rails_version) ? 'webpacker' : 'esbuild'
+  end
+
   # The version this cell's bundle actually resolved -- exactly how
   # `spec:prepare` picks it -- so the image and the job install the same rails
   # rather than the image installing whatever the cell's requirement floats to.
@@ -108,8 +135,11 @@ end
 # Run directly, this is the cell image build's interface (the root Rakefile's
 # `hyperstack:cell:prepare_gems` prints the same thing):
 #
-#   ruby spec_prepare_gems.rb            the shell to run
-#   ruby spec_prepare_gems.rb --verify   exit non-zero unless all of it landed
+#   ruby spec_prepare_gems.rb                     the shell to run
+#   ruby spec_prepare_gems.rb --verify            exit non-zero unless all of it landed
+#   ruby spec_prepare_gems.rb --rails-version     the resolved rails version
+#   ruby spec_prepare_gems.rb --js-pipeline       webpacker | esbuild, for this cell
+#   ruby spec_prepare_gems.rb --app-bundled-gems  what the generated app must declare
 #
 # --verify is what earns the image the right to set HYPERSTACK_PREBAKED_SPEC_GEMS:
 # without it a silently failed install would ship an image that promises these
@@ -117,7 +147,13 @@ end
 if $PROGRAM_NAME == __FILE__
   rails_version = SpecPrepareGems.resolved_rails_version
 
-  if ARGV.include?('--verify')
+  if ARGV.include?('--rails-version')
+    puts rails_version
+  elsif ARGV.include?('--js-pipeline')
+    puts SpecPrepareGems.js_pipeline(rails_version)
+  elsif ARGV.include?('--app-bundled-gems')
+    puts SpecPrepareGems.app_bundled_gems
+  elsif ARGV.include?('--verify')
     missing = SpecPrepareGems.missing(rails_version)
     unless missing.empty?
       warn "spec:prepare gems missing after install: " \

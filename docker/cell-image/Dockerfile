@@ -23,6 +23,12 @@ ARG RAILS_VERSION=""
 ARG OPAL_VERSION=""
 ARG OPAL_RAILS_VERSION=""
 ARG REACT_RAILS_VERSION=""
+# Which JS pipeline this cell scaffolds with. Unlike the version selectors this
+# one is a plain string with a safe default (spec_prepare_gems.rb derives it from
+# the Rails version when unset), so it can be exported unconditionally. The
+# warm-up layer needs it to know whether `webpacker:install` is what fills the
+# yarn cache. (#75)
+ARG HYPERSTACK_JS_PIPELINE=""
 # The gems CI actually bundles, passed in from .gitlab-ci.yml's COMPONENT values
 # by build.sh. Not "every directory with a Gemfile": hyper-console has one but is
 # never tested, and its Gemfile has multiple global sources, which Bundler 4
@@ -47,7 +53,13 @@ WORKDIR /hyperstack
 
 # Only the dependency-defining files (see prepare-context.sh). Copying the whole
 # repo would invalidate this layer -- and the bundle below -- on every commit.
-COPY --chown=ubuntu:ubuntu . /hyperstack/
+#
+# Deliberately NOT `COPY . /hyperstack/`: the context also carries the warm-up
+# script (#75), which is a build *procedure*, not a dependency. Copying it here
+# would put it in the same layer as the Gemfiles and make every edit to it redo
+# the ~370s bundle below. It gets its own COPY, after the expensive layers.
+COPY --chown=ubuntu:ubuntu HYPERSTACK_VERSION /hyperstack/
+COPY --chown=ubuntu:ubuntu ruby /hyperstack/ruby
 
 # The gemspecs call `git ls-files` for spec.files. Without a repo that errors and
 # the gemspec fails to evaluate, so give it an empty one: spec.files is
@@ -106,3 +118,21 @@ RUN set -eux; \
 # nokogiri for three minutes and looking like a slow success -- the same rule
 # #57 applied to a missing prebaked bundle.
 ENV HYPERSTACK_PREBAKED_SPEC_GEMS=1
+
+# Everything the generated app installs *implicitly* -- its own ~76-gem bundle
+# into GEM_HOME, and (Webpacker cells) the npm tree webpacker:install downloads.
+# warm-app.sh generates a throwaway app exactly as spec:prepare will, lets it
+# install, then deletes the app and keeps what it left behind. ~95s off every
+# rails61 job; see the table in that script. (#75)
+#
+# HYPERSTACK_JS_PIPELINE joins the export dance here because warm-app.sh asks
+# spec_prepare_gems.rb which pipeline this cell is, and that reads the variable.
+ENV HYPERSTACK_PREBAKED_YARN_CACHE=/hyperstack/yarn-cache
+COPY --chown=ubuntu:ubuntu docker /hyperstack/docker
+RUN set -eux; \
+    for v in RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION HYPERSTACK_JS_PIPELINE; do \
+      eval "val=\${$v:-}"; [ -n "$val" ] && export "$v=$val" || unset "$v"; \
+    done; \
+    YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE" \
+      bash /hyperstack/docker/cell-image/warm-app.sh; \
+    du -sh /hyperstack/yarn-cache

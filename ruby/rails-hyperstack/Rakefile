@@ -10,8 +10,11 @@ RSpec::Core::RakeTask.new(:spec)
 # #js_pipeline_name) so the harness and the generator can never disagree:
 # Webpacker for Rails < 7, esbuild + jsbundling for Rails >= 7, and
 # HYPERSTACK_JS_PIPELINE overrides both. (#51)
+#
+# The decision itself lives in spec_prepare_gems.rb, because the cell image build
+# has to make the same one when it scaffolds its warm-up app (#75).
 def hyperstack_js_pipeline
-  ENV['HYPERSTACK_JS_PIPELINE'] || (hyperstack_rails_major >= 7 ? 'esbuild' : 'webpacker')
+  SpecPrepareGems.js_pipeline(hyperstack_rails_major)
 end
 
 # Put the gems `spec:prepare` needs into GEM_HOME -- skipping every one that is
@@ -73,7 +76,18 @@ namespace :spec do
         # Not passed on Rails < 7, where there is no such scaffolding and the
         # Webpacker path expects the default layout. (#51)
         skip_js = hyperstack_js_pipeline == 'webpacker' ? '' : ' --skip-javascript'
-        sh("rails _#{rails_version}_ new test_app -T#{skip_js}")
+        # Ruby 3.4 + Rails 6.1: activesupport's LoggerThreadSafeLevel reads
+        # ::Logger at load time without requiring it, so whether `rails new`
+        # boots at all depends on what is in GEM_HOME. It used to get away with
+        # it because `logger` was only ever the stdlib copy; now that the cell
+        # image's warm-up app declares it (#75) there is a `logger` GEM there
+        # too, rubygems defers it, and the generator dies with
+        #   uninitialized constant ActiveSupport::LoggerThreadSafeLevel::Logger
+        # This is the same fix config/boot.rb gets below, applied to the
+        # generator command itself -- which runs before that file exists.
+        # Verified against a warmed image: exit 1 without, exit 0 with.
+        rubyopt = "-rlogger #{ENV['RUBYOPT']}".strip
+        sh({ 'RUBYOPT' => rubyopt }, "rails _#{rails_version}_ new test_app -T#{skip_js}")
       end
       Bundler.with_unbundled_env do
         Dir.chdir('test_app') do
@@ -88,11 +102,12 @@ namespace :spec do
           # exec` bundler drops default gems not in the Gemfile from the load
           # path, so without these the app fails with "cannot load such file --
           # bigdecimal". Declare them explicitly. See #11 (3.3 -> 3.4 bump).
-          sh("echo 'gem \"bigdecimal\"' >> Gemfile")
-          sh("echo 'gem \"mutex_m\"' >> Gemfile")
-          sh("echo 'gem \"drb\"' >> Gemfile")
-          sh("echo 'gem \"base64\"' >> Gemfile")
-          sh("echo 'gem \"logger\"' >> Gemfile")
+          #
+          # The list is in spec_prepare_gems.rb: the image's warm-up app needs
+          # the same declarations to boot, and two copies would drift (#75).
+          SpecPrepareGems.app_bundled_gems.each do |gem_name|
+            sh("echo 'gem \"#{gem_name}\"' >> Gemfile")
+          end
           # Rails 6.1 + Ruby 3.x: active_support/logger references ::Logger before
           # it is required -> "uninitialized constant LoggerThreadSafeLevel::Logger".
           # On Ruby 3.4 logger is a bundled gem and the command path (bin/rails ->
