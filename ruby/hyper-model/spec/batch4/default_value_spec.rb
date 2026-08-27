@@ -1,5 +1,10 @@
 require 'spec_helper'
 
+# The two components mounted here live in spec/support/default_value_components.rb --
+# they are shared by more than one example, and keeping a copy per example is what
+# produced default_value_textarea_spec.rb, a 248-line duplicate of this file that
+# existed to carry two assertions and had already drifted from it (#62).
+
 describe 'defaultValue special handling', js: true do
 
   before(:all) do
@@ -41,66 +46,8 @@ describe 'defaultValue special handling', js: true do
   end
 
   it 'will not use the defaultValue param until data is loaded - unit test' do
-    mount 'Tester' do
-      class LoadableString
-        include Hyperstack::State::Observable
-        def initialize(s)
-          @s = s
-        end
-        observer :to_s do
-          if @loaded
-            @s
-          else
-            Hyperstack::Internal::Component::RenderingContext.waiting_on_resources = true
-            "loading..."
-          end
-        end
-        observer :loading? do
-          !@loaded
-        end
-        def value
-          self
-        end
-        mutator :value= do |x|
-          @loaded = true
-          @s = x
-        end
-      end
-      class Tester < HyperComponent
-        include Hyperstack::Component::IsomorphicHelpers
-        def self.loadable_string
-          @loadable_string
-        end
-        before_first_mount do
-          @loadable_string = LoadableString.new(self)
-        end
-        render(DIV) do
-          INPUT(id: 'uncontrolled-input', defaultValue: Tester.loadable_string.value)
-          INPUT(id: 'uncontrolled-checkbox', type: :checkbox, defaultChecked: -> () { Tester.loadable_string.to_s == 'I have been loaded' })
-          SELECT(id: 'uncontrolled-select', defaultValue: Tester.loadable_string.value) do
-            OPTION(value: 'loading...') { "loading..." }
-            OPTION(value: 'I have been loaded') { "I have been loaded" }
-            OPTION(value: 'another value') { "another value" }
-            OPTION(value: 'set by user') { "set by user" }
-          end
-          TEXTAREA(id: 'uncontrolled-textarea', defaultValue: Tester.loadable_string.value)
+    mount_loadable_string_tester
 
-          INPUT(id: 'controlled-input', value: Tester.loadable_string.value, valuex: Tester.loadable_string.value)
-          .on(:change) { |evt| Tester.loadable_string.value = evt.target.value }
-          INPUT(id: 'controlled-checkbox', type: :checkbox, checked: Tester.loadable_string.to_s == 'I have been loaded')
-          .on(:change) { |evt| Tester.loadable_string.value = evt.target.checked ? 'I have been loaded' : 'The user clicked off the checkbox' }
-          SELECT(id: 'controlled-select', value: Tester.loadable_string.value) do
-            OPTION(value: 'loading...') { "loading..." }
-            OPTION(value: 'I have been loaded') { "I have been loaded" }
-            OPTION(value: 'another value') { "another value" }
-            OPTION(value: 'set by user') { "set by user" }
-          end
-          .on(:change) { |evt| Tester.loadable_string.value = evt.target.value }
-          TEXTAREA(id: 'controlled-textarea', value: Tester.loadable_string.value)
-          .on(:change) { |evt| Tester.loadable_string.value = evt.target.value }
-        end
-      end
-    end
     # initial value which is still loading
     expect(find('#uncontrolled-input').value).to eq('loading...')
     expect(find('#uncontrolled-checkbox')).not_to be_checked
@@ -127,7 +74,7 @@ describe 'defaultValue special handling', js: true do
     expect(find('#uncontrolled-input').value).to eq('I have been loaded')
     expect(find('#uncontrolled-checkbox')).to be_checked
     expect(find('#uncontrolled-select').value).to eq('I have been loaded')
-    # expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
+    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
     expect(find('#controlled-input').value).to eq('another value')
     expect(find('#controlled-checkbox')).not_to be_checked
     expect(find('#controlled-select').value).to eq('another value')
@@ -155,43 +102,7 @@ describe 'defaultValue special handling', js: true do
 
   it "will properly update input tags when data is loaded or changed" do
     ReactiveRecord::Operations::Fetch.semaphore.synchronize do
-      mount "InputTester", {}, no_wait: true do
-        class MyNestedGuy < HyperComponent
-          render(SPAN) do
-            "#{User.find_by_first_name('Lily').last_name} is a dog"
-          end
-        end
-        class InputTester < HyperComponent
-          before_mount do
-            @test_model = TestModel.first
-          end
-          render(DIV) do
-            INPUT(id: 'uncontrolled-input', defaultValue: @test_model.test_attribute)
-            INPUT(id: 'uncontrolled-checkbox', type: :checkbox, defaultChecked: @test_model.completed)
-            SELECT(id: 'uncontrolled-select', defaultValue: @test_model.test_attribute) do
-              OPTION(value: 'loading...') { "" }
-              OPTION(value: 'I have been loaded') { "I have been loaded" }
-              OPTION(value: 'another value') { "another value" }
-              OPTION(value: 'set by user') { "set by user" }
-            end
-            TEXTAREA(id: 'uncontrolled-textarea', defaultValue: @test_model.test_attribute)
-
-            INPUT(id: 'controlled-input', value: @test_model.test_attribute)
-            .on(:change) { |evt| @test_model.test_attribute = evt.target.value }
-            INPUT(id: 'controlled-checkbox', type: :checkbox, checked: @test_model.completed)
-            .on(:change) { |evt| @test_model.completed = evt.target.checked }
-            SELECT(id: 'controlled-select', value: @test_model.test_attribute) do
-              OPTION(value: 'loading...') { "" }
-              OPTION(value: 'I have been loaded') { "I have been loaded" }
-              OPTION(value: 'another value') { "another value" }
-              OPTION(value: 'set by user') { "set by user" }
-            end
-            .on(:change) { |evt| @test_model.test_attribute = evt.target.value }
-            TEXTAREA(id: 'controlled-textarea', value: @test_model.test_attribute)
-            .on(:change) { |evt| @test_model.test_attribute = evt.target.value }
-          end
-        end
-      end
+      mount_input_tester
     end
     # #61: wait for the data to ARRIVE before reading the DOM.
     #
@@ -223,7 +134,7 @@ describe 'defaultValue special handling', js: true do
     expect(find('#uncontrolled-input').value).to eq('I have been loaded')
     expect(find('#uncontrolled-checkbox')).to be_checked
     expect(find('#uncontrolled-select').value).to eq('I have been loaded')
-    # expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
+    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
     expect(find('#controlled-input').value).to eq('another value')
     expect(find('#controlled-checkbox')).not_to be_checked
     expect(find('#controlled-select').value).to eq('another value')
@@ -260,5 +171,39 @@ describe 'defaultValue special handling', js: true do
     expect(find('#controlled-textarea').value).to eq('text box set by the user')
     evaluate_promise('TestModel.first.save')
     expect(TestModel.first.test_attribute).to eq('text box set by the user')
+  end
+
+  it "an uncontrolled tag keeps ignoring its prop after the user has typed in it" do
+    # The guard the other two examples cannot state on their own.
+    #
+    # They check that an uncontrolled tag ignores a change that arrives while the tag
+    # is untouched, and that the user can overwrite it. Neither checks the combination
+    # -- a change arriving AFTER the user typed -- which is the case that actually
+    # matters in an app: a record the user is editing gets updated by someone else,
+    # and their half-typed edit must not be thrown away.
+    #
+    # To be straight about what this does and does not catch: it is contract coverage,
+    # not a #62 regression test. Uncontrolled-ness comes from the element's dirty value
+    # flag, and typing sets that flag by itself, so this example passes on the broken
+    # build too. The assertion that fails without the #62 fix is the untouched-textarea
+    # one in the two examples above (and, for this gem's own build,
+    # hyper-component's spec/client_features/uncontrolled_textarea_spec.rb).
+    mount_loadable_string_tester
+
+    evaluate_ruby("Tester.loadable_string.value = 'I have been loaded'")
+    expect(find('#uncontrolled-textarea').value).to eq('I have been loaded')
+
+    find('#uncontrolled-input').set 'the user was typing'
+    find('#uncontrolled-textarea').set 'the user was typing here too'
+    find('#uncontrolled-select').find(:option, 'set by user').select_option
+
+    evaluate_ruby("Tester.loadable_string.value = 'another value'")
+    # the controlled tags prove the change really did arrive
+    expect(page).to have_field('controlled-input', with: 'another value')
+    expect(page).to have_field('controlled-textarea', with: 'another value')
+
+    expect(find('#uncontrolled-input').value).to eq('the user was typing')
+    expect(find('#uncontrolled-textarea').value).to eq('the user was typing here too')
+    expect(find('#uncontrolled-select').value).to eq('set by user')
   end
 end
