@@ -184,11 +184,17 @@ stages:
     name: $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL
     docker:
       user: ubuntu
-  # No gem cache: the gems are in the image. Measured on job 40440, keeping it
+  # No cache at all: the gems are in the image. Measured on job 40440, keeping it
   # would cost 19-58s restoring 258 MB over gems already present, plus ~28s
   # re-uploading them (`policy: pull-push`, `when: always`) -- ~47s/job of pure
-  # waste. The `yarn-v1` cache from `default:` still applies: node packages are
-  # NOT in the image.
+  # waste.
+  #
+  # NOTE: `cache: []` REPLACES `default:`'s list, it does not merge with it, so
+  # this switches off the `yarn-v1` cache too -- an earlier version of this
+  # comment claimed otherwise. Job 44293's trace confirms it: no
+  # restore_cache/archive_cache sections, and every yarn run reported "No
+  # lockfile found" and refetched. npm packages come from the image instead, via
+  # HYPERSTACK_PREBAKED_YARN_CACHE (see before_script). (#75)
   cache: []
   # Retry the whole job once, but ONLY for failures that are never the code's
   # fault. `script_failure` is deliberately NOT retried.
@@ -241,6 +247,13 @@ stages:
     # slow but successful job and hide a broken or missing image.
     - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
     - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
+    # npm packages come from the image too (#75). The global YARN_CACHE_FOLDER
+    # points into $CI_PROJECT_DIR for the base24 jobs that still cache it;
+    # override it here so every yarn the generated app runs -- spec:prepare's
+    # included -- reads the cache the image warmed. Same rule as the gems: say so
+    # and stop, rather than silently redownloading the whole tree.
+    - test -d "$HYPERSTACK_PREBAKED_YARN_CACHE" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked yarn cache at $HYPERSTACK_PREBAKED_YARN_CACHE"; exit 1; }
+    - export YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE"
 
 # - bundle config set --local path local_gems
     # - bundle install
@@ -283,11 +296,17 @@ stages:
     name: $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL
     docker:
       user: ubuntu
-  # No gem cache: the gems are in the image. Measured on job 40440, keeping it
+  # No cache at all: the gems are in the image. Measured on job 40440, keeping it
   # would cost 19-58s restoring 258 MB over gems already present, plus ~28s
   # re-uploading them (`policy: pull-push`, `when: always`) -- ~47s/job of pure
-  # waste. The `yarn-v1` cache from `default:` still applies: node packages are
-  # NOT in the image.
+  # waste.
+  #
+  # NOTE: `cache: []` REPLACES `default:`'s list, it does not merge with it, so
+  # this switches off the `yarn-v1` cache too -- an earlier version of this
+  # comment claimed otherwise. Job 44293's trace confirms it: no
+  # restore_cache/archive_cache sections, and every yarn run reported "No
+  # lockfile found" and refetched. npm packages come from the image instead, via
+  # HYPERSTACK_PREBAKED_YARN_CACHE (see before_script). (#75)
   cache: []
   # Retry the whole job once, but ONLY for failures that are never the code's
   # fault. `script_failure` is deliberately NOT retried.
@@ -345,6 +364,13 @@ stages:
     # slow but successful job and hide a broken or missing image.
     - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
     - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
+    # npm packages come from the image too (#75). The global YARN_CACHE_FOLDER
+    # points into $CI_PROJECT_DIR for the base24 jobs that still cache it;
+    # override it here so every yarn the generated app runs -- spec:prepare's
+    # included -- reads the cache the image warmed. Same rule as the gems: say so
+    # and stop, rather than silently redownloading the whole tree.
+    - test -d "$HYPERSTACK_PREBAKED_YARN_CACHE" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked yarn cache at $HYPERSTACK_PREBAKED_YARN_CACHE"; exit 1; }
+    - export YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE"
 #    - sudo apt-get remove --purge mysql-server mysql-client mysql-common
 #    - sudo apt-get autoremove
 #    - sudo apt-get autoclean

@@ -20,7 +20,7 @@ CONTEXT="$ROOT/tmp/cell-context"
 eval "$(cd "$ROOT" && HYPERSTACK_CELL="$CELL" rake hyperstack:cell:env)"
 
 ARGS=()
-for v in RBENV_VERSION RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION; do
+for v in RBENV_VERSION RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION REACT_RAILS_VERSION HYPERSTACK_JS_PIPELINE; do
   if [ -n "${!v:-}" ]; then ARGS+=(--build-arg "$v=${!v}"); fi
 done
 
@@ -50,6 +50,24 @@ docker build \
   "$CONTEXT"
 
 if [ "${1:-}" = "--push" ]; then
+  # Re-authenticate first. The credential the CI job minted in its before_script
+  # is no longer accepted by the time a build of this length finishes: every
+  # layer uploads and then the push ends in
+  #   unauthorized: HTTP Basic: Access denied. If a password was provided for Git
+  #   authentication, the password was incorrect or you're required to use a
+  #   token instead
+  # The cutoff is ~5 minutes (the registry token's TTL). Pipeline 6675 shows it
+  # exactly -- pushes reached at 273s succeeded, at 463s / 547s / 547s / 552s all
+  # four failed -- and 6665, before the warm-up layer made the build ~2 minutes
+  # longer, pushed at 199-282s and never hit it. So this was always latent; #75
+  # simply made the build long enough to cross the line.
+  #
+  # Guarded on CI_REGISTRY_PASSWORD so a local `build.sh --push` keeps using
+  # whatever `docker login` the developer already did.
+  if [ -n "${CI_REGISTRY_PASSWORD:-}" ]; then
+    echo "re-authenticating with ${CI_REGISTRY} before push"
+    echo "$CI_REGISTRY_PASSWORD" | docker login -u "${CI_REGISTRY_USER:-gitlab-ci-token}" --password-stdin "${CI_REGISTRY:?CI_REGISTRY not set}"
+  fi
   echo "pushing $IMAGE"
   docker push "$IMAGE"
 fi

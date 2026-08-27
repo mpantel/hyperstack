@@ -42,4 +42,10 @@ done
 mkdir -p "$OUT/ruby/rails-hyperstack"
 cp "$ROOT/ruby/rails-hyperstack/spec_prepare_gems.rb" "$OUT/ruby/rails-hyperstack/"
 
+# The warm-up step that generates a throwaway app to fill GEM_HOME and the yarn
+# cache (#75). Same argument as above: an input to the image, and to nothing
+# else, so it belongs in the context and should invalidate the build.
+mkdir -p "$OUT/docker/cell-image"
+cp "$ROOT/docker/cell-image/warm-app.sh" "$OUT/docker/cell-image/"
+
 echo "staged $(find "$OUT" -type f | wc -l) files into $OUT"
