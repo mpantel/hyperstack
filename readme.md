@@ -96,6 +96,26 @@ hang for minutes).
 > time). The script pins both to `TZ=Etc/UTC`; override `TZ` only if you set it on
 > the host and the Chrome container alike.
 
+Every driver hyper-spec registers carries an HTTP read timeout, so a browser that
+stops answering fails the example in minutes instead of hanging until the OS gives
+up on the socket — which cost one CI job 42 minutes before a human cancelled it
+(#74). The default is 90s when `PRECOMPILED_ASSETS` is set and 300s when it is not,
+because the debug asset pipeline charges a cold Sprockets compile of the whole Opal
+bundle to the first `visit`. Override with `HYPER_SPEC_READ_TIMEOUT` /
+`HYPER_SPEC_OPEN_TIMEOUT` (seconds).
+
+Under a debugger the browser is legitimately idle for as long as you sit on a
+breakpoint, so name a large value:
+
+```bash
+HYPER_SPEC_READ_TIMEOUT=86400 ./run-local-docker-specs.sh hyper-model spec/batch4/scope_spec.rb:175
+```
+
+Setting one to `0` means "impose nothing" and leaves whatever the installed
+`selenium-webdriver` defaults to — which is not a fixed answer, so it is not a way
+to ask for an unbounded wait: up to 4.46 there is no timeout at all, while 4.47
+defaults to open 60 / read 120.
+
 Tear the containers down with `docker rm -f hs-postgres hs-chrome`.
 
 ## Contributing

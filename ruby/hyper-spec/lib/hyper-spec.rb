@@ -16,6 +16,7 @@ require 'hyper-spec/internal/client_execution'
 require 'hyper-spec/internal/component_mount'
 require 'hyper-spec/internal/controller'
 require 'hyper-spec/internal/copy_locals'
+require 'hyper-spec/internal/driver_timeouts'
 require 'hyper-spec/internal/patches'
 require 'hyper-spec/internal/rails_controller_helpers'
 require 'hyper-spec/internal/time_cop.rb'
@@ -276,6 +277,16 @@ RSpec.configure do |config|
   # (Net::ReadTimeout, "execution expired") rather than real assertion failures.
   # Retry js-tagged examples a couple of times so flakiness doesn't redden CI;
   # a genuinely failing spec still fails after the retries.
+  #
+  # Three attempts multiply whatever one attempt costs, which is why they were
+  # worth re-examining once #74 put a ceiling on a wedged browser. They stay:
+  # bounded by HyperSpec::Internal::DriverTimeouts the worst case is three read
+  # timeouts -- 4.5 minutes on the precompiled browser jobs -- instead of three
+  # OS-level TCP timeouts (~42 minutes observed), and retrying is what absorbs
+  # the genuinely transient failures this was added for in the first place.
+  # What is deliberately NOT done is adding this class to the job-level `retry:`
+  # in .gitlab-ci.yml: the fix is failing fast, not asking CI to run a dead
+  # browser again.
   config.verbose_retry = true
   config.display_try_failure_messages = true
   config.default_sleep_interval = 1
@@ -383,6 +394,15 @@ RSpec.configure do |config|
       options: options
     )
   end
+
+  # Every registration above, plus the ones Capybara ships that the case below
+  # can select (`:selenium_chrome_headless` is the default when DRIVER is unset),
+  # gets an HTTP read timeout so a wedged browser fails in minutes rather than
+  # holding the runner until a human notices. (#74)
+  #
+  # Capybara's own are wrapped rather than rewritten, so they keep whatever
+  # browser flags a Capybara upgrade adds to them.
+  HyperSpec::Internal::DriverTimeouts.bound!(::Capybara.drivers.names)
 
   Capybara.javascript_driver =
     case ENV['DRIVER']
