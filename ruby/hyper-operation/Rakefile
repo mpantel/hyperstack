@@ -27,8 +27,18 @@ task :part2 do
   Rake::Task[parallel_specs? ? 'spec:parallel' : 'part2_serial'].invoke
 end
 
+require_relative '../test_app_react_source'
+
 namespace :spec do
   task :prepare do
+    # #40: wire this test_app to npm/esbuild React when the cell asks for it
+    # (HYPERSTACK_REACT_SOURCE=npm). A no-op on the default react-rails/sprockets
+    # path, so the rails61-react16/17/18 cells are untouched. Runs FIRST: the
+    # assets:precompile below link_trees app/assets/builds, which does not exist
+    # until esbuild has written it.
+    if TestAppReactSource.apply!(File.expand_path('spec/test_app', __dir__))
+      puts "spec/test_app wired to npm React #{TestAppReactSource.npm_version}"
+    end
     sh %(cd spec/test_app; bundle exec rails db:setup)
     # When PRECOMPILED_ASSETS is set (CI browser jobs), build the static Opal
     # bundle once here so the specs run with compile=false (no debug-mode runtime
