@@ -173,6 +173,56 @@ describe 'defaultValue special handling', js: true do
     expect(TestModel.first.test_attribute).to eq('text box set by the user')
   end
 
+  it "keeps what the user typed while the data was still loading" do
+    # #72. Holding the fetch semaphore keeps the data on its way, so everything typed
+    # inside the block is typed into a field that is still showing its loading
+    # placeholder. That is the ordinary case rather than an exotic one -- "render now,
+    # data arrives later" is the whole premise of hyper-model, so any field the user
+    # reaches before the fetch lands is exposed.
+    #
+    # It used to be destructive: the loading -> loaded transition flipped a react `key`,
+    # react threw the DOM node away and mounted a fresh one carrying the loaded value,
+    # and the user's typing went with the old node.
+    #
+    # Driven by the semaphore rather than by the hand-rolled observable the other
+    # examples use, so it exercises the real loading path.
+    ReactiveRecord::Operations::Fetch.semaphore.synchronize do
+      mount_input_tester
+      # the placeholder a DummyValue renders as -- we are typing over nothing
+      expect(find('#uncontrolled-input').value).to eq('')
+      # stamp the node so we can tell afterwards whether it is still the same one; the
+      # element surviving is the mechanism, the typing surviving is the consequence
+      page.execute_script(
+        "document.getElementById('uncontrolled-input').dataset.specNodeId = 'the original node'"
+      )
+      find('#uncontrolled-input').set 'typed while loading'
+      find('#uncontrolled-textarea').set 'typed into textarea while loading'
+    end
+
+    # the controlled tag proves the data really did land -- without it the assertions
+    # below could pass simply because nothing has arrived yet
+    expect(page).to have_field('controlled-input', with: 'I have been loaded')
+
+    expect(find('#uncontrolled-input').value).to eq('typed while loading')
+    expect(find('#uncontrolled-textarea').value).to eq('typed into textarea while loading')
+    expect(
+      page.evaluate_script("document.getElementById('uncontrolled-input').dataset.specNodeId")
+    ).to eq('the original node')
+
+    # a field the user did NOT touch still picks the loaded value up (#61)
+    expect(page).to have_field('uncontrolled-select', with: 'I have been loaded')
+    expect(page).to have_field('uncontrolled-checkbox', checked: true)
+
+    # ...and once loaded every uncontrolled tag goes on ignoring its prop (#62),
+    # whether the value it is holding came from the load or from the user
+    TestModel.first.update(test_attribute: 'another value', completed: false)
+    expect(page).to have_field('controlled-input', with: 'another value')
+    expect(find('#uncontrolled-input').value).to eq('typed while loading')
+    expect(find('#uncontrolled-textarea').value).to eq('typed into textarea while loading')
+    expect(find('#uncontrolled-select').value).to eq('I have been loaded')
+    expect(find('#uncontrolled-checkbox')).to be_checked
+  end
+
   it "an uncontrolled tag keeps ignoring its prop after the user has typed in it" do
     # The guard the other two examples cannot state on their own.
     #
