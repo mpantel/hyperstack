@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
 # Ruby 3.4 "chilled string" deprecations: several unmaintained gems in the test
-# toolchain mutate the (chilled) string returned by `Symbol#to_s`, so every spec
-# run floods stderr with thousands of lines like
+# toolchain mutate chilled strings, so every spec run floods stderr with thousands
+# of lines. Ruby emits TWO distinct messages for this, and both must be matched --
+# a filter for only the first leaves the flood in place (#91):
 #   .../<gem>.rb:NN: warning: string returned by :foo.to_s will be frozen in the future
+#   .../<gem>.rb:NN: warning: literal string will be frozen in the future
+# The second is the common one by far: on a single hyper-model job it accounts for
+# 1727 of 2454 trace lines, from em-websocket's framing07.rb and masking04.rb.
 # The offending gems are all at their latest release with no fix upstream:
 #   - parser        (via unparser, when hyper-spec re-parses each mount/evaluate block)
 #   - em-websocket  (the in-process websocket server used by the sync specs)
@@ -18,9 +22,10 @@
 # deprecation any longer, delete this file and its require in hyper-spec.rb.
 module HyperSpec
   module WarningFilter
-    # The unmaintained, latest-release gems that mutate a chilled `Symbol#to_s`.
+    # The unmaintained, latest-release gems that mutate chilled strings.
     GEMS = %w[parser em-websocket unicode_utils].freeze
-    FROZEN_DEPRECATION = /string returned by .* will be frozen in the future/
+    # Both chilled-string forms: the `Symbol#to_s` result, and a bare literal.
+    FROZEN_DEPRECATION = /(?:string returned by .*|literal string) will be frozen in the future/
     THIRD_PARTY = %r{/gems/(?:#{Regexp.union(GEMS)})-\d}
 
     def warn(message, category: nil)
