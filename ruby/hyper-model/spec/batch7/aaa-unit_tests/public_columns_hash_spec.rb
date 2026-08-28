@@ -207,6 +207,52 @@ describe 'serializing the columns hash (#81)' do
 
     expect(ActiveRecord::Base.json_safe_columns(nested)).to eq('a' => { 'b' => [{ 'c' => :integer }] })
   end
+
+  # Regression coverage for #92, which the first cut of this fix caused.
+  #
+  # Expanding "everything that is not a scalar" through instance_values is wrong for
+  # any value that already serializes itself. Date and Time have a real as_json but
+  # no instance variables, so they expanded to {} and the column default was
+  # destroyed. On the client that surfaced a long way from here: the date default
+  # arrived as {}, `Date.parse({})` raised inside DummyValue#initialize, the bare
+  # `rescue ::Exception` there swallowed it, and the attribute read back as nil.
+  describe 'values that serialize themselves' do
+    it 'keeps a Date default intact' do
+      columns = { 'D' => { 'date' => column.new('date', Date.new(2026, 8, 28),
+                                                sql_type_metadata.new('date', :date),
+                                                type_value.new(:date)) } }
+      json = JSON.parse(ActiveRecord::Base.json_safe_columns(columns).as_json.to_json)
+
+      expect(json.dig('D', 'date', 'default')).to eq('2026-08-28')
+    end
+
+    it 'keeps a Time default intact' do
+      columns = { 'D' => { 'at' => column.new('at', Time.new(2026, 8, 28, 12, 0, 0),
+                                              sql_type_metadata.new('datetime', :datetime),
+                                              type_value.new(:datetime)) } }
+      json = JSON.parse(ActiveRecord::Base.json_safe_columns(columns).as_json.to_json)
+
+      expect(json.dig('D', 'at', 'default')).to start_with('2026-08-28T12:00:00')
+    end
+
+    it 'leaves any object with nothing to expand alone' do
+      # the general rule behind the two examples above: if there are no instance
+      # variables, expanding can only ever throw the value away
+      leaf = Class.new { def as_json(*) = 'i am a leaf' }.new
+
+      expect(ActiveRecord::Base.json_safe_columns('k' => leaf)['k']).to be(leaf)
+    end
+
+    it 'still expands objects that do have something to expand' do
+      # and the guard must not stop the expansion this fix exists for
+      columns = { 'D' => { 'name' => column.new('name', 'x',
+                                                sql_type_metadata.new('varchar', :string),
+                                                type_value.new(:string)) } }
+
+      expect(ActiveRecord::Base.json_safe_columns(columns).dig('D', 'name', 'cast_type'))
+        .to eq(:string)
+    end
+  end
 end
 
 end

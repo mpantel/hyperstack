@@ -577,13 +577,22 @@ module ActiveRecord
         value.each_with_object({}) { |(k, v), h| h[k] = json_safe_columns(v) }
       when Array
         value.map { |v| json_safe_columns(v) }
-      when nil, true, false, String, Symbol, Numeric
+      when nil, true, false, String, Symbol, Numeric, ::Date, ::Time
+        # Leaves. Date and Time are listed because they are exactly the kind of
+        # value that must NOT be expanded below: ActiveSupport gives them a real
+        # as_json ("2026-08-28"), but they carry no instance variables, so
+        # expanding them yields {} and the value is destroyed. (#92)
         value
       else
         # Column, SqlTypeMetadata and friends: same expansion Object#as_json does,
         # but recursed through this method so a Type::Value nested anywhere inside
         # is caught rather than raising three levels down.
-        value.respond_to?(:instance_values) ? json_safe_columns(value.instance_values) : value
+        ivars = value.respond_to?(:instance_values) ? value.instance_values : nil
+        # Nothing to expand means this is a leaf that serializes itself, whatever
+        # its class -- the general form of the Date/Time case above. Expanding it
+        # would replace the value with {}, which is how a date column default
+        # reached the client as {}, failed Date.parse, and surfaced as nil. (#92)
+        ivars.nil? || ivars.empty? ? value : json_safe_columns(ivars)
       end
     end
 
