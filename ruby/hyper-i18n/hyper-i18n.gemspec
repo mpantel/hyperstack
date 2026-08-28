@@ -24,7 +24,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'hyper-operation', Hyperstack::I18n::VERSION
   spec.add_dependency 'i18n'
 
-  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
+  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 9.0')
   spec.add_development_dependency 'bundler'
   # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-model', Hyperstack::I18n::VERSION

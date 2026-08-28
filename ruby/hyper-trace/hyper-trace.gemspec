@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'hyperstack-config', HyperTrace::VERSION
   spec.add_development_dependency 'hyper-spec', HyperTrace::VERSION
-  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
+  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 9.0')
   spec.add_development_dependency "bundler"
   # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency "rake"

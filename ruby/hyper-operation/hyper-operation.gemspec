@@ -46,9 +46,9 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'puma'# , '<= 5.4.0'
   spec.add_development_dependency 'pusher'
   spec.add_development_dependency 'pusher-fake'
-  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
+  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 9.0')
   spec.add_development_dependency 'rake'
-  spec.add_development_dependency 'react-rails', *Hyperstack.version_selector('REACT_RAILS_VERSION', '>= 2.4.0', '< 2.7.0')
+  spec.add_development_dependency 'react-rails', *Hyperstack.version_selector('REACT_RAILS_VERSION', '>= 2.4.0', '< 4.0')
   spec.add_development_dependency 'redis'
   spec.add_development_dependency 'rspec-rails', '>= 6.1.0'
   spec.add_development_dependency 'rspec-steps', '~> 2.1.1'
