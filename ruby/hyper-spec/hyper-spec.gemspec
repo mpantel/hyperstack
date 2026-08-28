@@ -31,7 +31,13 @@ Gem::Specification.new do |spec| # rubocop:disable Metrics/BlockLength
   spec.add_dependency 'prism'
   spec.add_dependency 'rspec'
   spec.add_dependency 'rspec-retry'
-  spec.add_dependency 'selenium-webdriver'#,'4.11.0'
+  # Pinned to a minor series, not left to float. This is the gem that drives the
+  # browser for EVERY js spec in every gem, so an unannounced minor bump changes
+  # what the whole suite runs against, between two pipelines on the same commit
+  # -- which is exactly what happened: 4.47.0 on 27 Aug 13:44, 4.48.0 at 20:49.
+  # A red pipeline should mean the code changed, not that a dependency did. The
+  # `.0` matters: `~> 4.48` would allow 4.49 and float again. (#84)
+  spec.add_dependency 'selenium-webdriver', '~> 4.48.0'
   spec.add_dependency 'timecop', '~> 0.9.0'
   spec.add_dependency 'uglifier'
   spec.add_dependency 'unparser', '>= 0.4.2'
