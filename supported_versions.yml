@@ -18,8 +18,8 @@
 # * `ruby` and `rails` are major.minor; a booting app matches on major.minor.
 # * `id` names the axes that distinguish a cell from its siblings, and only those.
 #   It is `rails<MM>-react<MM>`, with a `-ruby<MM>` suffix added ONLY where two
-#   cells would otherwise collide -- today that is the Rails 8.0 pair, which is
-#   run on both Ruby 4.0 and Ruby 3.4. Every other cell's Ruby is in its `ruby:`
+#   cells would otherwise collide -- today those are the Rails 8.0 and Rails 8.1
+#   pairs, each run on both Ruby 4.0 and Ruby 3.4. Every other cell's Ruby is in its `ruby:`
 #   field and nowhere else, so an unsuffixed id never means a particular Ruby.
 #   Ids are consumed by CI alone (image tag and cache key); the runtime check
 #   matches on the `ruby`/`rails` fields, so renaming one costs an image rebuild
@@ -182,7 +182,7 @@ cells:
   # and the reason the two ids now name their Ruby.
   #
   # It exists so the Rails 8 corner of the matrix is a one-variable grid again:
-  # this cell and rails81-react19 differ only in Rails, this cell and
+  # this cell and rails81-react19-ruby34 differ only in Rails, this cell and
   # rails80-react19-ruby40 differ only in Ruby. Without it, moving the 8.1 cell
   # to Ruby 3.4 left every Rails 8 comparison crossing two axes at once.
   #
@@ -207,21 +207,18 @@ cells:
 
   # Rails 8.1 on Ruby 3.4.
   #
-  # This cell was originally a single-variable step off rails80-react19 -- every
-  # other axis held exactly where that cell has it, so a failure here would be a
-  # Rails-version failure and nothing else. It no longer is: rails80-react19 runs
-  # Ruby 4.0 and this one runs 3.4, so the two differ on two axes. That is a
-  # deliberate trade, for two reasons:
+  # With rails81-react19-ruby40 below, the Rails 8 corner is a complete 2x2 grid
+  # -- {rails 8.0, 8.1} x {ruby 3.4, 4.0} -- so every comparison across it moves
+  # exactly one axis again. This cell and rails80-react19-ruby34 differ only in
+  # Rails; this cell and rails81-react19-ruby40 differ only in Ruby.
   #
-  #   * Rails 8.1 requires ruby >= 3.2, and Ruby 4.0 adoption lags Rails 8
-  #     adoption badly. With both Rails 8 cells on 4.0, nothing in the matrix
-  #     covered Rails 8 on the Ruby that Rails 8 users are actually running.
-  #   * rails80-react19 keeps Ruby 4.0, so that axis is still exercised by a cell
-  #     green enough to be a useful signal -- without growing the matrix (#58).
+  # That resolves the two-axis compromise this comment used to record under
+  # #80/#92: Rails 8.1 was tested only on Ruby 3.4 and Rails 8.0 only on Ruby 4.0,
+  # so a failure on either was not attributable to one version. It no longer has
+  # to be traded away -- a failure here is a Rails-version failure once more.
   #
-  # The cost is that a failure here is no longer attributable to the Rails version
-  # alone. If one appears, compare against rails80-react19 (Rails 8.0 / Ruby 4.0)
-  # before concluding anything. (#80, #92)
+  # This cell remains the configuration most Rails 8.1 users are actually on:
+  # Rails 8.1 requires ruby >= 3.2, and Ruby 4.0 adoption lags Rails 8 adoption.
   #
   # It exists because the rails axis span is derived from these cells, so with 8.0
   # as the maximum a Rails 8.1 app is reported :unsupported rather than :untested --
@@ -233,10 +230,10 @@ cells:
   # and opal-sprockets declares no rails dependency at all -- unlike opal-rails,
   # which is hard-capped at `rails < 7.3` and is why the swap exists.
   #
-  # RAILS_VERSION is `~> 8.1.0` (>= 8.1.0, < 8.2.0), matching how the cell above
-  # pins `~> 8.0.0`: each Rails cell stays on its own minor series rather than
+  # RAILS_VERSION is `~> 8.1.0` (>= 8.1.0, < 8.2.0), matching how the 8.0 cells
+  # pin `~> 8.0.0`: each Rails cell stays on its own minor series rather than
   # floating onto the next one.
-  - id: rails81-react19
+  - id: rails81-react19-ruby34
     ruby:        "3.4"
     rails:       "8.1"
     opal:        "1.8"
@@ -245,7 +242,47 @@ cells:
     react:       "19.2"      # derived: npm react, pinned by REACT_NPM_VERSION
     env:
       # no RBENV_VERSION: this cell takes the global 3.4.9 from .gitlab-ci.yml,
-      # like every other Ruby 3.4 cell. Only rails80-react19 overrides it.
+      # like every other Ruby 3.4 cell. Only the -ruby40 cells override it.
+      RAILS_VERSION: "~> 8.1.0"
+      OPAL_SPROCKETS_VERSION: "~> 1.0"
+      SQLITE3_VERSION: ">= 2.1"
+      REACT_RAILS_VERSION: "~> 3.3"
+      HYPERSTACK_REACT_SOURCE: "npm"
+      REACT_NPM_VERSION: "~19.2.0"
+      HYPERSTACK_JS_PIPELINE: esbuild
+
+  # Rails 8.1 on Ruby 4.0 -- the newest supported Rails on the newest Ruby, and
+  # the cell that completes the Rails 8 grid.
+  #
+  # Until this cell, the matrix ran Ruby 4.0 only on Rails 8.0 and Rails 8.1 only
+  # on Ruby 3.4, so their intersection was never run. That intersection is not an
+  # exotic corner: it is what a user on the newest of both is on, and
+  # SupportedVersions classified it :untested rather than :supported precisely
+  # because no cell covered it.
+  #
+  # It is also the exact configuration #38's client-runtime failures were reported
+  # against (Ruby 4.0.5 / Rails 8.1.3, on the old rails-8 branch line). Those were
+  # closed on the evidence that both axes pass independently -- which is the most
+  # the matrix could say without this cell. Now the combination itself is a gate.
+  #
+  # Ruby 4.0.5 via RBENV_VERSION, exactly as rails80-react19-ruby40 does it:
+  # base24:yjit already ships it, and only a cell's own env can move the global
+  # RBENV_VERSION 3.4.9 in .gitlab-ci.yml.
+  #
+  # This takes the matrix to 9 cells, against the "without growing the matrix"
+  # note that #58 prompted. Deliberately: #58's actual answer is a reduced default
+  # matrix with the full one on protected branches and on demand, which makes the
+  # raw cell count the wrong thing to economise on -- and the cost of the gap is
+  # paid on the combination users are most likely to hit. (#38, #58, #80)
+  - id: rails81-react19-ruby40
+    ruby:        "4.0"
+    rails:       "8.1"
+    opal:        "1.8"
+    react_rails: "3.3"       # for react_ujs; React itself comes from npm
+    pipeline:    sprockets   # Opal assets via opal-sprockets; React via esbuild
+    react:       "19.2"      # derived: npm react, pinned by REACT_NPM_VERSION
+    env:
+      RBENV_VERSION: "4.0.5"
       RAILS_VERSION: "~> 8.1.0"
       OPAL_SPROCKETS_VERSION: "~> 1.0"
       SQLITE3_VERSION: ">= 2.1"
