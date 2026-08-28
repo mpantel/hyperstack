@@ -603,8 +603,17 @@ module ActiveRecord
         pch = public_columns_hash
         return @public_columns_hash_json if @prev_public_columns_hash == pch
         @prev_public_columns_hash = pch
-        # safe because LazyColumnsHash#as_json sanitizes -- see #81 there
-        @public_columns_hash_json = pch.to_json
+        # Sanitize HERE, where both builders converge, rather than relying on the
+        # container's own as_json. public_columns_hash returns a LazyColumnsHash
+        # from build_lazy_columns_hash but a plain Hash from build_eager_columns_hash,
+        # and only the former carries the sanitizing as_json -- so the eager path
+        # handed raw Column objects to Rails 8.1's encoder and raised exactly the
+        # #81 NoMethodError again, 500ing the harness route. (#93)
+        #
+        # LazyColumnsHash#as_json still sanitizes too, for callers that ask it
+        # directly; json_safe_columns is idempotent, so the lazy path passing
+        # through both is harmless.
+        @public_columns_hash_json = json_safe_columns(pch.to_h).to_json
       end
     end
   end
