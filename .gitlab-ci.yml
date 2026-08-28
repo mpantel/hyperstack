@@ -640,7 +640,29 @@ build-cell-image:
     # used the variable to pull this job's image by now; from here the job needs
     # the job token, which is the credential allowed to write.
     - unset DOCKER_AUTH_CONFIG
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # Retried because the JWT auth endpoint occasionally resets the connection:
+    #   Error response from daemon: Get "https://registry.ru.aegean.gr/v2/":
+    #   Get "https://gitlab.ru.aegean.gr/jwt/auth?...": read tcp ...: connection
+    #   reset by peer
+    # (job 52433; the same job passed 63s later on a manual retry). The job is
+    # `allow_failure: true`, so an unretried reset does not go red -- it leaves
+    # the cell testing against the PREVIOUS image, with supported_versions.yml
+    # baked in at the older revision. That is the drift the `rules:` block above
+    # exists to prevent, so a one-off network blip must not be able to cause it.
+    #
+    # A job-level `retry:` is the wrong instrument: it reruns the whole build,
+    # and covering this would mean retrying `script_failure`, which .test_gem
+    # deliberately does not do (see the retry comment there). (#94)
+    - |
+      for attempt in 1 2 3; do
+        echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY" && break
+        if [ "$attempt" = 3 ]; then
+          echo "docker login to $CI_REGISTRY failed after 3 attempts"
+          exit 1
+        fi
+        echo "docker login attempt $attempt failed; retrying in $((attempt * 5))s"
+        sleep $((attempt * 5))
+      done
   script:
     - bash docker/cell-image/build.sh --push
 
