@@ -418,7 +418,12 @@ module ActiveRecord
       end
 
       def as_json(options = nil)
-        to_h.as_json(options)
+        # The JSON boundary for the columns hash. Everything that serializes one
+        # arrives here -- `to_json` on the render path, ActiveSupport 8.1's encoder
+        # (which calls `as_json` on this object directly), and callers that ask a
+        # LazyColumnsHash for JSON themselves. Sanitizing here rather than at any
+        # one call site is what makes all of them safe. See json_safe_columns. (#81)
+        ActiveRecord::Base.json_safe_columns(to_h).as_json(options)
       end
 
       def inspect
@@ -554,7 +559,10 @@ module ActiveRecord
     # which is an HTTP 500 on hyper-spec's harness route, a truncated inline script
     # ("Uncaught SyntaxError: Unexpected token '}'"), no columns hash on the client,
     # and then `JSON.parse(undefined)` and 1774 x "undefined method `[]' for nil".
-    # All of it from this one call. (#81)
+    # All of it from serializing this one hash. (#81)
+    #
+    # Applied from LazyColumnsHash#as_json, which is the single boundary every
+    # serialization of the columns hash passes through.
     #
     # Deliberately NOT reshaping the payload: the structure below is exactly what
     # `Object#as_json` produced before (instance_values, string keys, nested), and
@@ -586,7 +594,8 @@ module ActiveRecord
         pch = public_columns_hash
         return @public_columns_hash_json if @prev_public_columns_hash == pch
         @prev_public_columns_hash = pch
-        @public_columns_hash_json = json_safe_columns(pch.to_h).to_json
+        # safe because LazyColumnsHash#as_json sanitizes -- see #81 there
+        @public_columns_hash_json = pch.to_json
       end
     end
   end

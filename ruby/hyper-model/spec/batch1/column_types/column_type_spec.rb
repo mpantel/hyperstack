@@ -97,9 +97,14 @@ describe "column types on client", js: true do
   end
 
   it 'transfers the columns hash to the client' do
+    # The expectation has to be built the same way the payload is. A bare
+    # `columns_hash.as_json` raises on Rails 8.1 -- the columns hash holds
+    # ActiveModel::Type::Value objects, whose as_json is `raise NoMethodError`, and
+    # 8.1's encoder is the first one to ask them (#81). So the example could not
+    # compute what it was comparing against, and failed before reaching the client.
     expect_evaluate_ruby do
       TypeTest.columns_hash
-    end.to eq(TypeTest.columns_hash.as_json)
+    end.to eq(ActiveRecord::Base.json_safe_columns(TypeTest.columns_hash).as_json)
     check_errors
   end
 
