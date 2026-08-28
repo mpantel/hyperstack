@@ -90,9 +90,23 @@ module Hyperstack
     opts[:cluster] || 'mt1' if transport == :pusher
   end
 
-  def self.encrypted
-    opts.key?(:encrypted) ? opts[:encrypted] : true
+  # Whether the JS client should use TLS. Three spellings are accepted because
+  # `opts` is one hash handed to two different libraries that never agreed on the
+  # name: the `pusher` Ruby gem takes `use_tls`, pusher-js <= 6 took `encrypted`,
+  # and pusher-js >= 7 takes `force_tls`/`forceTLS`. Specs configure the transport
+  # with the Ruby gem's spelling, so reading only `:encrypted` silently ignored
+  # `use_tls: false` and defaulted TLS back on. (#85)
+  def self.force_tls
+    %i[force_tls forceTLS encrypted use_tls].each do |key|
+      return opts[key] if opts.key?(key)
+    end
+    true
   end
+
+  # pusher-js 8 dropped `encrypted` as a TLS switch entirely (there it now means
+  # end-to-end encrypted channels), but keep the old name working for anyone
+  # reading it.
+  singleton_class.send(:alias_method, :encrypted, :force_tls)
 
   def self.expire_polled_connection_in
     opts[:expire_polled_connection_in] || (5 * 60)

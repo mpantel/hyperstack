@@ -175,7 +175,7 @@ module Hyperstack
         pusher_fake_js: pusher_fake_js,
         key: Hyperstack.key,
         cluster: Hyperstack.cluster,
-        encrypted: Hyperstack.encrypted,
+        force_tls: Hyperstack.force_tls,
         channel: Hyperstack.channel,
         form_authenticity_token: controller.send(:form_authenticity_token),
         seconds_between_poll: Hyperstack.seconds_between_poll,
@@ -255,7 +255,22 @@ module Hyperstack
 
         if opts[:transport] == :pusher
 
-          opts[:dispatch] = lambda do |data|
+          # The splat is load-bearing. pusher-js <= 6 invoked a channel callback
+          # with the data alone; 7 builds an argument list and passes (data,
+          # metadata) whenever metadata is present -- and Channel#handleEvent
+          # always passes `{}`, which is truthy. A Ruby lambda enforces its arity,
+          # so the one-argument form raised
+          #   ArgumentError: wrong number of arguments (given 2, expected 1)
+          # and pusher-js runs named callbacks in a bare loop with no try/catch:
+          # the raise aborted the loop, sync_dispatch never ran, and no component
+          # ever saw a broadcast.
+          #
+          # It was invisible for as long as the client could not connect at all
+          # (#85) -- the polling fallback kept the specs green -- so it surfaced
+          # only once the socket came up. The sibling binding on the
+          # subscription_succeeded event already uses `->(*)` for the same reason.
+          # (#87)
+          opts[:dispatch] = lambda do |data, *_metadata|
             sync_dispatch JSON.parse(`JSON.stringify(#{data})`)
           end
 
@@ -269,7 +284,7 @@ module Hyperstack
             pusher_api = nil
             %x{
               h = {
-                encrypted: #{opts[:encrypted]},
+                forceTLS: #{opts[:force_tls]},
                 cluster: #{opts[:cluster]},
                 authEndpoint: window.HyperstackEnginePath+'/hyperstack-pusher-auth',
                 auth: {headers: {'X-CSRF-Token': #{opts[:form_authenticity_token]}}}
