@@ -532,6 +532,53 @@ module ActiveRecord
       end
     end
 
+    # What we hold are ActiveRecord Column objects, and serializing one eventually
+    # reaches `ActiveModel::Type::Value#as_json` -- which is, verbatim and on
+    # purpose:
+    #
+    #   def as_json(*)
+    #     raise NoMethodError
+    #   end
+    #
+    # in Rails 8.0 AND 8.1 alike. So these objects were never serializable; it only
+    # ever worked because nothing asked them. ActiveSupport 8.1 replaced its JSON
+    # encoder with JSONGemCoderEncoder (gated on json >= 2.15.2), and that one calls
+    # `as_json` on EVERY value outside
+    #   Hash, Array, Float, String, Symbol, Integer, NilClass, TrueClass,
+    #   FalseClass, JSON::Fragment
+    # -- so on 8.1 it asks, and the raise takes out the whole page render:
+    #
+    #   ActionView::Template::Error (NoMethodError)
+    #     1: <%= mount_component @component_name, @render_params %>
+    #
+    # which is an HTTP 500 on hyper-spec's harness route, a truncated inline script
+    # ("Uncaught SyntaxError: Unexpected token '}'"), no columns hash on the client,
+    # and then `JSON.parse(undefined)` and 1774 x "undefined method `[]' for nil".
+    # All of it from this one call. (#81)
+    #
+    # Deliberately NOT reshaping the payload: the structure below is exactly what
+    # `Object#as_json` produced before (instance_values, string keys, nested), and
+    # the client reads `[:sql_type_metadata][:type]` and `[:default]` out of it.
+    # Only the unserializable leaf is replaced -- with the type's name, which is
+    # what the client wanted from it in the first place.
+    def self.json_safe_columns(value)
+      case value
+      when ::ActiveModel::Type::Value
+        value.type
+      when Hash
+        value.each_with_object({}) { |(k, v), h| h[k] = json_safe_columns(v) }
+      when Array
+        value.map { |v| json_safe_columns(v) }
+      when nil, true, false, String, Symbol, Numeric
+        value
+      else
+        # Column, SqlTypeMetadata and friends: same expansion Object#as_json does,
+        # but recursed through this method so a Type::Value nested anywhere inside
+        # is caught rather than raising three levels down.
+        value.respond_to?(:instance_values) ? json_safe_columns(value.instance_values) : value
+      end
+    end
+
     @@hyper_stack_public_columns_hash_as_json_mutex = Mutex.new
     def self.public_columns_hash_as_json
       @@hyper_stack_public_columns_hash_as_json_mutex.synchronize do
@@ -539,7 +586,7 @@ module ActiveRecord
         pch = public_columns_hash
         return @public_columns_hash_json if @prev_public_columns_hash == pch
         @prev_public_columns_hash = pch
-        @public_columns_hash_json = pch.to_json
+        @public_columns_hash_json = json_safe_columns(pch.to_h).to_json
       end
     end
   end
