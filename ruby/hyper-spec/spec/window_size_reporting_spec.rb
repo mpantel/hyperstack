@@ -135,6 +135,107 @@ describe 'size_window' do
     end
   end
 
+  # A window manager plus a browser with chrome: resize_to sets the OUTER size,
+  # the page gets that minus the chrome. Records what it was asked for so the
+  # examples can assert the correction was applied on the way out.
+  class ChromedBrowser
+    include HyperSpec::Internal::WindowSizing
+
+    CHROME = [12, 143].freeze
+
+    attr_reader :asked_for
+
+    def initialize(min_outer_height: 0)
+      @min_outer_height = min_outer_height
+      @outer = [1024, 768]
+    end
+
+    # stands in for Capybara.current_session.current_window
+    def resize_to(width, height)
+      @asked_for = [width, height]
+      @outer = [width, [height, @min_outer_height].max]
+    end
+
+    def inner = [@outer[0] - CHROME[0], @outer[1] - CHROME[1]]
+
+    def evaluate_script(js)
+      js.include?('outerWidth') ? [*@outer, *inner] : inner
+    end
+
+    def resize(width, height) = send(:hs_internal_resize_to, width, height)
+    def chrome = send(:window_chrome)
+  end
+
+  describe 'correcting for window chrome' do
+    let(:browser) { ChromedBrowser.new }
+
+    # the chrome is measured once and cached on the configuration, so each
+    # example has to start from unmeasured
+    before do
+      @original = [RSpec.configuration.debugger_width, RSpec.configuration.debugger_height]
+      RSpec.configuration.debugger_width = nil
+      RSpec.configuration.debugger_height = nil
+      drive(browser)
+    end
+
+    after do
+      RSpec.configuration.debugger_width, RSpec.configuration.debugger_height = @original
+    end
+
+    def drive(window)
+      allow(Capybara).to receive(:current_session).and_return(
+        Struct.new(:current_window, :config).new(
+          window, Struct.new(:default_max_wait_time).new(5)
+        )
+      )
+    end
+
+    it 'measures both axes, not just width' do
+      expect(browser.chrome).to eq(ChromedBrowser::CHROME)
+    end
+
+    it 'reaches the inner size that was asked for' do
+      # Before #79 only width was corrected, so innerHeight came back 143 short
+      # of the request, `:reached` was unreachable, and every resize fell through
+      # to the "browser will not go further" branch -- which accepts whatever the
+      # window happens to be, including a resize that has not landed yet.
+      achieved, outcome = browser.resize(1024, 768)
+
+      expect(outcome).to eq(:reached)
+      expect(achieved).to eq([1024, 768])
+    end
+
+    it 'asks the window manager for the size plus the chrome' do
+      browser.resize(1024, 768)
+
+      expect(browser.asked_for).to eq([1024 + 12, 768 + 143])
+    end
+
+    it 'still reports a size the browser genuinely refuses' do
+      # the correction must not paper over a real limit -- that is what the
+      # reporting added in #77 is for
+      short = ChromedBrowser.new(min_outer_height: 700)
+      drive(short)
+
+      achieved, outcome = short.resize(480, 320)
+
+      # width is satisfied (480 asked -> 492 outer -> 480 inner); only the height
+      # runs into the window manager's floor, and that is what gets reported
+      expect(outcome).to eq(:stalled)
+      expect(achieved).to eq([480, 557])
+    end
+
+    it 'measures the chrome even when the probe size is refused' do
+      # outer-minus-inner, not asked-for-minus-inner: a window manager with a
+      # minimum height would otherwise have us measure the clamp as chrome and
+      # bake that error into every later resize.
+      short = ChromedBrowser.new(min_outer_height: 700)
+      drive(short)
+
+      expect(short.chrome).to eq(ChromedBrowser::CHROME)
+    end
+  end
+
   describe 'a size name it does not know' do
     # `size_window(:medium)` reached `:medium + debugger_width`, and the blanket
     # rescue turned that NoMethodError into a resize that quietly did nothing.

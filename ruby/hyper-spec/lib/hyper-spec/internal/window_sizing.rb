@@ -33,7 +33,10 @@ module HyperSpec
         width, height = STD_SIZES[width] if STD_SIZES[width]
         check_size!(width, height, requested)
         width, height = [height, width] if portrait
-        [width + debugger_width, height]
+        # The INNER size the caller asked for. The correction for window chrome
+        # is applied at the point of the resize, not here, so that what we wait
+        # for and what the caller asked for are the same numbers. (#79)
+        [width, height]
       end
 
       # A name that is not one of STD_SIZES fell through to `symbol + debugger_width`
@@ -49,21 +52,67 @@ module HyperSpec
               "#{STD_SIZES.keys.map(&:inspect).join(', ')}."
       end
 
-      def debugger_width
-        RSpec.configuration.debugger_width ||= begin
-          hs_internal_resize_to(1000, 500) do
-            sleep RSpec.configuration.wait_for_initialization_time
-          end
-          inner_width = evaluate_script('window.innerWidth')
-          1000 - inner_width
+      # The gap between the size the window manager is asked for and the size the
+      # page actually gets. `resize_to` sets the OUTER window; every assertion in
+      # the suite is about `window.innerWidth`/`innerHeight`. Browser chrome,
+      # toolbars and an open debugger pane all live in that difference.
+      #
+      # Width had a correction for this and height had none, so on any browser
+      # with chrome the height comparison could never be satisfied: ask for 768,
+      # innerHeight comes back 625, and wait_for_size falls through to its "the
+      # browser will not go further" branch on EVERY resize -- accepting whatever
+      # size the window happened to be at, including one a resize had not landed
+      # on yet. That is what made `will size_window to` fail under load, and why
+      # every CI run printed a "could not size the window" line for sizes the
+      # browser had no objection to. (#79)
+      #
+      # Both halves stay settable: a suite that knows its own chrome can set
+      # either and skip the probe.
+      def window_chrome
+        config = RSpec.configuration
+        unless config.debugger_width && config.debugger_height
+          measured = measure_window_chrome
+          config.debugger_width  ||= measured[0]
+          config.debugger_height ||= measured[1]
         end
-        RSpec.configuration.debugger_width
+        [config.debugger_width, config.debugger_height]
+      end
+
+      # Deliberately NOT routed through hs_internal_resize_to: that asks
+      # window_chrome for the correction, and this is where the correction comes
+      # from. It also must not wait for a size to be "reached" -- reaching one is
+      # precisely what it is here to make possible.
+      #
+      # Measured as outer MINUS inner rather than "what we asked for" minus inner,
+      # so it does not matter whether the probe size was honoured: a window
+      # manager with a minimum height would otherwise have us measure the clamp
+      # instead of the chrome, and bake that error into every later resize.
+      def measure_window_chrome
+        Capybara.current_session.current_window.resize_to(1000, 500)
+        sleep RSpec.configuration.wait_for_initialization_time
+        # one round trip, so the two sizes cannot be read a resize apart
+        outer_w, outer_h, inner_w, inner_h = evaluate_script(
+          '[window.outerWidth, window.outerHeight, window.innerWidth, window.innerHeight]'
+        )
+        [outer_w - inner_w, outer_h - inner_h]
+      end
+
+      # Kept for anything reading the width correction by its old name.
+      def debugger_width
+        window_chrome[0]
       end
 
       # Returns [[width, height], outcome] where outcome is one of :reached,
       # :stalled or :timed_out -- see wait_for_size.
+      #
+      # `width`/`height` are the INNER size wanted; the chrome correction is
+      # added on the way out to the window manager and never leaks into what we
+      # compare against, so `:stalled` now means the browser genuinely refused,
+      # rather than "there is a title bar". (#79)
       def hs_internal_resize_to(width, height)
-        Capybara.current_session.current_window.resize_to(width, height)
+        chrome_width, chrome_height = window_chrome
+        Capybara.current_session.current_window
+                .resize_to(width + chrome_width, height + chrome_height)
         yield if block_given?
         wait_for_size(width, height)
       end
