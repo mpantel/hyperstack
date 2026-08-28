@@ -253,6 +253,64 @@ describe 'serializing the columns hash (#81)' do
         .to eq(:string)
     end
   end
+
+  # Regression coverage for #93.
+  #
+  # The examples above, and #81's, all drive the sanitizer or LazyColumnsHash. That
+  # is what let #93 through: `public_columns_hash` has TWO builders, and only the
+  # lazy one returns a LazyColumnsHash. build_eager_columns_hash returns a plain
+  # Hash extended with a module, carrying raw Column objects and no sanitizing
+  # as_json -- so on Rails 8.1 it handed them to the JSON encoder and raised the
+  # same NoMethodError, 500ing hyper-spec's harness route. Every "Opal is not
+  # defined" on that cell was downstream of it.
+  #
+  # So these drive `public_columns_hash_as_json` itself, once per builder shape.
+  describe 'serializing whichever hash the builders return (#93)' do
+    around do |example|
+      # the method memoizes across calls; keep this from leaking either way
+      prev_json = ActiveRecord::Base.instance_variable_get(:@public_columns_hash_json)
+      prev_hash = ActiveRecord::Base.instance_variable_get(:@prev_public_columns_hash)
+      ActiveRecord::Base.instance_variable_set(:@public_columns_hash_json, nil)
+      ActiveRecord::Base.instance_variable_set(:@prev_public_columns_hash, nil)
+      example.run
+      ActiveRecord::Base.instance_variable_set(:@public_columns_hash_json, prev_json)
+      ActiveRecord::Base.instance_variable_set(:@prev_public_columns_hash, prev_hash)
+    end
+
+    let(:raw) do
+      { 'D' => { 'name' => column.new('name', 'anon',
+                                      sql_type_metadata.new('varchar', :string),
+                                      type_value.new(:string)) } }
+    end
+
+    it 'serializes what the EAGER builder returns -- a plain Hash, no as_json of its own' do
+      eager = raw.dup.extend(Module.new)
+      allow(ActiveRecord::Base).to receive(:public_columns_hash).and_return(eager)
+
+      json = nil
+      expect { json = ActiveRecord::Base.public_columns_hash_as_json }.not_to raise_error
+      expect(JSON.parse(json).dig('D', 'name', 'cast_type')).to eq('string')
+    end
+
+    it 'serializes what the LAZY builder returns -- a container with its own as_json' do
+      lazy = Class.new do
+        def initialize(h) = @h = h
+        def to_h = @h
+        def as_json(options = nil) = ActiveRecord::Base.json_safe_columns(to_h).as_json(options)
+      end.new(raw)
+      allow(ActiveRecord::Base).to receive(:public_columns_hash).and_return(lazy)
+
+      json = nil
+      expect { json = ActiveRecord::Base.public_columns_hash_as_json }.not_to raise_error
+      expect(JSON.parse(json).dig('D', 'name', 'cast_type')).to eq('string')
+    end
+
+    it 'is exactly the case that used to raise' do
+      # guards the guard: the eager shape must still be unserializable raw, or the
+      # example above proves nothing
+      expect { raw.to_json }.to raise_error(NoMethodError)
+    end
+  end
 end
 
 end
