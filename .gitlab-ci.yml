@@ -279,6 +279,25 @@ stages:
     - bundle list
     - echo 'install completed'
 
+  # Keep the generated app's server log when a job fails. Chasing #81 cost several
+  # full-matrix runs precisely because this did not exist: the browser reported
+  # 79 HTTP 500s from the harness route and there was not one backtrace anywhere
+  # to say what raised. The client-side symptom is visible in the trace; the
+  # server-side cause never is.
+  #
+  # `when: on_failure` so a green pipeline uploads nothing. Ignore a missing path
+  # rather than failing the job over it -- the gems that use a COMMITTED test_app
+  # always have one, but rails-hyperstack GENERATES its app at spec:prepare, so
+  # when that step is what failed there is no log to collect.
+  artifacts:
+    when: on_failure
+    expire_in: 1 week
+    name: "$CI_JOB_NAME-$CI_JOB_ID-logs"
+    paths:
+      - ruby/*/spec/test_app/log/
+    exclude:
+      - ruby/*/spec/test_app/log/**/*.gz
+
   script:
     - echo running script $COMPONENT
     - DRIVER=travis bundle exec rake $TASK
@@ -411,6 +430,25 @@ stages:
 #    - cd ../..
     - bundle list
     - echo 'install completed'
+
+  # Keep the generated app's server log when a job fails. Chasing #81 cost several
+  # full-matrix runs precisely because this did not exist: the browser reported
+  # 79 HTTP 500s from the harness route and there was not one backtrace anywhere
+  # to say what raised. The client-side symptom is visible in the trace; the
+  # server-side cause never is.
+  #
+  # `when: on_failure` so a green pipeline uploads nothing. Ignore a missing path
+  # rather than failing the job over it -- the gems that use a COMMITTED test_app
+  # always have one, but rails-hyperstack GENERATES its app at spec:prepare, so
+  # when that step is what failed there is no log to collect.
+  artifacts:
+    when: on_failure
+    expire_in: 1 week
+    name: "$CI_JOB_NAME-$CI_JOB_ID-logs"
+    paths:
+      - ruby/*/spec/test_app/log/
+    exclude:
+      - ruby/*/spec/test_app/log/**/*.gz
 
   script:
     - echo running script $COMPONENT
