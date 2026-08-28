@@ -30,6 +30,29 @@ module HyperSpec
   # It does not remove the hazard, and pretending otherwise would be worse than
   # documenting it: a mutating block whose first read mismatches WILL re-run.
   # The 19 sites are worth reviewing if any of them starts behaving oddly.
+  #
+  # ---------------------------------------------------------------------------
+  # THE WORST SHAPE OF THAT HAZARD: a block that mutates the value it asserts
+  #
+  # Re-running a mutating block is merely untidy while the mutation is unrelated
+  # to the value being matched. When the block mutates the very quantity under
+  # assertion -- a counter it increments, a table it counts after inserting into
+  # -- polling cannot converge BY CONSTRUCTION: every retry moves the value one
+  # step further from the matcher, and the example burns the whole
+  # default_max_wait_time before failing with a "got" that is really just the
+  # number of retries. batch6/server_method_spec.rb:71 failed that way with
+  # `expected: 5, got: 60` on three cells (#83).
+  #
+  # The failure is invisible until the first read happens to be wrong, so it
+  # surfaces as a rare flake with a wildly inflated value. Write such an example
+  # in one of these shapes instead:
+  #
+  #   * make the block IDEMPOTENT, so re-running it yields the same value --
+  #     reset the counter inside the block, or assert a delta rather than an
+  #     absolute (batch3/aaa_edge_cases_spec.rb, client_features/react_spec.rb);
+  #   * or, where the block already synchronises on a promise, drop to
+  #     `evaluate_promise` and a plain `expect(...)`: reading once after the
+  #     promise resolves reopens no race (batch6/server_method_spec.rb).
   class AsyncExpectationTarget
     INTERVAL = 0.25
 

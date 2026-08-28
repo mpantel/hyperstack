@@ -166,8 +166,12 @@ describe 'React', js: true do
       it "should match the instance cycle to ReactComponent life cycle" do
         expect_evaluate_ruby do
           class Foo
+            # Reset here, in the class body, rather than with a ||= in the
+            # constructor: expect_evaluate_ruby polls by re-running this whole
+            # block (#67), and a count that survived the re-run could never come
+            # back to 2 -- each retry would push it further away (#83).
+            @@count = 0
             def initialize(native)
-              @@count ||= 0
               @@count += 1
             end
             render do

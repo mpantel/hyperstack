@@ -85,13 +85,21 @@ describe "reactive-record edge cases", js: true do
   end
 
   it "does not double count local saves" do
+    # Assert the DELTA, not the absolute count: expect_promise polls by
+    # re-running its block (#67), and this block creates a Todo, so an absolute
+    # count would climb by one on every retry and could never converge back to
+    # the expected value (#83). The delta is what the example is actually about
+    # -- one local save must move the count by one, not by two -- and it stays
+    # correct however many times the block runs.
     expect_promise do
+      count_before = nil
       HyperMesh.load do
         Todo.count
       end.then do |count|
+        count_before = count
         Todo.create(title: 'test todo')
       end.then do
-        Todo.count
+        Todo.count - count_before
       end
     end.to eq(1)
   end

@@ -69,12 +69,28 @@ RSpec::Steps.steps 'server_method', js: true do
   end
 
   it "works with the load method" do
-    expect_promise do
+    # The block below increments a server side counter, so it has to be
+    # evaluated exactly ONCE. expect_promise polls by re-running its block
+    # (#67), and every retry increments the counter again, so an exact value
+    # expectation on it can never converge -- the reported "got" degenerates
+    # into a count of retry iterations (#83).
+    #
+    # evaluate_promise reads once, but only after waiting for the promise to
+    # resolve, and that resolution is the synchronisation the polling was
+    # standing in for here. So reading once reopens no race.
+    result = evaluate_promise do
       new_todo = TodoItem.new
       ReactiveRecord.load do
         new_todo.test
       end
-    end.to eq(5)
+    end
+    # What this step proves is that load resolves with the value the server
+    # computed for THIS call: not the default (0), and not a stale earlier
+    # value. Comparing against the server's own counter says exactly that,
+    # without hard coding how many times the earlier steps happened to call
+    # the method -- which is what made the old eq(5) brittle in the first place.
+    expect(result).to be > 0
+    expect(result).to eq(TodoItem.server_method_count)
   end
 
   it "the server method can access any unsaved associations" do
