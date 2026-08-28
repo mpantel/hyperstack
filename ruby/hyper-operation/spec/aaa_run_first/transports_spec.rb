@@ -112,6 +112,114 @@ end
         end
       end
 
+      # Nothing in this file asserted that the client ever REACHED pusher-fake,
+      # and the examples below cannot: they assert on page content, and
+      # hyperstack falls back to polling when a broadcast does not arrive. So a
+      # client pointed at the wrong host, port or scheme still produces the right
+      # page, just slowly, and every one of them passes.
+      #
+      # That is not hypothetical. The vendored client spent nine years connecting
+      # to `wss://127.0.0.1` on port 443 with nothing listening -- it did not
+      # understand the `forceTLS` option pusher-fake configures it with -- and the
+      # only symptom was unrelated column-type specs failing on console noise
+      # (#85). These two examples are the assertion that was missing. (#89)
+      it 'ships a pusher client that understands the option pusher-fake sends it' do
+        # pusher-fake says "do not use TLS" with `forceTLS: false`. A client that
+        # has never heard of the option ignores it and picks its own scheme and
+        # port -- which is exactly what happened. Cheap, no browser: catches the
+        # vendored file being replaced by one that does not speak this dialect.
+        vendored = File.expand_path('../../lib/sources/hyperstack/pusher.js', __dir__)
+
+        expect(File.read(vendored)).to include('forceTLS')
+      end
+
+      it 'actually establishes the websocket connection' do
+        mount 'TestComponent'
+        evaluate_ruby 'Hyperstack.go_ahead_and_connect'
+
+        # Passed as a string rather than a block: the body is Opal source with a
+        # JS escape in it, and a string goes to the client verbatim instead of
+        # through the spec-block round trip.
+        #
+        # pusher-js exposes connection.state as one of connecting / connected /
+        # unavailable / failed. `connected` is the only one that means the
+        # broadcasts these specs rely on can arrive over pusher at all; anything
+        # else means the assertions below are being satisfied by the polling
+        # fallback.
+        expect_evaluate_ruby(
+          '`#{Hyperstack::ClientDrivers.opts[:pusher_api]}.connection.state`'
+        ).to eq('connected')
+      end
+
+      # With the socket up (above) and the two examples below still failing, the
+      # fault is somewhere between a live connection and the component. This
+      # splits that span in two: pusher-js marks a channel `subscribed` only
+      # after `pusher:subscription_succeeded`, which for a PRIVATE channel means
+      # /hyperstack-pusher-auth accepted it. So a false here is subscription or
+      # authorisation, and a true here means the subscription is fine and the
+      # fault is in delivery -- `bind('dispatch')` never firing, or the server
+      # triggering a channel name the client is not listening on. (#87, #89)
+      #
+      # Deliberately reports the channel names and their flags rather than
+      # asserting a bare boolean: when this fails, the message is the diagnosis.
+      it 'subscribes to the channel it expects to receive broadcasts on' do
+        mount 'TestComponent'
+        evaluate_ruby 'Hyperstack.go_ahead_and_connect'
+        wait_for_ajax
+
+        channels = evaluate_ruby(
+          '`(function() { var p = #{Hyperstack::ClientDrivers.opts[:pusher_api]}; ' \
+          'if (!p || !p.channels || !p.channels.channels) { return ["<no channels object on the pusher client>"]; } ' \
+          'var names = Object.keys(p.channels.channels); ' \
+          'if (names.length === 0) { return ["<client is subscribed to nothing>"]; } ' \
+          'return names.map(function(n) { var c = p.channels.channels[n]; ' \
+          'return n + " subscribed=" + (c && c.subscribed); }); })()`'
+        )
+
+        expect(channels.join(' | ')).not_to include('subscribed=false')
+        expect(channels.join(' | ')).not_to include('<')
+      end
+
+      # The examples further down assert on page content, and hyperstack falls
+      # back to POLLING when a broadcast does not arrive -- so they pass whether
+      # or not pusher delivered anything. That is what let the transport stay
+      # broken for years: the vendored client could not connect at all (#85), and
+      # once it could, its dispatch handler raised on every broadcast (#87). Both
+      # were invisible because the page still ended up correct, slowly.
+      #
+      # This asserts the thing those cannot: that the broadcast arrives ON THE
+      # PUSHER CHANNEL. Only the public pusher-js API is used -- subscribe/bind --
+      # so it does not depend on the client's internals the way the throwaway
+      # probes that found the bug did.
+      it 'delivers a broadcast over pusher, not via the polling fallback' do
+        mount 'TestComponent'
+        evaluate_ruby 'Hyperstack.go_ahead_and_connect'
+        wait_for_ajax
+
+        evaluate_ruby(
+          '`(function() { var p = #{Hyperstack::ClientDrivers.opts[:pusher_api]}; ' \
+          'window.__hsSeen = []; ' \
+          'if (!p || !p.channels || !p.channels.channels) { return false; } ' \
+          'Object.keys(p.channels.channels).forEach(function(n) { ' \
+          'p.channels.channels[n].bind("dispatch", function() { window.__hsSeen.push(n); }); }); ' \
+          'return true; })()`'
+        )
+
+        CreateTestModel.run(test_attribute: 'delivered over pusher')
+
+        # poll rather than sleep a fixed span: a broadcast that arrives is seen at
+        # once, and only a broadcast that never arrives pays the full wait
+        seen = []
+        10.times do
+          seen = evaluate_ruby('`window.__hsSeen || []`')
+          break if seen.any?
+
+          sleep 0.5
+        end
+
+        expect("dispatches received on #{seen.inspect}").to satisfy { seen.any? }
+      end
+
       it 'opens the connection' do
         mount 'TestComponent'
         evaluate_ruby 'Hyperstack.go_ahead_and_connect'
