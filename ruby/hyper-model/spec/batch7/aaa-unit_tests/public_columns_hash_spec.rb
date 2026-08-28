@@ -106,4 +106,107 @@ describe "ActiveRecord::Base.public_columns_hash optimization" do
     end
   end
 
+# Regression coverage for #81.
+#
+# `public_columns_hash` holds ActiveRecord Column objects, and serializing one
+# reaches `ActiveModel::Type::Value#as_json` -- which is `raise NoMethodError`,
+# deliberately, and identically in Rails 8.0 and 8.1. Those objects were never
+# serializable; nothing had asked them. ActiveSupport 8.1 replaced its JSON
+# encoder with JSONGemCoderEncoder, which calls `as_json` on every value that is
+# not natively JSON -- so on 8.1 it asks, and the raise took out the whole page:
+# a 500 on hyper-spec's harness route, a truncated inline script, no columns hash
+# on the client, and then 1774 x "undefined method `[]' for nil".
+#
+# The stand-ins below are shaped like the real objects rather than mocked, so the
+# example fails if the serialization stops being safe for ANY reason -- a new
+# unserializable value in the hash, or the encoder changing again.
+describe 'serializing the columns hash (#81)' do
+  # A REAL ActiveModel::Type::Value subclass. The fix dispatches on that class, so
+  # a bare stand-in takes the generic instance_values branch instead and the
+  # examples below would prove nothing about the branch that actually runs. The
+  # raise is restated here rather than inherited, so the examples do not depend on
+  # which Rails version put it into Type::Value.
+  let(:type_value) do
+    Class.new(ActiveModel::Type::Value) do
+      attr_reader :type
+
+      def initialize(type)
+        super()
+        @type = type
+      end
+
+      def as_json(*) = raise(NoMethodError)
+    end
+  end
+
+  let(:sql_type_metadata) do
+    Class.new do
+      def initialize(sql_type, type)
+        @sql_type = sql_type
+        @type = type
+      end
+    end
+  end
+
+  let(:column) do
+    Class.new do
+      def initialize(name, default, meta, cast_type)
+        @name = name
+        @default = default
+        @sql_type_metadata = meta
+        @cast_type = cast_type
+      end
+    end
+  end
+
+  let(:columns_hash) do
+    {
+      'Sample' => {
+        'name' => column.new('name', 'anon',
+                             sql_type_metadata.new('varchar', :string),
+                             type_value.new(:string)),
+        'created_at' => column.new('created_at', nil,
+                                   sql_type_metadata.new('datetime', :datetime),
+                                   type_value.new(:datetime))
+      }
+    }
+  end
+
+  it 'is exactly the case that used to raise' do
+    # guards the guard: if this stops raising, the stand-in has drifted from
+    # what Rails actually does and the example below proves nothing
+    expect { columns_hash.as_json }.to raise_error(NoMethodError)
+  end
+
+  it 'serializes without raising' do
+    expect { ActiveRecord::Base.json_safe_columns(columns_hash).to_json }.not_to raise_error
+  end
+
+  it 'keeps the shape the client reads' do
+    # the client reads [:sql_type_metadata][:type] and [:default]; the payload is
+    # Object#as_json's instance_values form, so keys arrive as strings
+    json = JSON.parse(ActiveRecord::Base.json_safe_columns(columns_hash).to_json)
+    col = json.dig('Sample', 'name')
+
+    expect(col['default']).to eq('anon')
+    expect(col['name']).to eq('name')
+    expect(col.dig('sql_type_metadata', 'type')).to eq('string')
+    expect(json.dig('Sample', 'created_at', 'sql_type_metadata', 'type')).to eq('datetime')
+  end
+
+  it 'replaces an unserializable type with its type name' do
+    json = JSON.parse(ActiveRecord::Base.json_safe_columns(columns_hash).to_json)
+
+    expect(json.dig('Sample', 'name', 'cast_type')).to eq('string')
+  end
+
+  it 'catches one nested at any depth' do
+    # the point of recursing through instance_values rather than letting
+    # Object#as_json do it: a Type::Value further down must not escape
+    nested = { 'a' => { 'b' => [{ 'c' => type_value.new(:integer) }] } }
+
+    expect(ActiveRecord::Base.json_safe_columns(nested)).to eq('a' => { 'b' => [{ 'c' => :integer }] })
+  end
+end
+
 end
