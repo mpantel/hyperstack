@@ -68,10 +68,10 @@ You can control how much of the stack gets installed as well:
     spec.add_dependency 'opal-rails', *Hyperstack.version_selector('OPAL_RAILS_VERSION', '~> 2.0')
   end
   spec.add_dependency 'opal', *Hyperstack.version_selector('OPAL_VERSION', '~> 1.8')
-  spec.add_dependency 'react-rails', *Hyperstack.version_selector('REACT_RAILS_VERSION', '>= 2.4.0', '< 2.7.0')
+  spec.add_dependency 'react-rails', *Hyperstack.version_selector('REACT_RAILS_VERSION', '>= 2.4.0', '< 4.0')
   # spec.add_dependency 'mini_racer', '~> 0.2.6'
   # spec.add_dependency 'libv8', '~> 7.3.492.27.1'
-  spec.add_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
+  spec.add_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 9.0')
   spec.add_development_dependency 'bundler'
   # spec.add_development_dependency 'chromedriver-helper'
   spec.add_development_dependency 'hyper-spec', Hyperstack::VERSION

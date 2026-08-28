@@ -39,7 +39,7 @@ Gem::Specification.new do |spec|
   else
     spec.add_development_dependency 'opal-rails', *Hyperstack.version_selector('OPAL_RAILS_VERSION', '~> 2.0')
   end
-  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 7.0')
+  spec.add_development_dependency 'rails', *Hyperstack.version_selector('RAILS_VERSION', '>= 5.0.0', '< 9.0')
   spec.add_development_dependency 'rake'#, '~> 10.0'
   spec.add_development_dependency 'uglifier'#, '4.1.6'
 end
