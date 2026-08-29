@@ -141,7 +141,12 @@ module Hyperstack
   end
 
   def self.send_data(channel, data)
-    if !on_server?
+    # The root_path test matches `dispatch` and `Broadcast.after_commit`. Without
+    # it a process that is not the server and has no server to forward to (a rake
+    # task on a box where the app has never served a request) raised 'no server
+    # running' out of `send_to_server` instead of queueing the message locally,
+    # which is both harmless and what the polling transports actually read. (#105)
+    if !on_server? && Connection.root_path
       send_to_server(channel, data)
     elsif transport == :pusher
       pusher.trigger("#{Hyperstack.channel}-#{data[1][:channel].gsub('::', '==')}", *data)
@@ -159,9 +164,63 @@ module Hyperstack
     end
   end
 
+  # Is this process the one serving requests?
+  #
+  # `send_data`, `dispatch` and `ReactiveRecord::Broadcast.after_commit` ask this
+  # to choose between broadcasting directly and forwarding to the running server
+  # over HTTP (`send_to_server`); the connection adapters' `active` asks it to
+  # decide whether this process should be the one expiring and refreshing
+  # connections. That is a real distinction and the right question. Until #105 it
+  # was asked like this:
+  #
+  #     def self.on_server?
+  #       return defined? Rails::Server
+  #     end
+  #
+  # `Rails::Server` is defined only when the process was started through `rails
+  # server`. It is NOT defined under Passenger, a container running `bundle exec
+  # puma` or `rackup`, Capybara's in-process server, or any rake task -- so in a
+  # normal deployment this answered *false from inside the server itself*, and
+  # every broadcast took the forwarding branch: an HTTP POST from the server to
+  # itself, landing on `console_update`, which is `raise unless
+  # Rails.env.development?` and so answers 401 in production. `send_to_channel`
+  # calls `send_data` again on the way back out, so in development the same
+  # round trip recurses over HTTP until it times out. #103 (connection tables
+  # never created) was one consequence of the same predicate; this is the
+  # predicate itself.
+  #
+  # It is now answered three ways, in order:
+  #
+  # 1. `Hyperstack.on_server = true/false` -- an explicit statement, for a
+  #    deployment shape we cannot recognise, or for a test harness that runs the
+  #    server in its own process. `nil` (the default) means "work it out".
+  # 2. Whether this process has actually served a request. `Engine`'s middleware
+  #    records that on every request, so it is a fact rather than a guess, and it
+  #    holds under any rack server. This is the branch that matters: a broadcast
+  #    from a controller, a model callback or an ActionCable channel is always
+  #    downstream of a request.
+  # 3. The boot-time markers of the server processes we can name, for the window
+  #    before the first request has been served.
+  #
+  # Everything else -- a console, a rake task, a background job worker -- answers
+  # false and forwards, which is what it wants.
   def self.on_server?
-    return defined? Rails::Server
+    return on_server unless on_server.nil?
+    return true if @serving_requests
+
+    !!(defined?(::Rails::Server) || defined?(::PhusionPassenger))
   end
+
+  # Set from Engine's middleware on every request: this process serves requests.
+  # Deliberately not reset -- a process that has served one request is a server
+  # for the rest of its life.
+  def self.serving_requests!
+    @serving_requests = true
+  end
+
+  # An explicit answer for `on_server?`, overriding the detection above.
+  # nil (the default) leaves it to `on_server?`.
+  define_setting(:on_server, nil)
 
   def self.pusher
     unless @pusher

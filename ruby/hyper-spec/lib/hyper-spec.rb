@@ -236,11 +236,21 @@ RSpec.configure do |config|
   # on the size they asked for may prefer to fail on the spot. (#77)
   config.add_setting :raise_on_unreachable_window_size, default: false
 
+  # The rspec process and the app server are the same process under Capybara, so
+  # this process really is the server -- but it has not served a request yet when
+  # a non-js example broadcasts, and `Hyperstack.on_server?` has no way to know
+  # that on its own. Say so explicitly rather than redefining the predicate: #105
+  # replaced `defined?(Rails::Server)` with something the suites should be able
+  # to exercise, and a class_eval here would put the old hole straight back.
   config.before(:each) do
     if defined?(Hyperstack)
-      Hyperstack.class_eval do
-        def self.on_server?
-          true
+      if Hyperstack.respond_to?(:on_server=)
+        Hyperstack.on_server = true
+      else
+        Hyperstack.class_eval do
+          def self.on_server?
+            true
+          end
         end
       end
     end
