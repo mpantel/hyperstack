@@ -68,6 +68,17 @@ bundle install --quiet
 echo "==> Preparing test DB"
 ( cd spec/test_app && bundle exec rails db:create db:migrate >/dev/null )
 
+# jsbundling-rails (#19 esbuild): build the JS bundles in a node container (the
+# host has no Node), then skip jsbundling's own assets:precompile build hook so
+# the Opal precompile below runs without needing Node on the host. In CI (Node in
+# base24) SKIP_JS_BUILD is unset, so the hook builds automatically.
+if [ -f spec/test_app/package.json ] && grep -q '"build"' spec/test_app/package.json; then
+  echo "==> Building JS bundles (esbuild via node:24, yarn)"
+  docker run --rm --network host -v "$ROOT/ruby/$COMPONENT/spec/test_app":/app -w /app \
+    node:24 sh -c "corepack enable 2>/dev/null; yarn install --silent && yarn build" >/dev/null
+  export SKIP_JS_BUILD=1
+fi
+
 echo "==> Precompiling Opal assets"
 ( cd spec/test_app \
   && rm -f public/assets/.sprockets-manifest-*.json public/assets/manifest-*.js public/assets/application-*.js \
