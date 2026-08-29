@@ -42,6 +42,7 @@
     * [Methods and Features](development-workflow/hyper-spec/03-methods-and-features.md)
     * [Using with Rack](development-workflow/hyper-spec/04-using-with-rack.md)
   * [Deploy To Heroku](development-workflow/deploy-to-heroku.md)
+  * [The CI Version Matrix](development-workflow/ci-matrix.md)
 * [Tutorial](tutorial/README.md)
   * [TodoMVC Tutorial Part I](tutorial/todo.md)
   * [TodoMVC Tutorial Part II](tutorial/todo-part-2.md)

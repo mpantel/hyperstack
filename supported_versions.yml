@@ -1,5 +1,8 @@
 # The supported-configuration matrix — single source of truth.
 #
+# How to add or remove a cell, and what one costs:
+#   docs/development-workflow/ci-matrix.md
+#
 # Two consumers, so what we claim to support and what we actually test cannot
 # drift apart:
 #
@@ -142,6 +145,53 @@ cells:
     react:       "19.2"   # derived: npm via esbuild, not react-rails' bundled 18.2
     env:
       RAILS_VERSION: "~> 6.1.0"   # explicit since the gemspec cap widened (#20)
+      REACT_RAILS_VERSION: "~> 3.3"
+      HYPERSTACK_REACT_SOURCE: "npm"
+      REACT_NPM_VERSION: "~19.2.0"
+      HYPERSTACK_JS_PIPELINE: esbuild
+
+  # Rails 7.2 with React 19 -- the combination ru/hyperstack-addons actually
+  # ships, and until this cell the one hole in the table that a published gem
+  # line fell through.
+  #
+  # Rails 7.2 appeared once (rails72-react16, on React 16.14) and React 19 three
+  # times (6.1, 8.0, 8.1), never together -- so both axes were tested either side
+  # of this point and never at it. `rails-hyperstack`
+  # 1.0.alpha1.8.34.18.72.1902.x, whose version digits read Ruby 3.4 / Opal 1.8 /
+  # Rails 7.2 / React 19.02, is what hyperstack-addons depends on and releases
+  # against (hyperstack-addons 34.18.72.1902.x).
+  #
+  # The gap surfaced from that side: ru/hyperstack-addons#34 ports this matrix
+  # machinery, and its cells carry an `upstream_cell` naming the hyperstack cell
+  # they correspond to. The addons rails72-react19 cell had to be recorded as `~`
+  # because no upstream cell matched -- pointing it at the near-miss
+  # rails72-react16 would have claimed coverage of a React that is not the one
+  # being run, which that check rejects. This cell is what the field can now name.
+  #
+  # It is the union of two cells that already pass, and introduces no new
+  # mechanism: the Rails axis and OPAL_RAILS_VERSION come from rails72-react16,
+  # the React axis (npm via esbuild, plus react-rails 3.3 for react_ujs) from
+  # rails61-react19. So a failure here is specifically a Rails-7.2-with-React-19
+  # interaction -- which is the thing worth learning, because neither neighbouring
+  # cell can show it.
+  #
+  # opal-rails 2.x is kept rather than the opal-sprockets swap: its `rails < 7.3`
+  # cap still admits 7.2, so this cell needs none of the Rails 8 asset work. (#20)
+  #
+  # REACT_NPM_VERSION pins the 19.2 series rather than `^19.0.0` for the same
+  # reason rails61-react19 does: cell_contract_spec asserts the browser's
+  # window.React.version against `react:` below, and a caret range would float
+  # onto 19.3 and fail it. (#95)
+  - id: rails72-react19
+    ruby:        "3.4"
+    rails:       "7.2"
+    opal:        "1.8"
+    react_rails: "3.3"       # for react_ujs; React itself comes from npm
+    pipeline:    sprockets
+    react:       "19.2"      # derived: npm via esbuild, pinned by REACT_NPM_VERSION
+    env:
+      RAILS_VERSION: "~> 7.2"
+      OPAL_RAILS_VERSION: "~> 2.0"
       REACT_RAILS_VERSION: "~> 3.3"
       HYPERSTACK_REACT_SOURCE: "npm"
       REACT_NPM_VERSION: "~19.2.0"
