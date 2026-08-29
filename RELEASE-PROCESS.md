@@ -15,8 +15,18 @@ To release a new gem set:
    `git log --no-merges --reverse <last bump commit>..HEAD`
 4. Commit all the above. <- VERY IMPORTANT TO DO THIS BEFORE ADDING THE TAG
 5. `git tag 1.0.alpha1.<new point release>`
-6. `git push --tags origin edge` <- once build passes gems will be released!!!
-7. Add a new release note (add release in GitLab): copy the CHANGELOG entry.
+6. `git push --tags origin edge`. This starts a tag pipeline. It does **not**
+   publish anything — see below.
+7. When that pipeline is green, run the eleven `*-deploy` jobs. **They are
+   `when: manual`**, so nothing is published until a human starts them. Each runs
+   `rake hyperstack:gem:publish COMPONENT=<gem>`, which POSTs the built gem to the
+   GitLab RubyGems registry and then polls the packages API until the version
+   reports status `default` — a 201 only means the file was stored (#49). They
+   share `resource_group: production`, so they serialise.
+8. **Check each deploy job actually succeeded.** They are `allow_failure: true`,
+   so a failed publish leaves the pipeline green. Pipeline colour is not evidence
+   that the gems went out; the job statuses are.
+9. Add a new release note (add release in GitLab): copy the CHANGELOG entry.
 
 Notes on the version number
 ---------------------------
