@@ -21,6 +21,50 @@ describe 'rescues macro', js: true do
     expect(page).to have_content('FALLBACK')
   end
 
+  it 'recovers from a transient error consumed on the first raise (#39)' do
+    # React >= 18 (createRoot, concurrent renderer) recovers from a render error
+    # by re-rendering the whole root once (React error #520) BEFORE escalating to
+    # the error boundary; it only calls componentDidCatch if that recovery render
+    # ALSO throws. A rescue whose trigger clears on the first raise — a transient
+    # error, or the `raise_error!` + reset idiom — would therefore be "recovered"
+    # and its `rescues` block never run. On React 17's legacy root the throw went
+    # straight to the boundary, so this regressed. Component#_render_wrapper
+    # re-raises @__hyperstack_pending_render_error on the recovery render so it
+    # reaches the boundary. The trigger here is a reactive UPDATE (a click), not a
+    # mount, and clears itself on the first raise (`@boom = false` before `raise`).
+    #
+    # Salvaged from the retired branch lines, where it only ever ran on one React
+    # 18 cell. Two cross-cell caveats, unverified until a full-matrix run:
+    #   * on React 16/17 the throw reaches the boundary directly, so the fallback
+    #     appears for a simpler reason and the example should still pass;
+    #   * the recovery re-render is a DEVELOPMENT-build behaviour. The react-rails
+    #     cells serve a dev build; the esbuild/npm React 19 cells may serve a
+    #     production build, where React does not replay the throwing render.
+    mount 'Test' do
+      class Test < Hyperloop::Component
+        class << self
+          attr_accessor :boom
+        end
+        def check!
+          if Test.boom
+            Test.boom = false
+            raise 'transient'
+          end
+        end
+        render(DIV) do
+          check!
+          @rescued ? 'FALLBACK' : 'normal'
+        end
+        rescues { @rescued = true }
+      end
+    end
+    expect(page).to have_content('normal')
+    # trigger a reactive UPDATE whose render raises once (Test.boom cleared before
+    # the raise), then expect the rescue fallback
+    evaluate_ruby { Test.boom = true; Hyperstack::Component.force_update! }
+    expect(page).to have_content('FALLBACK')
+  end
+
   it 'will catch specific errors' do
     mount 'Test' do
       class MyError < Exception; end

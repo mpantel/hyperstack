@@ -28,6 +28,12 @@ RSpec.configure do |config|
   end
   config.before(:each, :js => true) do
     DatabaseCleaner.strategy = :truncation
+    # Clean at the START of every attempt. RSpec::Retry re-runs before(:each) on
+    # each retry, and the after-hook below skips cleaning on failure (to preserve
+    # state for debugging) — so without this a flaked data-sync try leaves its
+    # records behind and every retry starts dirty (`expected 0, got 1`), defeating
+    # the retry. Cleaning up front makes each retry start clean and self-recover. (#20)
+    DatabaseCleaner.clean
   end
 
   config.after(:each) do |example|
