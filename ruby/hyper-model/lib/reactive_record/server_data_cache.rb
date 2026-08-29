@@ -151,8 +151,12 @@ module ReactiveRecord
         def [](*vector)
           timing('building cache_items') do
             root = CacheItem.new(self, @acting_user, vector[0], @preloaded_records)
-            vector[1..-1].inject(root) { |cache_item, method| cache_item.apply_method method if cache_item }
             final = vector[1..-1].inject(root) { |cache_item, method| cache_item.apply_method method if cache_item }
+            if ENV['HYPERSTACK_TRACE_VECTORS']
+              ::Rails.logger.info(
+                "[TRACE_VECTOR] #{vector.inspect} => #{(final.value.inspect rescue '<unreadable>')}"
+              )
+            end
             next final unless final && final.value.respond_to?(:superclass) && final.value.superclass <= ActiveRecord::Base
             Hyperstack::InternalPolicy.raise_operation_access_violation(:invalid_vector, "attempt to insecurely access relationship #{vector.last}.")
           end
@@ -191,6 +195,11 @@ module ReactiveRecord
           profiling_enabled = ENV['ENABLE_HYPERSTACK_PROFILING'].to_s.downcase == 'true'
           overall_start = Time.current if profiling_enabled
           Rails.logger.info "[SERVERDATACACHE] Building cache for #{vectors.size} vectors, acting_user: #{acting_user.class.name}" if profiling_enabled
+
+          if ENV['HYPERSTACK_TRACE_VECTORS']
+            Rails.logger.info "[TRACE_BATCH] #{vectors.size} vector(s) in this fetch:"
+            vectors.each_with_index { |v, i| Rails.logger.info "[TRACE_BATCH]   #{i}: #{v.inspect}" }
+          end
 
           start_timing do
             timing(:public_columns_hash) { ActiveRecord::Base.public_columns_hash }

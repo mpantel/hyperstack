@@ -53,6 +53,35 @@ module HyperSpec
   #   * or, where the block already synchronises on a promise, drop to
   #     `evaluate_promise` and a plain `expect(...)`: reading once after the
   #     promise resolves reopens no race (batch6/server_method_spec.rb).
+  #
+  # ---------------------------------------------------------------------------
+  # A SEPARATE HAZARD THE ABOVE DOES NOT COVER: comparing across the two
+  # processes
+  #
+  # Everything above is about re-reading. This one bites a single read.
+  #
+  # `expect(evaluate_promise { ... }).to eq(SomeModel.some_counter)` reads twice
+  # from two different processes: the value the CLIENT resolved, and server state
+  # read afterwards, in the example. Nothing ties the two reads to one moment. If
+  # anything the client has in flight can still move that server state, the
+  # comparison is a race no matter how carefully the first half is read --
+  # dropping to `evaluate_promise` fixes the polling hazard and leaves this one
+  # untouched.
+  #
+  # It is easy to leak such a request: any step that reads a server method (or
+  # fires an operation) and asserts only the value returned SYNCHRONOUSLY ends
+  # with the fetch still outstanding. The next step issues its own, both are
+  # evaluated by different Puma threads, and the later one can resolve with the
+  # earlier call's value while the counter has already moved past it. On an idle
+  # machine every fetch gets its own batch and this never shows; on a loaded CI
+  # runner it is an intermittent off-by-one (#100: `expected: 5, got: 4`).
+  #
+  # The cure is synchronisation, NOT a weaker matcher. Have the step that fires
+  # the asynchronous work settle it -- `wait_for_ajax` before the step ends --
+  # so the server state is quiescent when the next step reads it. Relaxing the
+  # assertion to a delta, or to `be > 0`, would go green whether the client got
+  # a fresh value or a stale one, which throws away the only signal the example
+  # exists to produce.
   class AsyncExpectationTarget
     INTERVAL = 0.25
 

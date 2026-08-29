@@ -40,7 +40,39 @@ RSpec::Steps.steps 'server_method', js: true do
             @server_method_count ||= 0
           end
         end
-        server_method(:test, default: 0) { TodoItem.server_method_count += 1 }
+        server_method(:test, default: 0) do
+          # HYPERSTACK_FORCE_OVERLAP turns the #100 race into a deterministic
+          # failure. The flake needs two fetches of this (side effecting) method
+          # to be evaluated by different Puma threads at the same time, with the
+          # LATER step's evaluated first -- which happens by chance on a loaded
+          # CI runner and never on an idle developer machine, where every fetch
+          # gets its own batch, one at a time.
+          #
+          # Setting the variable parks the first invocation that finds the
+          # counter at 3 -- the one fired by "returns the default value on the
+          # first call" -- until a later invocation has incremented past it. The
+          # next step then resolves with THIS call's value while the counter has
+          # moved on, reproducing `expected: 5, got: 4` exactly. It is off by
+          # default and costs one ENV lookup; with the wait_for_ajax that step
+          # now ends with, the overlap cannot form and the run stays green.
+          if defined?(::Rails) && ENV['HYPERSTACK_FORCE_OVERLAP'] &&
+             TodoItem.server_method_count == 3 &&
+             !TodoItem.instance_variable_get(:@forced_overlap_done)
+            TodoItem.instance_variable_set(:@forced_overlap_done, true)
+            ::Rails.logger.info '[FORCE_OVERLAP] parking this invocation until another increments'
+            waited = 0.0
+            while TodoItem.server_method_count == 3 && waited < 5
+              sleep 0.01
+              waited += 0.01
+            end
+            ::Rails.logger.info "[FORCE_OVERLAP] resuming after #{waited.round(2)}s, count=#{TodoItem.server_method_count}"
+          end
+          TodoItem.server_method_count += 1
+          if defined?(::Rails) && ENV['HYPERSTACK_TRACE_VECTORS']
+            ::Rails.logger.info "[TRACE_COUNT] server_method :test invoked -> #{TodoItem.server_method_count} (id=#{id.inspect})"
+          end
+          TodoItem.server_method_count
+        end
       end
       TestModel.server_method(:test) { child_models.count }
     end
@@ -66,6 +98,22 @@ RSpec::Steps.steps 'server_method', js: true do
 
   it "returns the default value on the first call while waiting for the promise" do
     expect_evaluate_ruby("TodoItem.new.test").to eq(0)
+    # Reading `.test` returns the default synchronously and fires the server side
+    # fetch ASYNCHRONOUSLY. Nothing above waits for that fetch, so without this
+    # wait the step ends with a request still in flight, and the next step issues
+    # its own while it is outstanding. Two Puma threads then evaluate the (side
+    # effecting) server method concurrently against a plain `count += 1`, which is
+    # neither atomic nor ordered: the later step can resolve with the value this
+    # step's call produced while the counter has already moved past it. That is
+    # exactly the intermittent `expected: 5, got: 4` seen on loaded CI runners,
+    # and it reproduces deterministically if this step's invocation is made to
+    # park until the next one has incremented (#100).
+    #
+    # So settle here. Waiting for quiescence -- rather than for a specific value
+    # -- also mops up the fetch the PREVIOUS step (`test!`) fires and likewise
+    # does not wait for, and keeps this step from leaking work into whatever runs
+    # next.
+    wait_for_ajax
   end
 
   it "works with the load method" do
@@ -78,6 +126,7 @@ RSpec::Steps.steps 'server_method', js: true do
     # evaluate_promise reads once, but only after waiting for the promise to
     # resolve, and that resolution is the synchronisation the polling was
     # standing in for here. So reading once reopens no race.
+    count_before = TodoItem.server_method_count
     result = evaluate_promise do
       new_todo = TodoItem.new
       ReactiveRecord.load do
@@ -89,7 +138,22 @@ RSpec::Steps.steps 'server_method', js: true do
     # value. Comparing against the server's own counter says exactly that,
     # without hard coding how many times the earlier steps happened to call
     # the method -- which is what made the old eq(5) brittle in the first place.
+    #
+    # `count_before` is read on the server before the block runs and is exact
+    # only because the previous step waited for quiescence; this step then fires
+    # exactly one fetch, so the value the client resolved must be the one that
+    # increment produced. Asserting the delta AND the absolute keeps both halves
+    # of the meaning: the delta says the client got THIS call's value rather than
+    # an earlier one, the absolute says nothing else moved the counter
+    # underneath. Neither is a relaxation -- weakening this to a delta alone (or
+    # to `be > 0`) would go green whether the value is fresh or stale, and
+    # detecting a stale value is the whole point of the example (#100).
+    if ENV['HYPERSTACK_TRACE_VECTORS']
+      puts "[TRACE_ASSERT] result=#{result.inspect} count_before=#{count_before.inspect} " \
+           "server_method_count=#{TodoItem.server_method_count.inspect}"
+    end
     expect(result).to be > 0
+    expect(result).to eq(count_before + 1)
     expect(result).to eq(TodoItem.server_method_count)
   end
 
