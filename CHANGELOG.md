@@ -3,6 +3,985 @@
 Project-wide changelog. Version-scoped release notes for the v23–v28 Redis
 connection work live in [`CHANGELOG_v23-v28.md`](./CHANGELOG_v23-v28.md);
 hyper-component has its own [`CHANGELOG`](./ruby/hyper-component/CHANGELOG.md).
+The releases published by the retired `rails-7` / `rails-8.0` / `rails-8.1`
+branch lines are archived in
+[`CHANGELOG_rails-7-and-8-lines.md`](./CHANGELOG_rails-7-and-8-lines.md).
+
+## 1.0.alpha1.9 — 2026-08-29
+
+The release that collapses the four release lines into one. Since
+`1.0.alpha1.8.34.18.61.1614.6` this project maintained `edge`, `rails-7`,
+`rails-8.0` and `rails-8.1` as stacked rebases of each other, each publishing its
+own gem set for one Rails version. A fix landed on one line and had to be carried
+by hand to the others; several never made the trip, and the drift was invisible
+because nothing compared the lines. `edge` now serves all of them from a single
+gem set, tested across a 10-cell matrix, and the branch lines are retired.
+
+Two consequences are visible from outside:
+
+- **The version number no longer encodes a configuration.** The old suffix
+  (`.34.18.61.1614.6` = Ruby 3.4 / Opal 1.8 / Rails 6.1 / React 16.14 / patch 6)
+  was the only record of what a build was tested against, which worked while one
+  build meant one combination. It does not survive a matrix, so it is retired and
+  the series returns to a plain point release. `supported_versions.yml` is now the
+  compatibility statement, checked at boot by `Hyperstack::SupportedVersions` and
+  from the command line by `rake hyperstack:config:check` (#51).
+- **The published gems install on what they are tested on.** With no cell env set
+  — exactly how `rake publish` builds — the gemspecs resolved to `rails < 7.0` and
+  `react-rails < 2.7.0`, so the gem refused to install on the Rails 7.2 and 8.x it
+  is tested against. See "Dependency declarations" below (#20).
+
+### Supported configurations
+
+Ten cells, each a pipeline. `react` is derived, not selected: it is whatever
+`react_rails` plus the JS pipeline deliver.
+
+| cell | ruby | rails | react-rails | react |
+|------|------|-------|-------------|-------|
+| rails61-react16 | 3.4 | 6.1 | 2.6 | 16.14 |
+| rails61-react17 | 3.4 | 6.1 | 2.7 | 17.0.2 |
+| rails61-react18 | 3.4 | 6.1 | 3.3 | 18.2 |
+| rails61-react19 | 3.4 | 6.1 | 3.3 | 19.2 (npm) |
+| rails72-react16 | 3.4 | 7.2 | 2.6 | 16.14 |
+| rails72-react19 | 3.4 | 7.2 | 3.3 | 19.2 (npm) |
+| rails80-react19-ruby34 | 3.4 | 8.0 | 3.3 | 19.2 (npm) |
+| rails80-react19-ruby40 | 4.0 | 8.0 | 3.3 | 19.2 (npm) |
+| rails81-react19-ruby34 | 3.4 | 8.1 | 3.3 | 19.2 (npm) |
+| rails81-react19-ruby40 | 4.0 | 8.1 | 3.3 | 19.2 (npm) |
+
+Opal is `~> 1.8` throughout. An app outside these spans is reported
+`:unsupported` and raises; one inside them but not on a cell is `:untested` and
+warns once, naming the nearest tested cell.
+
+### Spec suite timings
+
+Measured on pipeline 6829 — `edge` at `24b4a409a`, the commit this release is cut
+from — with all 121 test jobs green.
+
+**Hardware.** A single host, `ru-vm2`: **16 cores, 32 GB RAM, 15 GB swap**, Docker
+executor, GitLab Runner 19.3.1 on linux/amd64. Hyperstack has no dedicated runner;
+its jobs are served by two runner registrations on that host — id 4 (`limit = 5`)
+and id 7, "unprotected" (`limit = 12`) — under a global `concurrent = 22`. So at
+most **17 jobs run at once**, and this pipeline hit exactly that ceiling: peak 17
+concurrent, 33 jobs on the first registration and 88 on the second.
+
+Those limits are current as of 2026-08-29 and were lowered that day, from 20/28,
+after the kernel OOM-killer fired three times on 2026-08-28 killing a `chrome`
+inside a job container. The matrix widening from 6 to 8 cells (90 → 120 jobs) had
+made a single `edge` pipeline able to fill the runner by itself. A brief upgrade
+to 32 cores / 62 GB was walked back the same week on the reasoning that more cores
+do not lower per-job memory footprint — Chrome, ruby and `cc1` need the same RAM
+regardless — so the ceiling here is memory, not CPU.
+
+**Totals.** 60 minutes wall clock for the test stage. 7 h 20 min (26,395 s) of
+aggregate runner time across 121 jobs: 12 gem jobs × 10 cells, plus the
+once-per-pipeline `supported-versions` check.
+
+Per job, in seconds, across the ten cells:
+
+| job | min | median | max |
+|-----|----:|-------:|----:|
+| hyper-model | 608 | 734 | 762 |
+| hyper-component | 504 | 508 | 513 |
+| hyper-spec | 269 | 285 | 301 |
+| hyperstack-config | 169 | 250 | 265 |
+| hyper-operation:part1 | 181 | 198 | 203 |
+| rails-hyperstack | 139 | 144 | 252 |
+| hyper-operation:part2 | 119 | 130 | 139 |
+| hyper-store | 106 | 113 | 122 |
+| hyper-i18n | 81 | 87 | 93 |
+| hyper-router | 81 | 86 | 90 |
+| hyper-state | 75 | 85 | 93 |
+| hyper-trace | 27 | 33 | 36 |
+| supported-versions | — | 52 | — |
+
+hyper-model is the critical path at ~12 minutes, and is why it runs as 7 batches
+in 4 concurrent rspec processes; hyper-operation splits into two parts for the
+same reason.
+
+Per cell, total runner seconds for its 12 jobs:
+
+| cell | total |
+|------|------:|
+| rails61-react18 | 2736 |
+| rails61-react19 | 2735 |
+| rails61-react16 | 2726 |
+| rails61-react17 | 2722 |
+| rails80-react19-ruby40 | 2712 |
+| rails72-react19 | 2678 |
+| rails72-react16 | 2589 |
+| rails81-react19-ruby34 | 2502 |
+| rails80-react19-ruby34 | 2491 |
+| rails81-react19-ruby40 | 2452 |
+
+The spread across cells is under 12%, which is the point worth taking from this
+table: no configuration in the matrix is meaningfully more expensive than another,
+so the cost of a cell is essentially fixed and adding one is a capacity decision
+rather than a performance one.
+
+Two caveats on reading any of these numbers. They are **with** the prebaked cell
+images (#57, #73, #75), which took roughly 200 s + 95 s off each rails61 job and
+removed a ~58 s cache restore from every job; before that work the same suite cost
+substantially more. And the host is shared — `ru/hyperstack-addons` runs on the
+same two registrations, and five other runners share the machine — so co-scheduling
+moves these figures, and a job that looks slow is often contended rather than
+regressed.
+
+### Security
+
+- **hyper-model: a save or destroy by id now requires read access to the record
+  (#50).** `find_record`/`destroy_record` resolved an incoming primary key with a
+  bare `Model.find(id)`, leaving `create_permitted?`/`update_permitted?`/
+  `destroy_permitted?` as the only gate. Those policies are very often written as
+  "is someone signed in" — the natural place to ask "does this record belong to
+  the acting user" being the read regulations — so a client could send the id of
+  *any* record of that model, have its own permissive change policy evaluated
+  against it, and then have every attribute in the request written to it. The
+  `save: false` branch already replayed the client's vector through the regulated
+  `__secure_remote_access_to_*` path; only the write branch skipped it. Rather
+  than replay the vector on the write path (client vectors go stale — a `*N`
+  collection index can come to point at a different row — so a strict replay
+  would reject legitimate saves), the record is resolved as before and the acting
+  user must then be able to *read* it, via the same
+  `check_permission_with_acting_user(acting_user, :view_permitted?, :id)` the read
+  path uses. The bar is low enough not to break working apps:
+  `accessible_attributes_for` includes `:id` whenever any attribute of the record
+  is broadcast to this browser. `Hyperstack.verify_record_visibility_on_write =
+  false` restores the old behaviour. The unchecked mass-assignment half of #50 —
+  every attribute the browser sends is written before the change policy runs — is
+  documented in `docs/policies` and the hyper-model gotchas rather than changed.
+
+- **hyper-model: close the second half of the `get_model` constant gate (#60).**
+  `ServerDataCache.get_model` consults two gates and only one had been hardened.
+  `LazyColumnsHash#key?` still fell back to `Object.const_defined?`, which under
+  Zeitwerk is true for every class in `app/*` — each has a registered autoload at
+  boot — so a client-supplied string could be declared a "public model" and then
+  autoloaded. The predicate ("defined AND no pending autoload", via
+  `owner.autoload?(leaf)`) moves into `ReactiveRecord::ConstantGate.loaded?`,
+  which both `ServerDataCache.constant_loaded?` and `key?` now call. `key?`
+  returns true first for `@loaded_models` entries and for names matching a
+  `@file_paths` entry, so legitimately-unloaded lazy public models still resolve.
+  The Zeitwerk-safe gate in `server_data_cache` itself came across from the
+  rails-7 line with #43.
+
+### Rails 7 and Rails 8 support
+
+Every one of these was already fixed on a branch line and stranded there. None
+required a Rails-version branch in library code — all are capability checks that
+are correct on 6.1 and on 8.1 alike (#52, #51).
+
+- **hyper-model: `ActiveRecord::InternalMetadata.do_not_synchronize` is guarded.**
+  Rails 7.1+ made `InternalMetadata` a plain class rather than an
+  `ActiveRecord::Base` subclass, so it no longer has `do_not_synchronize` and does
+  not participate in sync anyway. edge called it unconditionally and the gem
+  failed to load outright with
+  `Bundler::GemRequireError: undefined method 'do_not_synchronize'`.
+
+- **hyper-component / hyper-model: `fixture_paths=` replaces `fixture_path=`.**
+  rspec-rails 7, pulled in by Rails 7, removed the singular form, so every example
+  group failed to load. Written as a `respond_to?` check.
+
+- **hyper-store / hyper-state / hyperstack-config: relax the rspec cap (#52).**
+  Those three pinned `rspec '~> 3.11.0'`, which caps rspec-core at 3.11 and so
+  blocks rspec-rails 7+. Relaxed to `'~> 3.11'` — a range rather than rails-7's
+  `rspec-rails >= 7.0`, which would be uninstallable on Rails 6.1.
+
+- **hyper-operation: `serialize :data` needs an explicit coder on Rails 7.1
+  (#52).** A bare `serialize` raises there. Guarded on
+  `::ActiveRecord.version >= 7.1` to pass `coder: YAML`, keeping YAML so existing
+  rows still read. The broken serialize meant connections never registered and
+  every ActionCable transport spec saw `Hyperstack::Connection.active == []`.
+
+- **hyper-operation: use `secret_key_base`, not the Rails-7.2-removed
+  `application.secrets` (#52).** `Hyperstack.authorization` computed the channel
+  authorization SHA1 from `Rails.application.secrets[:secret_key_base]`. Rails 7.2
+  removed `Rails.application.secrets` entirely, so every channel authorization
+  failed, no connection became active and no broadcast arrived. Now reads
+  `Rails.application.secret_key_base`, available since Rails 4.1.
+
+- **hyper-operation: the Zeitwerk autoloader contract for policy files (#52).** A
+  policy file that exists but fails to define its constant must propagate as a
+  `LoadError`. The classic autoloader raised exactly that; Zeitwerk raises
+  `Zeitwerk::NameError`. `transport/policy.rb` converts the latter back behind
+  `defined?(Zeitwerk::NameError)`, so the contract holds on both.
+
+- **hyperstack-config: guard the classic-autoloader hooks removed in Rails 7
+  (#52).** `server_side_auto_require.rb` aliased
+  `ActiveSupport::Dependencies.require_or_load` at load time, which no longer
+  exists and raised `NameError` during `rails generate model`; the alias is now
+  wrapped in `if respond_to?(:require_or_load, true)`, correct because under
+  Zeitwerk the `loader.on_load` hook already covers shadowed server-side files.
+  More insidiously, `Rails.configuration.try(:autoloader) == :zeitwerk` is
+  *silently false* on Rails 7 (`config.autoloader` was removed), so the `on_load`
+  hook was never installed and server-side shadow files quietly stopped loading.
+  Replaced with `Rails.respond_to?(:autoloaders) &&
+  Rails.autoloaders.zeitwerk_enabled?`.
+
+- **hyper-model: `primary_abstract_class` is a no-op on the client (#43).**
+  Rails 7+ generates `class ApplicationRecord < ActiveRecord::Base;
+  primary_abstract_class; end`, and `hyperstack:install` moves `ApplicationRecord`
+  into `app/hyperstack` so it compiles to the client too — where that server-only
+  macro is undefined and raises on boot, corrupting the reactive-record model
+  layer so client-created records never sync. Inert on Rails 6.1.
+
+- **Rails 8: Opal reaches sprockets through opal-sprockets (#20, #15).**
+  opal-rails 2.x is hard-capped at `rails < 7.3` so it cannot resolve at all on
+  Rails 8, and opal-rails 3.0 replaces the sprockets processor with an `app/opal`
+  entrypoint build — a separate change (#37). A new `OPAL_SPROCKETS_VERSION`
+  selector swaps `opal-sprockets` in for `opal-rails` in the gemspecs, and the
+  Rails wiring `Opal::Rails::Engine` used to provide — `config.opal`, trimming
+  `app/assets` out of `eager_load_paths`, unshifting `Opal.paths` after
+  `:append_assets_path`, and pushing `config.opal.*` into `Opal::Config` — is
+  ported into `Hyperstack::Railtie`, activating only `unless
+  defined?(::Opal::Rails::Engine)`. `SQLITE3_VERSION` comes with it, because Rails
+  8's SQLite3 adapter needs sqlite3 2.x against the gemspecs' `< 2` pin.
+
+- **hyper-spec: register the harness route with `routes.append` on Rails 8 (#20).**
+  The old `disable_clear_and_finalize` / `clear!` / `draw` / `finalize!` dance no
+  longer registers the route there, and every mount spec died with
+  `No route matches [GET] "/hyper_spec_test/N"`. Gated on
+  `Rails::VERSION::MAJOR >= 8`.
+
+- **hyper-spec: emit `Opal::Sprockets.load_asset` for `.rb` assets (#20).**
+  opal-sprockets does not append the `Opal.load(...)` bootstrap to the compiled
+  asset the way opal-rails did, so the module stayed registered in `Opal.modules`
+  and never executed.
+
+- **hyper-model: the columns hash must be JSON-serializable on Rails 8.1 (#81).**
+  The root cause of the entire Rails 8.1 breakage, and a good example of a latent
+  fault that only a new cell could find.
+  `ActiveModel::Type::Value#as_json` is `raise NoMethodError`, deliberately, and
+  it is identical in Rails 8.0 — so the `Column` objects hyperstack serializes
+  were never serializable; nothing had asked them. ActiveSupport 8.1 swapped its
+  JSON encoder for `JSONGemCoderEncoder`, which calls `as_json` on every value
+  outside a small set of primitives, so 8.1 asks and the raise takes the page
+  render with it. That single exception is the whole of #81: the 500 truncates the
+  harness page's inline script (`Uncaught SyntaxError: Unexpected token '}'`), the
+  client never receives the columns hash and so does `JSON.parse(undefined)`, and
+  then 1774 × `ReactiveRecord.load exception ... undefined method '[]' for nil`.
+  The wire shape is deliberately unchanged — exactly what `Object#as_json`
+  produced before, because the client reads `[:sql_type_metadata][:type]` and
+  `[:default]` out of it and that shape already works on 6.1, 7.2 and 8.0. Only
+  the unserializable leaf is replaced, with the type's name, which is the single
+  thing the client wanted from it. Sanitization recurses through `instance_values`
+  rather than delegating to `Object#as_json`, so a `Type::Value` nested anywhere
+  inside is caught rather than raising three levels down where the backtrace does
+  not say which column.
+
+- **hyper-model: sanitize at the JSON boundary, not the call site (#81).** The
+  first cut applied the fix in `public_columns_hash_as_json`, which covered the
+  render path and nothing else; three specs call the serialization directly and
+  still raised. Moved into `LazyColumnsHash#as_json` — which is also what
+  ActiveSupport 8.1's encoder calls on the way through — covering the render path
+  and the direct callers at once.
+
+- **hyper-model: sanitize where both builders converge (#93).** `public_columns_hash`
+  has two builders: `build_lazy_columns_hash` returns a `LazyColumnsHash` (which
+  sanitizes) while `build_eager_columns_hash` returns a plain Hash extended with a
+  module (which did not). On the eager path the raw `Column` objects still reached
+  Rails 8.1's encoder and re-raised, 500ing the harness route — the source of every
+  downstream "Opal is not defined" on that cell. Sanitization moves to
+  `json_safe_columns(pch.to_h).to_json`, and is idempotent so the lazy path passing
+  through both is harmless.
+
+- **hyper-model: do not expand values that already serialize themselves (#92).**
+  A regression introduced by the first cut of #81, not a Rails 8.1 behaviour
+  change. `json_safe_columns` expanded everything non-scalar through
+  `instance_values`, which is wrong for any value that has a real `as_json` but no
+  instance variables — `Date` and `Time` being exactly that. They expanded to `{}`
+  and the column default was destroyed. The damage surfaced a long way off: the
+  date column's default reached the client as `{}`, `DummyValue#initialize` called
+  `Date.parse({})`, the bare `rescue ::Exception` there swallowed the error, and
+  the attribute read back as `nil`. `Date` and `Time` are now leaves, and the
+  expansion branch additionally refuses to expand anything whose `instance_values`
+  are empty — the general form of the same rule.
+
+- **hyper-model: key the `ServerDataCache` tree's id with a String (#82).**
+  `as_hash` did `children.merge(id: id)` with a Symbol while every other key was a
+  String, so any node whose record had also had its `id` attribute fetched carried
+  both `:id` and `"id"` — which collapse to one duplicate `"id"` in JSON.
+  ActiveSupport warns about that today; json 3.0 raises. Keyed `'id'`, with the
+  `load_from_json` readers and `class_methods.rb`'s `_react_param_conversion`
+  vector building updated to match.
+
+### React 16 through 19 from one code line
+
+- **hyper-component: the React 18 `createRoot` path (#51).** edge could not run
+  React >= 18 at all — `react_api.rb` had zero `createRoot` references, and React
+  18 removed `ReactDOM.render`. Taken from the rails-7 line (10 files). The code
+  needs no version branching: it feature-detects and keeps every path
+  (`createRoot` → `ReactDOM.render` → `findDOMNode` → `unmountComponentAtNode`).
+  The one genuine difference was the Webpacker server-rendering container, which
+  react-rails 2.x ships and 3.x dropped; rails-7 simply deleted the require, and
+  since both majors are now supported it comes back behind a `LoadError`/`defined?`
+  guard.
+
+- **hyper-component: prop-warning and component-stack specs are React-17 aware
+  (#51).** The React 17 cell surfaced 12 failures, all test expectations rather
+  than component code. React ≤ 16 interpolated its warnings before handing them to
+  `console.error`; React 17 passes the format string and its arguments separately.
+  `console_messages` now re-interpolates before matching, so the assertions stay
+  written against the readable form on either version. Separately, React 17
+  replaced the synthetic component stack with native error frames, so the
+  non-empty `componentStack` is asserted unconditionally and the
+  component-by-component form only on React ≤ 16.
+
+- **React 19 from npm, in every gem's test_app (#40).** react-rails tops out at
+  3.3 / React 18.2, so before this the React axis was frozen at 18 no matter what
+  the table said. New `ruby/test_app_react_source.rb`, invoked from each gem's
+  `spec:prepare`, rewrites the committed app in place when
+  `HYPERSTACK_REACT_SOURCE=npm`: it installs the same four templates the esbuild
+  generator uses (extracted out of `esbuild.rb`'s heredocs so the two cannot
+  drift), inserts `//= require react_runtime` before `hyperstack-loader`, and
+  strips *every* `Hyperstack.import 'react(-server)'` — including hyper-i18n's
+  indented one and hyper-component's client-side `react-server`, which together
+  caused 185 "Minified React error #525" failures from two Reacts in one page,
+  not a React 19 incompatibility. `app/assets/builds` is inserted *early* in
+  `config/initializers/assets.rb`, since appending lands after Opal's load-path
+  array is frozen, and rewritten files are backed up under `.react_source_backup`
+  so a local checkout is not silently left on React 19. react-rails 3.3 is still
+  required even where React does not come from it: it ships `react_ujs`, the
+  mount/unmount shim, and that has to match the React major.
+
+- **esbuild: let a cell select the npm React version (#51, #40).** The generated
+  `package.json` hardcoded `^19.0.0`, so the React axis was selectable only on the
+  react-rails path and frozen on the npm one — which is why three branch lines
+  declared `react: 19.2` while actually serving 18.2. `REACT_NPM_VERSION` is now
+  interpolated into both entries, pinned to a `~19.2.0` series rather than a caret
+  range because `cell_contract_spec` asserts `window.React.version` against the
+  table.
+
+- **rails-hyperstack: actually cancel the sprockets React under esbuild (#66).**
+  The generated app shipped a 1.2 MB React 19 bundle but ran React 16.14
+  (`hasCreateRoot: false`). The base `cancel_react_source_import` is a no-op — it
+  prepends a *commented-out* import line — while `rails-hyperstack.rb`
+  unconditionally calls `js_import 'react/react-source-browser'`, putting the
+  react-rails UMD into the Opal loader manifest; `application.js` requires
+  `react_runtime` before `hyperstack-loader`, so the UMD assigned `window.React`
+  last and won. The esbuild strategy now emits real `Hyperstack.cancel_import`
+  calls, scoped to that strategy so the Rails 6.1 cells are untouched.
+
+- **hyper-component: an uncontrolled `<textarea>` must ignore later values (#62).**
+  React decides at mount whether to set a textarea's dirty value flag by comparing
+  the rendered child text against `_wrapperState.initialValue` with `===`;
+  `initWrapperState` stores `props.defaultValue` uncoerced while `getHostProps`
+  stringifies it, so the check only holds for a JS string primitive. Any object
+  `defaultValue` — a value object, an observable, hyper-model's `DummyValue`, or a
+  boxed Opal String from a reactive-record attribute — failed it, the flag was
+  never set, and React's per-render `node.defaultValue = ...` then pushed every
+  later value into the visible textarea. `normalize_textarea_default_value` forces
+  a primitive with `'' + value.to_s`, called only when `type == 'textarea'`;
+  `<select>` is untouched because its `defaultValue` may legitimately be an Array.
+
+- **hyper-model: the load transition must not discard what the user typed (#72).**
+  `input_tags.rb` carried a late-arriving `defaultValue`/`defaultChecked` into an
+  already-mounted uncontrolled element by setting a React `key` from the value's
+  `loading?` state; when the key flipped true→false React discarded and re-mounted
+  the DOM node, throwing away anything typed while the fetch was in flight.
+  Replaced by `Tags::UncontrolledDefault`, which attaches a per-render `ref`
+  (chaining any existing one), records the pending state and placeholder on the
+  node itself, and on the loading→loaded transition assigns `node.value` /
+  `node.checked` exactly once and only if the node still holds the placeholder —
+  preserving user input while still setting the dirty value flag #62 requires.
+
+### hyper-operation: two transports that had never delivered a broadcast
+
+- **The connection tables were never created unless the app was booted by
+  `rails server` (#103).** The most consequential fix in this release, and the
+  one most likely to be affecting a running application right now. The
+  `hyperstack_connections` and `hyperstack_queued_messages` tables have no
+  migration — `AutoCreate#create_table` is the only thing that ever creates them
+  — and `needs_init?` gated that on `Hyperstack.on_server?`, which is
+  `defined?(Rails::Server)`. That constant exists only when the process was
+  started through `rails server`. It is absent under Capybara's in-process
+  server, a bare `puma` or `rackup`, Passenger, and every rake task — so in any
+  of those the tables were never created, `ConnectionAdapter::ActiveRecord.active`
+  returned `[]` behind its own `table_exists?` guard, and every server-originated
+  broadcast was discarded. Silently: that guard is indistinguishable from
+  "nobody is listening", so there was no exception, no log line and no failed
+  request. Both the `:action_cable` and `:simple_poller` transports are affected,
+  and `:action_cable` is what `hyperstack:install` writes by default. Whether the
+  current process happens to be the one serving requests has nothing to do with
+  whether the tables need to exist, so the gate is dropped from `needs_init?`
+  alone; `on_server?` is untouched and remains correct for `send_data` and
+  `dispatch`, which use it to choose between broadcasting directly and forwarding
+  to the running server over HTTP. A `StandardError` rescue keeps what the old
+  gate covered by accident — with no usable database (asset precompile, a build
+  container, a boot before `db:create`) `table_exists?` raises, and that must
+  stay a no-op rather than become a boot failure.
+
+  Worth recording how this was found, because it is the argument for the whole
+  consolidation. It surfaced only when a spec salvaged from the retired
+  `rails-8.1` line — the only place it had ever existed — was run across the
+  matrix: it failed on all six Rails 6.1/7.2 cells and passed on all four Rails
+  8 ones. Rails 8 passing was incidental, something on that boot path defines
+  `Rails::Server`, and chasing the difference as a Rails-version behaviour change
+  produced one confident wrong fix before a control printing the adapter state
+  per cell settled it. No single-configuration branch line could have seen this.
+
+- **Two faults in series, each hiding the next (#85, #87, #89, #90).** Both were
+  invisible because hyperstack falls back to polling when a broadcast does not
+  arrive, so the page still ended up correct and every spec passed on the fallback.
+  First, the vendored client was Pusher JavaScript Library v4.0.0, from 2016, which
+  has never heard of `forceTLS` — the option pusher-fake configures it with. It
+  ignored it, chose its own scheme, and tried `wss://127.0.0.1` on port 443 with
+  nothing listening; the only symptom was unrelated column-type and scope specs
+  failing on console noise. With the socket finally up, `opts[:dispatch]` raised
+  `ArgumentError: wrong number of arguments (given 2, expected 1)` on every
+  broadcast: pusher-js 7 changed a channel callback from `fn.call(context, data)`
+  to `fn.apply(context, args)` with a metadata argument, `Channel#handleEvent`
+  always passes `{}`, and `opts[:dispatch]` was a Ruby lambda, which enforces
+  arity. pusher-js runs named callbacks in a bare loop with no `try`/`catch`, so
+  the raise aborted the loop and no component ever saw a broadcast. Fixed with a
+  splat, and the client taken to 8.6.0 — which also replaces the `unload` listener
+  Chrome 150 blocks by permissions policy with `pagehide`. hyper-console's
+  prebuilt bundle carried its own embedded copy of v4.0.0 and would otherwise keep
+  shipping it. Four new assertions span the chain so this cannot hide again: the
+  client understands `forceTLS`, the websocket reaches `connected`, the channel
+  reaches `subscribed`, and a broadcast arrives *on the pusher channel* rather
+  than via the polling fallback. hyper-model also now runs in ~500s against ~981s
+  on v4 — the examples stop waiting out timeouts for broadcasts that were never
+  going to arrive.
+
+- **Queued messages are no longer destroyed with a handshaking connection (#70).**
+  A broadcast issued while a client had `open`ed a connection but not yet finished
+  `connect_to_transport` was silently lost. `expire_new_connection_in` (default
+  10s) reaps half-open connections via `Connection.expired.delete_all`, which
+  cascades and destroys the connection's `QueuedMessage` rows — so a handshake
+  running past the window, routine on a loaded server, took the queued message
+  with it. Both connection adapters' `send_to_channel` now refresh
+  `expires_at` for each pending connection they queue against: a waiting message
+  proves the connection is not abandoned, while genuinely idle half-open
+  connections are still reaped.
+
+- **Queued broadcasts carry their own YAML permissions (#44).** On Rails 7.1+,
+  `serialize :data, coder: YAML` routes through `ActiveRecord::Coders::YAMLColumn`'s
+  safe coder, which refuses to *dump* anything outside
+  `config.active_record.yaml_column_permitted_classes` (default `[Symbol]`).
+  Hyperstack's queued broadcast payloads are `HashWithIndifferentAccess` with
+  times, so every queued broadcast raised `Psych::DisallowedClass` — killing
+  `:simple_poller` outright and making `:action_cable` drop any broadcast that beat
+  the websocket handshake. `queued_message.rb` now declares
+  `PERMITTED_YAML_CLASSES` and passes it on the column, so the table carries its
+  own permissions rather than depending on the host app widening a global list.
+
+### hyper-model
+
+- **Wait for the pusher handshake before broadcasting (#70).** Diagnosed by
+  instrumenting the step under a full matrix run, where the discriminator was
+  exact, 4/4: passing cells created 0 `QueuedMessage`s during the step, failing
+  cells created 1 and 3. `send_to_channel` has two mutually exclusive paths —
+  queue if the client is still handshaking, push if transport-connected — so
+  passing runs pushed and failing runs queued. The subscription was never the
+  problem; the missing piece was the transport handshake, which is what runs late
+  under load. Adds a shared `WaitForTransportConnection` helper (36 specs in this
+  repo configure the pusher transport and share the latent race) which removes the
+  race rather than widening a window.
+
+- **Wait for the handshake before dispatching `FetchNow` (#65).** The same shape
+  in the two "while loading" examples: the assertions only proved the page had
+  rendered, not that the handshake had completed, so the dispatch could be queued
+  against a connection that expired unread.
+
+- **`default_value_spec` raced the fetch (#61).** Intermittently red for months
+  (~3 runs in 10) and repeatedly written off as environment flakiness. It is not
+  environmental. `expect(page).not_to have_content('loading...', wait: 0)` looks
+  like a gate on the data having arrived but is *vacuous* — 'loading...' only ever
+  appears as an option *value* attribute, never as page text, and
+  `DummyValue#to_s` returns `''`. `find('#uncontrolled-input')` then waits for the
+  element, which exists immediately carrying the placeholder, and `.value` is read
+  once and compared with a plain `eq`, which does not retry. That fits every
+  observation: ~30% failure, no correlation with cell, Rails version, React
+  version or concurrency, and immunity to forcing functions applied around mount —
+  because the race is between Capybara's read and the fetch, not between the fetch
+  and mount. Demonstrated rather than argued: with the fetch response delayed 2s,
+  the original assertions fail 4/4 cells with the identical signature and the
+  waiting matchers pass 4/4.
+
+- **`alias_attribute` regression specs, made deterministic (#25).** The
+  `alias_attribute` sequence intermittently failed `implements the _changed?
+  method` with `undefined method 'surname_changed?'`. The sequence runs as one
+  shared-session example in a single long-lived browser, and the aliases are
+  installed via `before(:step) { isomorphic ... }` — which injects code only at
+  *mount* time, effectively once. A mid-sequence re-mount wiped them, and because
+  `alias_attribute` installs both the alias methods and the `_attribute_aliases`
+  entry in one call, it also emptied the `method_missing` dealias map. Deterministic
+  single-example specs now lock the dealias contract behind the flake.
+
+- **Make the `aaa_edge_cases` monkeypatch idempotent (#51, #38).** The example
+  redefines `synchromesh_after_create` with a bare `alias` in its body; that body
+  re-runs on every RSpec::Retry attempt, and the second `alias` re-points `orig` at
+  the already-overridden method, so the override calls itself. Infinite recursion —
+  `SystemStackError`, a 4MB truncated log, and a cascade of downstream noise that
+  looks nothing like the cause. Deterministic, already fixed on another line, and
+  exactly the signature that has been written off as browser flakiness.
+
+- **Document the polymorphic / auto-inverse contract (#45).** The three log calls
+  in `AssociationReflection#find_inverse` are factored into
+  `warn_dynamically_adding`, which now explains why it matters: until something
+  resolves the inverse the relationship does not exist on the client, so reading it
+  falls through to the attribute reader and yields the target's column hash instead
+  of a model. The docs state that the `unless RUBY_ENGINE == 'opal'` guard on a
+  polymorphic `belongs_to` is unnecessary and leaves an order-dependent client API,
+  and that the reconstructed side is built from naming conventions only.
+
+### hyper-spec
+
+The largest group, and the one with a common theme: assertions that read
+asynchronous client state exactly once, then blame the environment when they lose
+the race.
+
+- **`on_client_to` must wait for the value (#64).** It evaluated the block in the
+  browser once and matched once. Client state is asynchronous — a value may be
+  broadcast, fetched or recomputed after the block first returns — so this raced
+  whatever produced it, in the shared DSL rather than in one spec. Now polls,
+  mirroring Capybara's own matchers. Positive expectations only: retrying a
+  negative would wait for something to stop being true, which is a different
+  assertion. Block matchers (`raise_error`, `change`) are excluded, since
+  `matches?` is meaningless for them. A matching value still costs exactly one
+  evaluation.
+
+- **`on_client_to` must also retry when the client is not ready at all (#64).**
+  Polling does not help when the exception comes from *evaluating* the block, which
+  escapes before the loop is reached — the "uninitialized constant Physician"
+  shape, a load race rather than a wrong answer. Retries on `JavascriptError` too,
+  and on timeout re-raises the *last* error so the failure reads as the real
+  problem rather than as a mismatch against nil. Only `JavascriptError` is
+  retryable: retrying every `StandardError` would swallow real problems and make
+  each cost the full timeout.
+
+- **`expect_evaluate_ruby` must wait for the value (#67).** The other read-once
+  path. Not hypothetical: `batch6/server_method_spec.rb:71` passed on every cell at
+  07:42 and failed on three different cells an hour later, after the runner was
+  reconfigured — the spec did not change, the timing did. Deliberately narrower
+  than the `on_client_to` fix, because polling re-evaluates the block and a survey
+  of the 475 call sites found ~19 whose blocks create/update/destroy/save. The
+  first evaluation stays *eager* — Ruby builds the matcher argument before calling
+  `.to`, and several specs interpolate a server-side lookup into the matcher that
+  depends on the block having already run — so a matching value now costs *zero*
+  re-evaluations and those 19 sites behave exactly as before unless they mismatch.
+
+- **Stop asserting exact values the polled block itself mutates (#83).** The
+  counterpart hazard. Where a block mutates the very quantity being asserted, every
+  retry moves the value one step further from the matcher, so the expectation
+  cannot converge *by construction* and the example burns the whole wait before
+  failing with a "got" that is really a count of retry iterations —
+  `expected: 5, got 44 / 59 / 60`, against a server_method that is literally
+  `server_method_count += 1`. A sweep of all 485 call sites found three; each is
+  now either idempotent or reads once through `evaluate_promise`, where the promise
+  resolution *is* the synchronisation. One further site is flagged and deliberately
+  left alone. The hazard is documented in `AsyncExpectationTarget` so the next
+  person meets it in the code rather than in CI.
+
+- **A retried example must not lose its isomorphic/mount code (#68, #25).** Two
+  independent causes, both fixed. hyper-spec retries every js example, and
+  rspec-retry re-runs it in the *same* example-group instance, so instance
+  variables survive the failed attempt — but both mount buffers are *consumed* by
+  mounting. So the second and third attempts built their page without them: any js
+  example that mounts, fails for any reason, and is retried lost everything its
+  `isomorphic do` / `before_mount` / `insert_html` / `add_class` calls put on the
+  client, and what CI showed was `uninitialized constant <Model>` instead of
+  whatever actually went wrong on the first try. Separately, each mount writes its
+  payload into a FileCache keyed by the test URL's id — a bare counter starting at
+  1 in every process, rooted at a fixed `/tmp` path with no pid, port or run id.
+  hyper-model runs 4 concurrent rspec processes in one container and hyper-operation
+  3, so two batches reach `/hyper_spec_test/42` and the loser's page boots with the
+  winner's client code, invisibly, because the payload is structurally valid. Fixed
+  with a per-process token in the key.
+
+- **Injected client code must survive a re-mount (#71, #25).** The same family:
+  `before_mount`/`isomorphic`/`insert_html`/`add_class` wrote into pending buffers
+  that mounting *drained*, so any later page lost every constant the spec had
+  injected — fatal in an `RSpec::Steps` sequence where injection happens once at
+  the first step. Drained code now moves into separate de-duplicated *mounted*
+  buffers replayed into every subsequently built page. Also replaces
+  `evaluate_script('Opal && true') rescue nil` with `opal_loaded?`, which treats
+  only a `JavascriptError` as evidence Opal is gone, so a transient WebDriver error
+  no longer triggers a page reload that discards client state.
+
+- **`wait_for_ajax` must confirm idle across two polls (#41).** It broke out of its
+  loop on the *first* idle observation, so a request starting more than one poll
+  interval after the triggering action — behind a debounce, a `requestAnimationFrame`,
+  or a `mutate` that re-renders before dispatching — had simply not begun, and
+  callers reading state directly got a false "done". Now requires two consecutive
+  idle polls. Two guards keep existing callers safe: it stops rather than starting a
+  confirmation poll once the deadline is spent (`running?` swallows every exception
+  including `Timeout::Error`, and Ruby's `Timeout` fires only once, so a post-swallow
+  poll would run unbounded), and a `Timeout::Error` is re-raised only if idle was
+  never observed. The deadline uses `CLOCK_MONOTONIC` so Timecop moves do not shift it.
+
+- **`size_window` must not accept a clamped window size (#77).** A blanket
+  `rescue StandardError` hid two real bugs: an unknown symbol such as
+  `size_window(:medium)` fell through `STD_SIZES` to `symbol + debugger_width`,
+  raised `NoMethodError` and silently sized nothing; and `stalled?` accepted any
+  size after five polls of *either* dimension holding still, with tallies that
+  never reset, so a loaded browser whose resize had not landed read as "the browser
+  refuses" and the example ran at the wrong width. Arguments are now validated,
+  a full 1.0s of stability in both dimensions is required, the outcome is returned
+  as `:reached` / `:stalled` / `:timed_out`, and the rescue is narrowed to
+  `Capybara::NotSupportedByDriverError`.
+
+- **Correct for window chrome on BOTH axes (#79).** `resize_to` sets the *outer*
+  window; every assertion in the suite is about `innerWidth`/`innerHeight`. Width
+  had a correction and height had none, so on any browser with a title bar the
+  height comparison could not be satisfied — ask for 768, get 625 — and
+  `wait_for_size` never returned `:reached`. Falling through to the "the browser
+  will not go further" branch then meant *accepting* whatever size the window
+  happened to be, including a resize that had not landed: precisely the failure #77
+  removed, reintroduced through the other axis. Every reported stall was short by
+  exactly 143 — one constant, on one axis, not a clamp. `determine_size` now
+  returns the inner size the caller asked for and the correction is applied at the
+  resize, so what is waited for and what was asked for are the same numbers. The
+  chrome is measured as outer *minus inner*, not "what we asked for" minus inner,
+  so a window manager with a minimum height cannot have us bake its clamp into
+  every later resize.
+
+- **Bracket the TimeCop clock assertions instead of guessing a tolerance (#63).**
+  The specs compared a fresh browser round trip against a once-measured clock
+  offset, with tolerances of 1, 3, 3 and 1 for the same shape of assertion and no
+  stated reason for the difference; the effective error was "how much slower is
+  this round trip than the one that measured the gap", unbounded under load. Every
+  guessed tolerance is replaced by a bracket: sample the server clock either side
+  of the round trip and require the client's timestamp to fall inside the window
+  the server observed around it, so a slow round trip widens the window by exactly
+  as much as it delays the read. `@sync_gap` becomes a range rather than a point,
+  for the same reason. Two tolerances that were expressed in *scaled* seconds
+  inside `Timecop.scale 60` — really latency budgets of ~83ms and ~167ms — are
+  fixed with it, and the frozen-time example now applies the offset like its three
+  siblings. Verified by simulation: the bracket passes for a correct clock across
+  round trips from 0.2s to 5s and with a real 30s offset, and fails a client skewed
+  by 10s or 30s, so it is not merely a wider window. A follow-up widens the bracket
+  by `2 × scale` under `Timecop.scale`, where the server clock runs n× real time
+  while the browser advances its own copy at real speed between syncs.
+
+- **Give every registered driver a read timeout (#74).** Capybara's
+  `default_max_wait_time` bounds only *re-running* a finder, not a single WebDriver
+  command that never returns, and Selenium ≤ 4.46 registers no default HTTP client
+  timeouts — so a wedged browser hung until the OS TCP timeout (~14 minutes
+  observed), times rspec-retry's three attempts, holding a runner ~42 minutes.
+  `DriverTimeouts.bound!` re-registers each driver to fill in an HTTP client with
+  open 30s and read 90s (or 300s for a cold Sprockets compile), overridable via
+  `HYPER_SPEC_READ_TIMEOUT` / `HYPER_SPEC_OPEN_TIMEOUT`, where 0 means "impose
+  nothing".
+
+- **Filter both Ruby 3.4 chilled-string warnings (#19, #91).** The filter matched
+  only the `Symbol#to_s` form and not the `literal string will be frozen` one,
+  which is the flood: a single hyper-model job carries 1727 of them in a 2454-line
+  trace — 70% of the log — 892 from em-websocket's `framing07.rb`, 821 from its
+  `masking04.rb`. Widened, with the path guard unchanged so nothing from Hyperstack
+  or user code is newly suppressed, and half the new spec's examples negative,
+  because a filter that is too wide is a worse bug than one that is too narrow.
+
+- **Assert the running cell matches `supported_versions.yml` (#51).**
+  `rake hyperstack:matrix:check` only proves the table and the CI cell list name
+  the same cells; nothing proved a cell actually *runs* what it advertises. This
+  reads the running system — Ruby, Rails, Opal and react-rails from loaded
+  constants, and React from `window.React.version` in the browser, the only
+  authority for an axis the table itself documents as derived. Each axis skips
+  rather than errors when its constant is absent, and the whole file skips when
+  `HYPERSTACK_CELL` is unset.
+
+- **Pin selenium-webdriver to a minor series (#84).** It was unpinned, and it
+  drives the browser for every js spec in every gem, so an upstream release
+  changed what the whole suite ran against, silently, between two pipelines on the
+  same commit — 4.47.0 at 13:44 and 4.48.0 at 20:49 on identical content. A red
+  pipeline should mean the code changed, not that a dependency did. Pinned to
+  `~> 4.48.0`, the series CI already runs; the `.0` is deliberate, since `~> 4.48`
+  would permit 4.49 and float again. This narrows the window rather than closing
+  it — Chrome for Testing in the cell image still moves independently.
+
+### hyper-i18n
+
+- **Guard the async Store writes in `t` / `t_async` / `l` (#42).** The three wrote
+  to `Store.translations` / `Store.localizations` inside the `.then` callback of
+  the `Translate`/`Localize` operation, so the earlier synchronous guard at call
+  time could not protect them: if the Store was still uninitialized when the
+  promise resolved, the write raised `undefined method 'translations' for nil`
+  inside a promise chain where nothing catches it. Replaced by
+  `cache_translation` / `cache_localization` helpers that bail out when the store
+  accessor returns nil and skip the cache update rather than exploding.
+
+### hyperstack-config
+
+- **`js_import` checked every package against the same global key.** The
+  "package not found" guard was written `` `Opal.global['#{name}'] === undefined` ``,
+  and Opal does not interpolate `#{}` inside a quoted subscript in a backtick, so
+  it compiled to the literal `Opal.global['name']`. In a browser this is invisible
+  — `window.name` always exists, so the guard passed vacuously — but under V8
+  prerendering `globalThis.name` is undefined, so it raised "The package X was not
+  found" for the first package every time, which is why prerendering has been
+  stuck off. Fixed by dropping the quotes. The new spec asserts against the
+  *compiled* JavaScript, since no browser test can reach the bug.
+
+### rails-hyperstack (the install generator)
+
+- **Split the JS pipeline into per-version generator strategies (#51).**
+  `install_webpack` unconditionally ran `rails webpacker:install`, which does not
+  exist on Rails 7. Unlike the other Rails 7.2 failures this cannot be a capability
+  check, because the two pipelines scaffold *different applications* — Webpacker
+  for Rails < 7, esbuild + jsbundling for Rails >= 7. The divergent ~20% is
+  extracted into `JsPipeline::Webpacker` and `JsPipeline::Esbuild`, selected by
+  `HYPERSTACK_JS_PIPELINE` or Rails major; routes, initializer, manifests and
+  component generation stay shared. The strategies are nested under
+  `Rails::Generators`, not `Hyperstack` — a partial `Hyperstack` constant at
+  generator-load time broke boot with a `Logger` NameError.
+
+- **Make the test-app harness pipeline-aware, and declare the pipeline per cell
+  (#51).** The Rails 7.2 cell still died on `Unrecognized command
+  "webpacker:install"`, but from `spec:prepare`, which calls Webpacker directly
+  *before* the generator ever runs. The Rakefile now branches the same way, with
+  `spring stop || true` on the esbuild path because Rails 7 apps ship no spring and
+  exit 127 must not abort. Each cell now *declares* `HYPERSTACK_JS_PIPELINE` rather
+  than relying on inference from the ambient rails gem.
+
+- **Add `javascript_include_tag` to the generated layout (#51, #52).** On Rails 7+
+  the installer runs `rails new --skip-javascript`, and that layout ships no
+  javascript tag at all; the only fallback anchored on `javascript_pack_tag`, which
+  exists solely in Webpacker apps. So the sprockets `application` bundle — and with
+  it Opal and the entire Hyperstack client — was never loaded, and `/` rendered
+  blank. Now injected before `</head>`, guarded by a scan for an existing tag so it
+  is a no-op on Rails 6.1 and idempotent on re-install.
+
+- **Ignore Rails 7+ built-in routes in `new_rails_app?` (#51).** It decides whether
+  to generate the top-level `App` component by counting non-blank, non-comment,
+  non-`mount` lines in `config/routes.rb` and treating ≤ 2 as a fresh app. Rails 7+
+  ships built-in routes there (`/up`, plus 7.2's PWA service-worker and manifest
+  routes), pushing a brand-new app over the threshold — so the installer logged
+  "Top Level App Component skipped" and never created `App` or its `hyperstack#app`
+  route. Framework-owned `rails/` routes are now skipped.
+
+- **Port the branch-only generator fixes to edge (#98).**
+  `install_mui_generator` and `install_bootstrap_generator` hardcoded the Webpacker
+  answer — appending to pack manifests and running `bin/webpack` — which silently
+  did nothing on an esbuild app, leaving `Mui`/`BS` undefined at render time. They
+  now extend the pipeline strategy and call a three-method surface
+  (`expose_npm_global`, `add_npm_stylesheet`, `build_js_bundle`) implemented in
+  both. Separately, `hyperstack_generator_base.rb` only injected
+  `javascript_include_tag` *after* an existing `javascript_pack_tag`, so Rails 7
+  apps got nothing and a warning; it now falls back to injecting before `</head>`.
+
+- **Make the post-install asset advice pipeline-aware (#98).** The last hardcoded
+  Webpacker answer in the installer, and the one the user actually reads: on
+  finishing, `hyperstack:install` printed *"Webpack integrated with Hyperstack.
+  Add javascript assets to app/javascript/packs/client_only.js and
+  /client_and_server.js"* unconditionally — so every Rails 7+ install, meaning
+  every esbuild app, was pointed at two pack manifests esbuild never reads.
+  `js_assets_advice` joins the strategy surface, and the esbuild one names
+  `react_runtime.js` / `react_server_runtime.js` and `yarn build` instead.
+
+- **Unit specs for the install generator's decision logic (#51).** 17 fast
+  examples, no app or browser boot (~0.05s total), pinning the two bugs above
+  against real Rails 6.1 and 7.2 `routes.rb` fixtures plus the JS-pipeline strategy
+  dispatch — including that an unknown `HYPERSTACK_JS_PIPELINE` raises rather than
+  silently defaulting.
+
+### Dependency declarations
+
+- **Widen the rails and react-rails caps to the matrix span (#20).**
+  `supported_versions.yml` claims rails 6.1–8.1 and react-rails 2.6–3.3 and CI runs
+  a green cell for each, but with no cell env set — exactly how `rake publish`
+  builds — the gemspecs resolved to `rails >= 5.0.0, < 7.0` and
+  `react-rails >= 2.4.0, < 2.7.0`, so the *published* gem refused to install on the
+  Rails 7.2 and 8.x it is tested against. An installed gem carries the serialized
+  spec, so the narrow default is what shipped. `hyperstack:matrix:check` guarded
+  table-vs-CI; nothing guarded table-vs-gemspec, which is how the two drifted.
+  Widened in all 12 gemspecs (rails `< 9.0`, react-rails `< 4.0`; lower bounds
+  untouched). Because widening a default changes what a cell resolves when it does
+  not pin, the five cells that were reaching their versions *through* the old
+  narrow defaults now pin both axes explicitly — without that, the widening would
+  have floated all four rails61 cells onto Rails 8.1 and both react16 cells onto
+  react-rails 3.3, silently turning the matrix into several copies of one
+  configuration. Not fixed here: `rails-hyperstack` still declares runtime
+  `opal-rails ~> 2.0`, which is hard-capped at `rails < 7.3`, so a default-built
+  gem is still held below Rails 8 by that dependency rather than by a cap. What a
+  single published gem should depend on is #37.
+
+- **Every version axis is selectable, and a blank selector means unset (#51, #78).**
+  react-rails, opal and rails became ENV-selectable so a cell can move an axis. The
+  old `ENV[x] || 'a', 'b'` idiom could not do it: the trailing constraint survives
+  when the variable is set, so `RAILS_VERSION='~> 7.2'` resolved to
+  `['~> 7.2', '< 7.0']` and installed nothing. The variable now replaces the whole
+  requirement. Separately, `''` is truthy in Ruby, so an empty selector produced
+  the requirement `['']` and aborted `bundle install` with "Illformed requirement"
+  from inside a gemspec, pointing nowhere near the cell that caused it — and
+  `rake hyperstack:cell:env` maps a YAML nil to `""`, so a cell written
+  `RAILS_VERSION: ""` (or with a bare key) did exactly that. All 56 call sites
+  across 12 gemspecs now go through `Hyperstack.version_selector`, which treats
+  blank or whitespace as unset; no gemspec reads ENV directly any more, and the
+  three hand-rolled blank guards in the Dockerfile are gone. 132 examples cover it,
+  each evaluating a gemspec in a *subprocess* because `Gem::Specification.load`
+  memoises per path and every ENV-varying example would otherwise pass vacuously.
+
+- **Declare `opal ~> 1.8` (#51).** The gemspecs declared `>= 0.11.0, < 2.0` — a
+  claim back to Opal 0.11 that nothing tests — while every line has actually run
+  1.8.3 for a long time. The matrix exists so that declared support and tested
+  support are the same thing.
+
+- **Pin `pg` below its next major, behind a `PG_VERSION` selector (#102).** `pg`
+  drives the database the specs actually run against and was unpinned in
+  hyper-model and hyper-operation, so a new major could arrive with no commit of
+  ours — and it would arrive on cells running EOL Rails 6.1, whose
+  `postgresql_adapter` calls `PG::Coder.new` with a positional Hash. That has been
+  deprecated in `pg` since 1.5.0 and fixed in Rails 7.2+, never in 6.1, so the
+  major that finishes the deprecation turns a warning into a failure on exactly
+  the cells that cannot be fixed. Capped at `< 2`, with `PG_VERSION` plumbed
+  through the gemspecs, `supported_versions.yml` and the cell-image build the way
+  `SQLITE3_VERSION` already is, so moving it per cell stays a one-line change. No
+  cell sets it today.
+
+- **Pin sprockets below 4.2 everywhere it was still unbounded.** sprockets >= 4.2
+  raises "can't modify immutable cached environment" and stops compiling the Opal
+  assets, and nothing says so at the point of failure — the browser simply reports
+  "Opal is not defined" and every mount dies inside the Opal runtime. Nine of the
+  ten components already carried the pin; `hyperstack-config`'s Gemfile and, worse,
+  the `sprockets "~> 4.0"` that `spec:prepare` appends to the *generated* app's
+  Gemfile on the Rails 8 branch did not — so the one app built from scratch, for
+  the newest cells, was the one resolving sprockets unbounded. Found while rebasing
+  the branch lines onto edge.
+
+- **Pin `opal-rails ~> 2.0`, and make it selectable.** It was unconstrained in 11
+  gemspecs while the latest is 3.0.0, so simply setting `RAILS_VERSION` would have
+  silently jumped the asset pipeline from opal-rails 2 to 3 as well — an `app/opal`
+  rewrite (#37), not a version bump.
+
+### CI and tooling
+
+- **Recover the test coverage stranded on the retired branch lines.** A
+  content-level diff of `rails-7`, `rails-8.0` and `rails-8.1` against `edge`
+  — file contents, not commit SHAs, since those lines were linear rebases and
+  SHAs cannot answer the question — found no unmerged library code: every fix on
+  them is here, and in places this line supersedes them (#81/#92/#93 sanitize at
+  the JSON boundary where `rails-8.1` monkey-patched `Column#as_json`; #83 and
+  #98 exist only here). What *was* stranded is coverage for code `edge` already
+  ships. `hyper-component` gains `react18_spec.rb`, 8 examples for the React 18
+  `createRoot` rewrite (#18) — its `lib` was byte-identical to `rails-8.1`, and
+  no spec on this line so much as mentioned `createRoot`, so that code shipped
+  untested — and the #39 transient-error example, whose fix was already here
+  without a test. `rails-hyperstack` gains real reactive-push assertions and a
+  server-side-create example exercising the #44 queued path end to end, plus a
+  `DatabaseCleaner.clean` at the start of each `js` attempt so a retry does not
+  begin dirty. `run-local-docker-specs.sh` builds the esbuild bundles in a node
+  container before the Opal precompile.
+
+  Two of these failed on first contact with the full matrix, which is the point:
+  each had only ever run on the single cell its branch line tested. The
+  `set_state!` example was asserting React 18's coalesced render count on React
+  16/17 — and, being written with a polling matcher over a block that mutates
+  the counter it asserts, reported the retry count rather than the real answer
+  (#83, again). The other found #103, above.
+
+- **Prebaked per-cell dependency images (#57, #73, #75).** Restoring the gem cache
+  cost a measured 57.9s per job — about 46 minutes over a 48-job pipeline —
+  against a warm `bundle install` of 8.9s. Each cell now has an image with its
+  `local_gems` bundle baked in, including compiled native extensions, and the gem
+  cache is dropped entirely. `prepare-context.sh` stages only Gemfiles, gemspecs
+  and the `version.rb` files the gemspecs require, so the `COPY` layer is
+  invalidated by dependency changes rather than by every commit, and the build
+  derives its args from `rake hyperstack:cell:env` so image and test run share one
+  source of truth. Each `before_script` hard-fails if the prebaked marker is
+  absent, so a cold fallback cannot masquerade as a slow success. A new `images`
+  stage ordered before `test` stops a job starting against an image still being
+  built in the same pipeline.
+  Two follow-ups closed the remaining gaps: `spec:prepare` shells out under
+  `Bundler.with_unbundled_env` and runs plain `gem install`, so those gems land in
+  `GEM_HOME` and never in `local_gems` — which is why nokogiri recompiled from
+  source (78s → 202s) on every job even with the cache warm. Those pins move into
+  `spec_prepare_gems.rb`, read by both `spec:prepare` and the image build so they
+  cannot drift, and are baked in (#73). Then the ~76-gem bundle `rails new`
+  installs and the npm tree `webpacker:install` downloads are warmed the same way
+  by scaffolding and discarding a throwaway app in a late layer (#75) — the npm
+  half being pure waste, because `cache: []` on the test jobs *replaces*
+  `default:`'s list rather than merging, so the `yarn-v1` cache never applied.
+  Roughly 200s off each rails61 cell from #73 and ~95s more from #75.
+
+- **Retry the registry login in `build-cell-image` (#94).** A transient TCP reset
+  from the registry's JWT auth endpoint failed the job 66s in; a manual retry
+  passed 63 seconds later. The job is `allow_failure: true`, which is what makes
+  this worth fixing rather than retrying by hand: an unretried reset does not turn
+  the pipeline red, it leaves that cell testing against the *previous* image, with
+  the older `supported_versions.yml` baked in — precisely the drift the job's
+  rules exist to prevent, reintroduced by a network blip. Three attempts with a
+  5s/10s backoff. A job-level `retry:` would not do, since reaching this failure
+  means retrying `script_failure`.
+
+- **Keep the generated app's log when a test job fails (#81).** Chasing the Rails
+  8.1 breakage cost several full-matrix runs because this did not exist: the
+  browser reported 79 HTTP 500s and 1774 client-side errors, and there was not one
+  backtrace anywhere to say what raised. The client-side symptom is in the job
+  trace; the server-side cause never is. Added to both job templates,
+  `when: on_failure`, `expire_in: 1 week`.
+
+- **Cache keys, and caching on failure (#55).** The gem cache key gains
+  `$HYPERSTACK_CELL`, because `local_gems` holds compiled C extensions and each
+  cell deliberately installs a different set, so cross-cell restores were invalid.
+  `YARN_CACHE_FOLDER` moves under the project dir and is shared under one key —
+  npm packages do not vary by cell and the cache is content-addressed, so one entry
+  warms every job instead of ~48 near-identical copies. And both caches gain
+  `when: always`: GitLab's default is `on_success`, so a failing job never uploaded
+  its cache and every red iteration re-installed from scratch (~219s versus ~90s
+  warm).
+
+- **Stop retrying `script_failure` (#56).** A job-level retry was added for
+  environmental flakes and then narrowed two commits later, because its
+  justification was a misdiagnosis: the real cause was the runner filling its disk,
+  which killed Chrome and produced 268 `InvalidSessionIdError`s — only 2 of 69
+  reported failures were genuine. With that fixed in infrastructure, retrying
+  `script_failure` only hides real test failures. `runner_system_failure` and
+  `stuck_or_timeout_failure` are kept, since they are never the code's fault.
+
+- **Stream Ruby output live (#69).** `$stdout`/`$stderr` default to `sync = false`
+  whenever stdout is not a tty, which is every CI job, so Ruby's own buffer held
+  output until ~8KB or process exit and a progressing run looked hung for minutes.
+  `stdbuf` does *not* fix this — it shims glibc's `setvbuf`, and MRI's IO does not
+  go through glibc's buffered stdio; measured here before committing. Set in the
+  10 spec_helpers rather than inside hyper-spec's lib, since a shipped gem should
+  not mutate global IO state as a side effect of `require`.
+
+- **Delete the dead Travis config (#54).** 12 tracked `.travis.yml` files, the
+  commented-out Travis `deploy:` block carrying an encrypted RubyGems `secure:`
+  blob, the two now-unreferenced gemfiles those configs pinned in place, and three
+  dead build badges. Note that deleting the file does not close the credential
+  exposure — it stays in git history; revoking the key is the only thing that does.
+  Deliberately untouched: `DRIVER=travis`, which is unrelated to Travis CI and
+  selects hyper-spec's Capybara profile.
+
+- **Publish gems to the GitLab RubyGems registry (#49).** `gems.ru.aegean.gr` was
+  repointed and geminabox retired, breaking both publish paths: `rake publish` used
+  `curl -F` multipart, so GitLab answered 201 and then stored the *form envelope*
+  as the gem, and the CI deploy script had Ruby string interpolation pasted into
+  bash and pushed a literally-named file. A single `publish_gem` helper now POSTs
+  the gem as a raw octet-stream and then polls the packages API until the version
+  reports status `default`, because 201 only means the file was stored.
+  Credentials fall back through `GEM_SERVER_TOKEN` → `BUNDLE_GEMS__RU__AEGEAN__GR`
+  → `GEM_SERVER_KEY` using `find { !v.to_s.empty? }` rather than `||`, since an
+  empty CI variable is truthy in Ruby.
+
+- **The matrix machinery itself (#51).** `supported_versions.yml` is the single
+  source of truth, with `rake hyperstack:matrix:check` asserting that every cell in
+  the table appears as a `HYPERSTACK_CELL` in the pipeline and vice versa (also a
+  `publish` prerequisite), `rake hyperstack:cell:env` resolving a cell's
+  environment, and CI naming cells rather than values so the two cannot drift.
+  All three file reads pass `encoding: 'UTF-8'` explicitly — the runners set no
+  locale, so Ruby defaults to US-ASCII and the em-dashes in the comments raised
+  `ArgumentError: invalid byte sequence in US-ASCII`, including in the runtime read
+  that any app booting without a locale would have hit.
+
+- **The Rails 8 corner is a complete 2×2 grid (#38, #80).** The matrix ran Ruby 4.0
+  only on Rails 8.0 and Rails 8.1 only on Ruby 3.4, so the intersection — the
+  combination a user on the newest supported Rails *and* the newest Ruby is on, and
+  the configuration #38's client-runtime failures were reported against — was never
+  run, and `SupportedVersions` classified it `:untested`. With
+  `rails81-react19-ruby40` added, every comparison across the Rails 8 corner moves
+  exactly one axis again.
+
+- **A Rails 7.2 + React 19 cell (#95).** The one hole a shipped gem line fell
+  through: Rails 7.2 was tested only with React 16.14, and React 19 only with Rails
+  6.1/8.0/8.1 — while the `rails-hyperstack` version ru/hyperstack-addons depends
+  on is exactly Rails 7.2 + React 19. Also adds
+  `docs/development-workflow/ci-matrix.md`.
+
+- **Documentation.** `docs/development-workflow/ci-matrix.md` describes the matrix
+  and how to add a cell; the prebaked-image work is recorded job by job (#57).
 
 ## 1.0.alpha1.8.34.18.61.1614.6 — 2026-07-02
 
