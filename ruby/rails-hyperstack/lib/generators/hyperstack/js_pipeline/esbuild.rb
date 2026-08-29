@@ -201,6 +201,13 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
       def build_js_bundle
         run 'yarn build'
       end
+
+      # See the Webpacker strategy. (#98)
+      def js_assets_advice
+        'esbuild (jsbundling-rails) integrated with Hyperstack.  Add npm packages ' \
+          'to app/javascript/react_runtime.js (and react_server_runtime.js for ' \
+          'prerendering), then `yarn build`'
+      end
       end
     end
   end

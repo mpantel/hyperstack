@@ -130,6 +130,14 @@ jQuery = require('jquery');                    // remove if you don't need jQuer
       def build_js_bundle
         system('bin/webpack')
       end
+
+      # What `hyperstack:install` should tell the user about adding JS assets.
+      # Pipeline-specific: the pack manifests below exist only under Webpacker, so
+      # printing this on an esbuild app sends people to files nothing reads. (#98)
+      def js_assets_advice
+        'Webpack integrated with Hyperstack.  Add javascript assets to ' \
+          'app/javascript/packs/client_only.js and /client_and_server.js'
+      end
       end
     end
   end
