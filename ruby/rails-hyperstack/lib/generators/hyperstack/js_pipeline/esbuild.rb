@@ -177,6 +177,30 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
         File.exist?(gemfile) &&
           File.foreach(gemfile).any? { |l| l =~ /^\s*gem\s+['"]#{Regexp.escape(name)}['"]/ }
       end
+
+      # --- shared surface used by the add-on framework generators -------------
+      # See the Webpacker strategy for why these exist. (#98)
+
+      # esbuild: react_runtime.js is the React bundle's entrypoint and is loaded
+      # before the Opal loader, so a global assigned here exists by the time any
+      # component renders -- the same guarantee the Webpacker manifest gave.
+      def expose_npm_global(global, package)
+        append_file 'app/javascript/react_runtime.js', verbose: false do
+          "\nimport #{global} from \"#{package}\"; window.#{global} = #{global};\n"
+        end
+      end
+
+      # The esbuild setup bundles JS only -- there is no scss entrypoint to
+      # import into, so take the package's CSS from its CDN instead.
+      def add_npm_stylesheet(scss_path:, cdn_url:)
+        inject_into_file 'app/views/layouts/application.html.erb', after: /stylesheet_link_tag.*$/ do
+          "\n    <link rel=\"stylesheet\" href=\"#{cdn_url}\">\n"
+        end
+      end
+
+      def build_js_bundle
+        run 'yarn build'
+      end
       end
     end
   end

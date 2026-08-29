@@ -6,32 +6,33 @@ module Hyperstack
 
     class_option 'no-build', type: :boolean
 
-    def insure_yarn_loaded
-      begin
-        yarn_version = `yarn --version`
-        raise Errno::ENOENT if yarn_version.blank?
-      rescue Errno::ENOENT
-        raise Thor::Error.new("please insure the yarn command is available if using webpacker")
-      end
+    # See InstallBootstrapGenerator for why this runs first. (#98)
+    def select_js_pipeline
+      extend(js_pipeline_strategy)
     end
 
-    def add_to_manifests
-      add_to_manifest('client_and_server.js') { "Mui = require('muicss/react');\n" }
-      add_to_manifest('application.scss') { "@import '~muicss/lib/sass/mui'\n" }
+    def insure_node_loaded
+      insure_yarn_loaded
     end
 
-    def add_style_sheet_pack_tag
-      inject_into_file 'app/views/layouts/application.html.erb', after: /stylesheet_link_tag.*$/ do
-        "\n    <%= stylesheet_pack_tag    'application' %>\n"
-      end
+    def expose_mui
+      expose_npm_global 'Mui', 'muicss/react'
     end
 
-    def run_yarn
+    # MUI's CSS is the one place the two pipelines genuinely differ: Webpacker
+    # compiles the package's scss from the pack, esbuild has no scss entrypoint
+    # and takes the built CSS from the CDN. The strategy decides.
+    def add_mui_stylesheet
+      add_npm_stylesheet scss_path: 'muicss/lib/sass/mui',
+                         cdn_url: 'https://cdn.muicss.com/mui-0.10.3/css/mui.min.css'
+    end
+
+    def install_packages
       yarn 'muicss'
     end
 
-    def build_webpack
-      system('bin/webpack') unless options['no-build']
+    def build_bundle
+      build_js_bundle unless options['no-build']
     end
 
     def add_sample_component

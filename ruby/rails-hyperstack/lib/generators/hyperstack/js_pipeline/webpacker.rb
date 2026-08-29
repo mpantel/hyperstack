@@ -102,6 +102,34 @@ jQuery = require('jquery');                    // remove if you don't need jQuer
         `spring stop`
         Dir.chdir(Rails.root.join.to_s) { run 'bundle exec rails webpacker:install' }
       end
+
+      # --- shared surface used by the add-on framework generators -------------
+      #
+      # install_mui / install_bootstrap need three things that differ by
+      # pipeline: expose an npm package as a browser global, make that package's
+      # CSS available, and build the bundle. They used to hardcode the Webpacker
+      # answer, which silently did nothing on an esbuild app -- the manifest they
+      # appended to is not read by esbuild. Each strategy answers for itself
+      # instead, so an add-on generator works on whichever pipeline the app has.
+      # (#98)
+
+      # Webpacker: a pack manifest entry, evaluated into the bundle.
+      def expose_npm_global(global, package)
+        add_to_manifest('client_and_server.js') { "#{global} = require('#{package}');\n" }
+      end
+
+      # Webpacker compiles scss from the pack, so import the package's stylesheet
+      # and emit the pack tag. cdn_url is unused here and is the esbuild fallback.
+      def add_npm_stylesheet(scss_path:, cdn_url:)
+        add_to_manifest('application.scss') { "@import '~#{scss_path}'\n" }
+        inject_into_file 'app/views/layouts/application.html.erb', after: /stylesheet_link_tag.*$/ do
+          "\n    <%= stylesheet_pack_tag    'application' %>\n"
+        end
+      end
+
+      def build_js_bundle
+        system('bin/webpack')
+      end
       end
     end
   end

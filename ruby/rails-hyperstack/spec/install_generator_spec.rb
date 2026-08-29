@@ -195,6 +195,29 @@ describe 'hyperstack:install generator logic' do
       it "#{strategy.name.split('::').last} implements the full strategy interface" do
         expect(strategy.instance_methods).to include(:install_js_pipeline, :pipeline_webpack_check)
       end
+
+      # The add-on framework generators (install_mui, install_bootstrap) extend a
+      # strategy and call these three. They used to hardcode the Webpacker answer,
+      # which silently did nothing on an esbuild app -- the pack manifest they
+      # appended to is not read by esbuild, so the global was simply never defined.
+      # Both strategies must answer, or the add-on generator NoMethodErrors on one
+      # pipeline and no spec would say which. (#98)
+      it "#{strategy.name.split('::').last} implements the add-on generator surface" do
+        expect(strategy.instance_methods)
+          .to include(:expose_npm_global, :add_npm_stylesheet, :build_js_bundle, :insure_yarn_loaded)
+      end
+
+      # Signatures too, not just presence: the generators call
+      # expose_npm_global(global, package) and add_npm_stylesheet(scss_path:, cdn_url:),
+      # so a strategy that defines the names with different arity still breaks at the
+      # call site, on one pipeline only.
+      it "#{strategy.name.split('::').last} matches the add-on generator signatures" do
+        expect(strategy.instance_method(:expose_npm_global).arity).to eq(2)
+        required_keywords = strategy.instance_method(:add_npm_stylesheet)
+                                    .parameters.select { |type, _| type == :keyreq }
+                                    .map(&:last).sort
+        expect(required_keywords).to eq(%i[cdn_url scss_path])
+      end
     end
 
     # The strategies are nested under Rails::Generators::JsPipeline, NOT under
