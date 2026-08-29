@@ -6,22 +6,28 @@ module Hyperstack
 
     class_option 'no-build', type: :boolean
 
-    def insure_yarn_loaded
-      begin
-        yarn_version = `yarn --version`
-        raise Errno::ENOENT if yarn_version.blank?
-      rescue Errno::ENOENT
-        raise Thor::Error.new("please insure the yarn command is available if using webpacker")
-      end
+    # Pick the app's JS pipeline before anything else runs, exactly as
+    # install_generator_base#install_webpack does. Thor runs public methods in
+    # definition order, so every step below can rely on the strategy being mixed
+    # in. Without this the generator hardcoded the Webpacker answer and silently
+    # did nothing on an esbuild app: it appended to a pack manifest that esbuild
+    # never reads, so `BS` was simply undefined at render time. (#98)
+    def select_js_pipeline
+      extend(js_pipeline_strategy)
     end
 
-    def add_to_manifests
-      add_to_manifest 'client_and_server.js' do
-        "BS = require('react-bootstrap');\n"
-      end
+    # Each strategy words this for its own toolchain.
+    def insure_node_loaded
+      insure_yarn_loaded
     end
 
-    def add_style_sheet_pack_tag
+    def expose_bootstrap
+      expose_npm_global 'BS', 'react-bootstrap'
+    end
+
+    # Bootstrap's CSS comes from a CDN on both pipelines, so this one step does
+    # not go through the strategy.
+    def add_style_sheet_link_tags
       inject_into_file 'app/views/layouts/application.html.erb', after: /stylesheet_link_tag.*$/ do
         <<-JAVASCRIPT
 
@@ -34,13 +40,13 @@ module Hyperstack
       end
     end
 
-    def run_yarn
+    def install_packages
       yarn 'react-bootstrap'
-      yarn 'bootstrap@3'
+      yarn 'bootstrap', '3'
     end
 
-    def build_webpack
-      system('bin/webpack') unless options['no-build']
+    def build_bundle
+      build_js_bundle unless options['no-build']
     end
 
     def add_sample_component

@@ -41,22 +41,39 @@ module Rails
           end
         else
           create_file application_js, "//= require hyperstack-loader\n"
-          warnings <<
-            " ***********************************************************\n"\
-            " * Could not find the  app/assets/application.js file.     *\n"\
-            " * We created one for you, and added the                   *\n"\
-            " * `<%= javascript_include_tag 'application' %>` to your   *\n"\
-            " * `html.erb` files immediately after any                  *\n"\
-            " * `<%= javascript_pack 'application' %>` tags we found.   *\n"\
-            " ***********************************************************\n"
           application_pack_tag =
             /\s*\<\%\=\s+javascript_pack_tag\s+(\'|\")application(\'|\").*\%\>.*$/
+          include_tag = /javascript_include_tag\s+(\'|\")application/
+          injected = false
           Dir.glob(Rails.root.join('app', 'views', '**', '*.erb')) do |file|
             if File.foreach(file).any? { |l| l =~ application_pack_tag }
               inject_into_file file, after: application_pack_tag do
                 "\n    <%= javascript_include_tag 'application' %>"
               end
+              injected = true
             end
+          end
+          # Rails 7 (--skip-javascript / importmap) ships no javascript_pack_tag to
+          # anchor on, so nothing was injected above. Add the include tag to the
+          # application layout's <head> directly.
+          unless injected
+            layout = Rails.root.join('app', 'views', 'layouts', 'application.html.erb')
+            if File.exist?(layout) && File.foreach(layout).none? { |l| l =~ include_tag }
+              inject_into_file layout.to_s, before: %r{\s*</head>} do
+                "\n    <%= javascript_include_tag 'application' %>"
+              end
+              injected = true
+            end
+          end
+          unless injected
+            warnings <<
+              " ***********************************************************\n"\
+              " * Could not wire the JavaScript loader automatically.     *\n"\
+              " * We created app/assets/javascripts/application.js, but    *\n"\
+              " * you must add                                            *\n"\
+              " *   <%= javascript_include_tag 'application' %>           *\n"\
+              " * to the <head> of your application layout.               *\n"\
+              " ***********************************************************\n"
           end
         end
       end
