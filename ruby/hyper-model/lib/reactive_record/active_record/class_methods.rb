@@ -613,9 +613,10 @@ module ActiveRecord
                           "and it is unknown on the client"
                   end
 
-                  [assoc.attribute, { id: [model_id], model_name: [model_name] }]
+                  # String keys to match what load_from_json reads (#82)
+                  [assoc.attribute, { 'id' => [model_id], 'model_name' => [model_name] }]
                 else
-                  [assoc.attribute, { id: [value]}]
+                  [assoc.attribute, { 'id' => [value] }]
                 end
               else
                 [*key, [value]]

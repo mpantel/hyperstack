@@ -456,11 +456,14 @@ module ReactiveRecord
                 end
               elsif (@value.class < ActiveRecord::Base) && children.is_a?(Hash)
                 id = method.is_a?(Array) && method.first == "new" ? [nil] : [@value.id]
-                # c = children.merge(id: id)
-                # if @value.attributes.key? @value.class.inheritance_column
-                #   c[@value.class.inheritance_column] = [@value[@value.class.inheritance_column]]
-                # end
-                @parent.as_hash(jsonize(method) => merge_inheritance_column(children.merge(id: id)))
+                # The id goes in under a String key like every other key in this
+                # tree -- jsonize returns a String, and inheritance_column is a
+                # String.  A Symbol here put both "id" and :id in the same node
+                # whenever the client had also fetched the id attribute; both
+                # serialize to "id", which activesupport warns about today and
+                # json 3.0 rejects outright.  The readers in load_from_json below
+                # look the key up as a String to match. (#82)
+                @parent.as_hash(jsonize(method) => merge_inheritance_column(children.merge('id' => id)))
               elsif method == '*all'
                 @parent.as_hash('*all' => children.first)
               else
@@ -531,7 +534,10 @@ keys:
           end
         end
 
-        if (id_value = tree[target.class.try(:primary_key)] || tree[:id]) && id_value.is_a?(Array)
+        # as_hash writes the id under 'id' whatever the model calls its primary
+        # key; a tree built from attributes alone (_react_param_conversion) keys
+        # it by the primary key name.  Both spellings are Strings. (#82)
+        if (id_value = tree[target.class.try(:primary_key)] || tree['id']) && id_value.is_a?(Array)
           target.id = id_value.first
         end
         tree.each do |method, value|
@@ -563,11 +569,11 @@ keys:
 
             target.send "#{method}=", value.first
           elsif value.is_a? Array
-            target.send("_hyperstack_internal_setter_#{method}", value.first) unless [target.class.primary_key, :id].include? method
-          elsif value.is_a?(Hash) && value[:id] && value[:id].first && (association = target.class.reflect_on_association(method))
+            target.send("_hyperstack_internal_setter_#{method}", value.first) unless [target.class.primary_key, 'id'].include? method
+          elsif value.is_a?(Hash) && value['id'] && value['id'].first && (association = target.class.reflect_on_association(method))
             # not sure if its necessary to check the id above... is it possible to for the method to be an association but not have an id?
-            klass = value[:model_name] ? Object.const_get(value[:model_name].first) : association.klass
-            new_target = ReactiveRecord::Base.find_by_id(klass, value[:id].first)
+            klass = value['model_name'] ? Object.const_get(value['model_name'].first) : association.klass
+            new_target = ReactiveRecord::Base.find_by_id(klass, value['id'].first)
             target.send "#{method}=", new_target
           elsif !(target.class < ActiveRecord::Base)
             new_target = target.send(*method)
