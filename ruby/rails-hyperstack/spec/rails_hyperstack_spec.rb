@@ -44,6 +44,34 @@ describe "rails-hyperstack" do
     expect { Hyperstack::Model.load { Sample.count } }.on_client_to eq(1)
   end
 
+  # #105. The example above is what a broken `on_server?` breaks, but every
+  # suite hides it: hyper-spec forces `Hyperstack.on_server = true` in a
+  # before(:each), because the predicate used to be `defined?(Rails::Server)`
+  # and nothing but `rails server` satisfies that -- not Capybara's in-process
+  # puma, and not a Passenger or `bundle exec puma` deployment either. This is
+  # a generated app booted the way a real one is, so it is the place to take the
+  # override away and make the predicate answer for itself.
+  #
+  # Rails::Server goes with it: Rails 8's boot path defines it where 6.1 and 7.2
+  # do not (#103), and the whole point is that neither answer says anything about
+  # whether this process is serving.
+  it "knows it is the server without having been started by `rails server`", js: true do
+    rails_server = Rails.const_defined?(:Server, false) && Rails.send(:remove_const, :Server)
+
+    # A freshly booted server: nothing declared, nothing observed.
+    Hyperstack.on_server = nil
+    Hyperstack.instance_variable_set(:@serving_requests, nil)
+    expect(Hyperstack.on_server?).to be false
+
+    visit "/"
+
+    # One request through the app's middleware stack is all it takes, and it is
+    # the same fact under puma, Passenger or rackup.
+    expect(Hyperstack.on_server?).to be true
+  ensure
+    Rails.const_set(:Server, rails_server) if rails_server
+  end
+
   it "implements server_side_auto_require", js: true do
     expect(Sample.super_secret_server_side_method).to be true
     expect do

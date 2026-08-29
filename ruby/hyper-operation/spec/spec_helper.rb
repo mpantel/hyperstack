@@ -90,12 +90,10 @@ RSpec.configure do |config|
   #   DatabaseCleaner.strategy = :transaction
   # end
 
+  # Same process as the Capybara server, so this is true -- but state it through
+  # the setting instead of redefining the predicate, which would hide #105 again.
   config.before(:each) do |x|
-    Hyperstack.class_eval do
-      def self.on_server?
-        true
-      end
-    end
+    Hyperstack.on_server = true
     # Hyperstack.configuration do |config|
     #   config.connect_session = false
     # end
