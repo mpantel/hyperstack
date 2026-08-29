@@ -137,8 +137,14 @@ Hyperstack.transport = :action_cable # :pusher, :simple_poller or :none
         say '🎢 Top Level App Component skipped, you can manually generate it later 🎢', :green
       end
       unless skip_webpack?
-        say '📦 Webpack integrated with Hyperstack.  '\
-            'Add javascript assets to app/javascript/packs/client_only.js and /client_and_server.js 📦', :green
+        # Ask the pipeline what to tell the user. This message used to be the
+        # Webpacker one unconditionally, so every Rails 7+ install -- i.e. every
+        # esbuild app -- was pointed at two pack manifests esbuild never reads.
+        # extend is idempotent; install_webpack has already mixed the strategy in
+        # by the time report runs, but repeating it keeps this independent of
+        # method order. (#98)
+        extend(js_pipeline_strategy)
+        say "📦 #{js_assets_advice} 📦", :green
       end
       unless skip_hyper_model?
         say '👩‍✈️ Basic development policy defined.  See app/policies/application_policy.rb 👨🏽‍✈️', :green

@@ -207,6 +207,14 @@ describe 'hyperstack:install generator logic' do
           .to include(:expose_npm_global, :add_npm_stylesheet, :build_js_bundle, :insure_yarn_loaded)
       end
 
+      # `report` asks the strategy what to tell the user about adding JS assets.
+      # It used to print the Webpacker text unconditionally, so every esbuild app
+      # was pointed at pack manifests esbuild never reads. Both strategies must
+      # answer, and neither may describe the other's files. (#98)
+      it "#{strategy.name.split('::').last} provides js_assets_advice" do
+        expect(strategy.instance_methods).to include(:js_assets_advice)
+      end
+
       # Signatures too, not just presence: the generators call
       # expose_npm_global(global, package) and add_npm_stylesheet(scss_path:, cdn_url:),
       # so a strategy that defines the names with different arity still breaks at the
