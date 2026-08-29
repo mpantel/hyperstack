@@ -31,7 +31,14 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'database_cleaner'
   spec.add_development_dependency 'hyper-spec', Hyperstack::Operation::VERSION
   # spec.add_development_dependency 'mysql2'
-  spec.add_development_dependency 'pg'
+  # pg drives the database the specs actually run against, and was unpinned: a
+  # new major could arrive here with no commit of ours -- and it would arrive
+  # on cells running EOL Rails 6.1, whose postgresql_adapter calls
+  # PG::Coder.new with a positional Hash -- deprecated in pg since 1.5.0, fixed
+  # in Rails 7.2+ and never in 6.1 -- so a major that finishes that deprecation
+  # turns a warning into a failure. Cap the major; a cell moves it with
+  # PG_VERSION, the way SQLITE3_VERSION is moved. (#102)
+  spec.add_development_dependency 'pg', *Hyperstack.version_selector('PG_VERSION', '< 2')
   # spec.add_development_dependency 'opal-browser', '~> 0.2.0'
   # Opal reaches sprockets through opal-rails by default; a cell that sets
   # OPAL_SPROCKETS_VERSION swaps in opal-sprockets, the only route on Rails 8

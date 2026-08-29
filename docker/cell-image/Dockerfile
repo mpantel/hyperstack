@@ -28,6 +28,11 @@ ARG OPAL_SPROCKETS_VERSION=""
 ARG REACT_RAILS_VERSION=""
 # Rails 8 needs sqlite3 2.x; the gemspecs pin `< 2` for the Rails 6.1 cells.
 ARG SQLITE3_VERSION=""
+# No cell sets this today -- the gemspecs' own `< 2` is what pins pg (#102).
+# It is plumbed through anyway so that pinning pg per cell stays a one-line
+# change in supported_versions.yml: a selector the image build does not pass
+# resolves one bundle at build time and a different one in the job.
+ARG PG_VERSION=""
 # Which JS pipeline this cell scaffolds with. Unlike the version selectors this
 # one is a plain string with a safe default (spec_prepare_gems.rb derives it from
 # the Rails version when unset), so it can be exported unconditionally. The
@@ -71,7 +76,7 @@ RUN git init -q . && git config user.email ci@hyperstack && git config user.name
 # One `local_gems` shared by every gem, exactly as CI does it
 # (`bundle config set --local path ../../local_gems`).
 RUN set -eux; \
-    env | grep -E '^(RBENV|RAILS|OPAL|REACT|SQLITE3)' || echo 'no version selectors set (gemspec defaults)'; \
+    env | grep -E '^(RBENV|RAILS|OPAL|REACT|SQLITE3|PG)_' || echo 'no version selectors set (gemspec defaults)'; \
     gem install bundler -v '~> 4.0'; \
     for gem in ${HYPERSTACK_COMPONENTS}; do \
       [ -f "ruby/$gem/Gemfile" ] || continue; \

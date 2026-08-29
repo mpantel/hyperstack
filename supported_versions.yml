@@ -42,6 +42,17 @@
 #   gemspec default. The gemspecs read these through Hyperstack.version_selector,
 #   which treats blank as unset, so neither spelling can reach Bundler as the
 #   requirement '' any more. (#78)
+# * A selector does not need a cell entry to be worth having. PG_VERSION is one
+#   no cell sets: the gemspecs' own `< 2` is what pins pg, the driver for the
+#   database the specs run against, which until #102 was unpinned -- so a new pg
+#   major could have landed with no commit of ours, on the Rails 6.1 cells whose
+#   EOL postgresql_adapter still calls PG::Coder.new with a positional Hash
+#   (deprecated in pg since 1.5.0, fixed in Rails 7.2+). The selector is what
+#   makes moving that cap for one cell -- when pg 2.0 ships and the Rails 7/8
+#   cells want it -- one line here, rather than a gemspec edit that moves every
+#   cell at once. It does NOT silence the deprecation warning: that is surfaced on
+#   purpose by RUBYOPT=-W:deprecated in .gitlab-ci.yml, and only Rails 6.1
+#   leaving the matrix ends it. (#102)
 #
 name: hyperstack supported configurations
 cells:

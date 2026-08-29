@@ -23,7 +23,8 @@ module VersionSelectorSpecHelper
     'OPAL_RAILS_VERSION' => 'opal-rails',
     'OPAL_SPROCKETS_VERSION' => 'opal-sprockets',
     'REACT_RAILS_VERSION' => 'react-rails',
-    'SQLITE3_VERSION' => 'sqlite3'
+    'SQLITE3_VERSION' => 'sqlite3',
+    'PG_VERSION' => 'pg'
   }.freeze
 
   EVAL_SCRIPT = <<~RUBY

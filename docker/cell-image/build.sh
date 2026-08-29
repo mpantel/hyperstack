@@ -25,7 +25,7 @@ eval "$(cd "$ROOT" && HYPERSTACK_CELL="$CELL" rake hyperstack:cell:env)"
 # override with nothing; for the rest it is now belt-and-braces.
 ARGS=()
 for v in RBENV_VERSION RAILS_VERSION OPAL_VERSION OPAL_RAILS_VERSION OPAL_SPROCKETS_VERSION \
-         REACT_RAILS_VERSION SQLITE3_VERSION HYPERSTACK_JS_PIPELINE; do
+         REACT_RAILS_VERSION SQLITE3_VERSION PG_VERSION HYPERSTACK_JS_PIPELINE; do
   if [ -n "${!v:-}" ]; then ARGS+=(--build-arg "$v=${!v}"); fi
 done
 
