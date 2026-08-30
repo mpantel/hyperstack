@@ -797,6 +797,51 @@ the race.
 
 ### rails-hyperstack (the install generator)
 
+- **The generated app's React bundle is minified: 1.26 MB → 421 KB (#107).** The
+  most user-visible change in this release. `esbuild.config.js` set
+  `NODE_ENV=production` — so React's development branches were already folding
+  away, this was never a dev build — but never set `minify`, so the bundle shipped
+  with full identifiers, comments and whitespace. esbuild flagged its own output
+  on every build (`react_runtime.js 1.2mb ⚠️`) and nothing acted on it.
+
+  This is not a test fixture: `hyperstack:install` writes `react_runtime.js` into
+  the app, adds `//= link_tree ../builds` so sprockets serves it, and injects
+  `//= require react_runtime` into `application.js` ahead of `hyperstack-loader`
+  — which the layout loads on **every page**. Sprockets does not compress
+  JavaScript by default and nothing sets `config.assets.js_compressor`, so what
+  esbuild emitted was what every browser received.
+
+  Measured against react 19.2 rather than estimated:
+
+  ```
+  unminified   1,260,648 bytes   (gzip 211,184)
+  minified       421,272 bytes   (gzip 130,222)
+  ```
+
+  −67% raw, −38% on the wire. Tied to the same `NODE_ENV` signal as `define`, so
+  `NODE_ENV=development` still produces a readable bundle.
+
+  One spec changed with it. `component_spec.rb`'s `componentDidCatch` example
+  matched the React >= 17 componentStack against
+  `/ErrorFoo|at eval|factory\.js/`, and the alternative that actually matched was
+  `factory.js` — create-react-class's path surviving in the *unminified* output
+  (2 occurrences unminified, 0 minified). None of the three ever named a
+  Hyperstack component; React >= 17 frames name the JavaScript function the
+  engine sees, which is create-react-class's internal constructor. That is what
+  the comment above the assertion already said — "native error frames, which name
+  files rather than components" — so the regex was contradicting its own
+  documentation and re-encoding how the bundle happened to be built. It is
+  removed; the non-empty-`componentStack` check above it is the real contract and
+  remains, as does the exact component-by-component assertion for React <= 16,
+  where the synthetic stack genuinely does name components.
+
+  Not addressed here, and now measured: `react-dom/server` is bundled into the
+  *client* runtime despite a dedicated `react_server_runtime.js` entrypoint
+  existing for prerendering. It is 189,490 bytes — 45% of what remains after
+  minification — but it backs a documented API (`Hyperstack::Component::Server.render_to_string`),
+  so removing it is a public API change rather than a size fix. Tracked in #109,
+  with the caching question in #108.
+
 - **Split the JS pipeline into per-version generator strategies (#51).**
   `install_webpack` unconditionally ran `rails webpacker:install`, which does not
   exist on Rails 7. Unlike the other Rails 7.2 failures this cannot be a capability
@@ -927,6 +972,27 @@ the race.
   rewrite (#37), not a version bump.
 
 ### CI and tooling
+
+- **One gem list, two consumers — and the CI publish path is gated on it (#49).**
+  `rake publish` and the eleven `*-deploy` jobs already shared one
+  *implementation* (`publish_gem`), but not one *list*: the Rakefile hardcoded its
+  own eleven gems and `.gitlab-ci.yml` hardcoded the same eleven as `COMPONENT`
+  values. They agreed by care rather than construction, and nothing would have
+  noticed when they stopped — add a gem and forget the deploy job and it silently
+  never ships. `PUBLISHED_GEMS` is now the list and `rake hyperstack:gem:check`
+  asserts the pipeline matches it, the same "one table, two consumers" rule
+  `supported_versions.yml` follows for cells (#51). It also catches the case a
+  list-vs-list comparison misses: a gemspec on disk that is in neither list, which
+  would ship to nobody with nothing to complain. `hyper-console` is *named* as the
+  one deliberate exclusion (#86) so "excluded on purpose" and "someone forgot"
+  cannot look alike.
+
+  The check runs in `supported-versions`, not on the deploy jobs — those are
+  `when: manual` and `allow_failure: true`, so a check there would only run when
+  someone starts a deploy and could not fail the pipeline when it did. That also
+  closes the asymmetry that prompted this: publishing *locally* had always gated
+  on `matrix:check`, while publishing through CI — the path that actually ships —
+  gated on nothing.
 
 - **`RELEASE-PROCESS.md` no longer claims the tag publishes the gems.** It said
   *"once build passes gems will be released!!!"*. It does not: the eleven
