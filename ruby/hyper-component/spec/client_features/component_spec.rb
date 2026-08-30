@@ -170,9 +170,23 @@ describe 'React::Component', js: true do
       expect_evaluate_ruby('Foo.get_info.is_a?(String) && !Foo.get_info.empty?').to be_truthy
       if react_version_major <= 16
         expect_evaluate_ruby('Foo.get_info').to eq("\n    in ErrorFoo (created by Foo)\n    in div (created by Foo)\n    in Foo (created by Hyperstack::Internal::Component::TopLevelRailsComponent)\n    in Hyperstack::Internal::Component::TopLevelRailsComponent")
-      else
-        expect_evaluate_ruby('Foo.get_info').to match(/ErrorFoo|at eval|factory\.js/)
       end
+      # Deliberately nothing further above React 16. There used to be a
+      # `match(/ErrorFoo|at eval|factory\.js/)` here, and it was asserting a build
+      # artifact rather than a contract: the alternative that actually matched was
+      # `factory.js`, create-react-class's path surviving in the UNMINIFIED esbuild
+      # bundle. Counted in the real bundles -- 2 occurrences unminified, 0 minified
+      # -- so minifying the React bundle (#107) turned it red on all six npm cells
+      # while the four react-rails cells stayed green.
+      #
+      # None of the three alternatives named a Hyperstack component. React >= 17
+      # frames name the JavaScript function they find, which here is
+      # create-react-class's internal constructor, so the frames read `at E (...)`
+      # once the bundle is minified and `at <whatever esbuild called it>` before.
+      # There is no version- or build-independent name to assert, which is exactly
+      # what the comment above already says. The non-empty check is the real
+      # contract and it is asserted; anything more would only re-encode how the
+      # bundle happens to be built today.
     end
   end
 
