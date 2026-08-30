@@ -7,7 +7,7 @@ The releases published by the retired `rails-7` / `rails-8.0` / `rails-8.1`
 branch lines are archived in
 [`CHANGELOG_rails-7-and-8-lines.md`](./CHANGELOG_rails-7-and-8-lines.md).
 
-## 1.0.alpha1.9 — 2026-08-29
+## 1.0.alpha1.9 — 2026-08-30
 
 The release that collapses the four release lines into one. Since
 `1.0.alpha1.8.34.18.61.1614.6` this project maintained `edge`, `rails-7`,
@@ -386,6 +386,58 @@ are correct on 6.1 and on 8.1 alike (#52, #51).
 
 ### hyper-operation: two transports that had never delivered a broadcast
 
+Three defects here, and they were stacked: each one had to be fixed before the
+next became reachable. `#103` created the tables, which let `#104` be observed,
+and rooting `#103` out exposed that the predicate behind it was wrong everywhere
+else too, which is `#105`. All three are silent failures — the page simply stays
+stale — and all three affect ordinary deployments, not just CI.
+
+- **`on_server?` answered *false from inside the server* in any normal
+  deployment (#105).** The predicate `send_data`, `dispatch`,
+  `ReactiveRecord::Broadcast.after_commit` and the connection adapters' `active`
+  all branch on was:
+
+  ```ruby
+  def self.on_server?
+    return defined? Rails::Server
+  end
+  ```
+
+  `Rails::Server` is defined only when the process was started through
+  `rails server`. Not under Passenger, not under a container running
+  `bundle exec puma` or `rackup`, not under Capybara's in-process server, and not
+  in any rake task. So in a normal deployment every broadcast took the
+  *forwarding* branch — an HTTP POST from the server to itself, landing on
+  `console_update` — instead of being published to the transport. The question
+  being asked is a real one, and the right one ("am I the process serving
+  requests, or a console that must forward to it?"); only the way of asking it
+  was wrong. It is now answered by fact rather than inference: a
+  `Hyperstack::MarkServerProcess` middleware, installed by the engine, records
+  that this process is serving on its first request, which is what actually
+  distinguishes a server from a console or a rake task. Being middleware, it runs
+  ahead of the router, so a broadcast issued from the very first request already
+  sees the flag. `send_data` also gains the `Connection.root_path` test that
+  `dispatch` and `Broadcast.after_commit` already had, so a process with nothing
+  to forward *to* — a rake task on a box where the app has never served — queues
+  the message locally instead of raising `no server running`.
+
+- **Queued broadcasts raised `Psych::DisallowedClass` when read back on Rails
+  6.1 (#104).** `#44` applied the permitted-class list only on Rails >= 7.1, and
+  below that the column fell back to a bare `serialize :data`. But Rails 6.1.7.x
+  carries the same safe-load backport, so `YAMLColumn#yaml_load` there is already
+  a restricted `safe_load` with nothing permitted on this column: the payload
+  dumps fine and raises on the way back in. `#44` fixed the dump side; this is the
+  load side, and it had never been reachable — per `#103` the
+  `hyperstack_queued_messages` table did not exist on Rails 6.1 at all, so nothing
+  was ever queued there and nothing ever read back. Rails 6.1's `serialize`
+  accepts any object responding to `dump`/`load`, so the same list is applied
+  through a coder on the column rather than by widening
+  `config.active_record.yaml_column_permitted_classes` — `#44`'s reasoning stands,
+  that hyperstack's own table should not require the host application to widen a
+  global list. Worth knowing if you meet it in an application: the raise surfaces
+  from `restore_transaction_record_state` during `rolledback!`, so it presents at
+  an unrelated `Model.create` rather than at the queue read.
+
 - **The connection tables were never created unless the app was booted by
   `rails server` (#103).** The most consequential fix in this release, and the
   one most likely to be affecting a running application right now. The
@@ -466,6 +518,36 @@ are correct on 6.1 and on 8.1 alike (#52, #51).
   own permissions rather than depending on the host app widening a global list.
 
 ### hyper-model
+
+- **`ServerDataCache` built every vector twice (#100).** `ServerDataCache.[]`
+  ran the same `inject` over the vector's methods twice — once discarding the
+  result, then again into `final`:
+
+  ```ruby
+  vector[1..-1].inject(root) { |cache_item, method| cache_item.apply_method method if cache_item }
+  final = vector[1..-1].inject(root) { |cache_item, method| cache_item.apply_method method if cache_item }
+  ```
+
+  `apply_method` is not free of side effects: a vector ending in a
+  `server_method` *invokes* it. So every such fetch ran the method twice, and any
+  server method that mutates — a counter, a log line, an external call — did its
+  work twice per request. Invisible in the returned data, because the second pass
+  produces the same value the caller sees.
+
+  It surfaced as an intermittent off-by-one in
+  `batch6/server_method_spec.rb:71` (`expected: 5, got: 4`), which is the shape
+  that made it hard to attribute: the doubling is deterministic, but whether it
+  changed the *observed* count depended on how the fetches batched, so it only
+  showed under load. The duplicate pass is removed. An opt-in
+  `HYPERSTACK_TRACE_VECTORS` logs each vector and the batch it arrives in, which
+  is how the double-build was made visible.
+
+  The spec's own cross-process hazard is documented alongside it in
+  `AsyncExpectationTarget`, next to the #67/#83 notes: comparing a
+  client-resolved value against server state read afterwards is a race that no
+  amount of care about the *first* read can fix — a step that fires asynchronous
+  work must settle it (`wait_for_ajax`) so the server is quiescent when the next
+  step reads it. Relaxing the matcher would only have hidden this.
 
 - **Wait for the pusher handshake before broadcasting (#70).** Diagnosed by
   instrumenting the step under a full matrix run, where the discriminator was
@@ -845,6 +927,18 @@ the race.
   rewrite (#37), not a version bump.
 
 ### CI and tooling
+
+- **`RELEASE-PROCESS.md` no longer claims the tag publishes the gems.** It said
+  *"once build passes gems will be released!!!"*. It does not: the eleven
+  `*-deploy` jobs are `when: manual`, so pushing the tag starts a pipeline and
+  publishes nothing until someone starts each one. They are also
+  `allow_failure: true`, so a publish that fails leaves the pipeline green —
+  which is now its own step, because it is the failure that would go unnoticed,
+  and it is not hypothetical: #49 fixed a publish path that stored the multipart
+  form envelope *as the gem* while the registry answered `201`. The document also
+  now records what the deploy job actually does — publish, then poll the packages
+  API until the version reports status `default` — and that
+  `resource_group: production` serialises them.
 
 - **Recover the test coverage stranded on the retired branch lines.** A
   content-level diff of `rails-7`, `rails-8.0` and `rails-8.1` against `edge`
