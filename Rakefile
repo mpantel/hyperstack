@@ -1,5 +1,30 @@
 require './ruby/version'
 
+# The gems this repo publishes. ONE list, two consumers -- `rake publish` walks
+# it, and every `*-deploy` job in .gitlab-ci.yml must name one of them, asserted
+# by `rake hyperstack:gem:check`. Same "one table, two consumers" rule
+# supported_versions.yml follows for cells (#51): the pipeline and the Rakefile
+# each carried their own hardcoded copy of this list, agreeing only by care,
+# with nothing to notice when they stopped.
+PUBLISHED_GEMS = %w[
+  hyper-component
+  hyper-i18n
+  hyper-model
+  hyper-operation
+  hyper-router
+  hyper-spec
+  hyper-state
+  hyper-store
+  hyper-trace
+  hyperstack-config
+  rails-hyperstack
+].freeze
+
+# Has a gemspec but is deliberately not published. Listed rather than merely
+# absent, so `hyperstack:gem:check` can tell "excluded on purpose" from "someone
+# added a gem and forgot the deploy job".
+DELIBERATELY_UNPUBLISHED = %w[hyper-console].freeze # untested by CI, frozen on React 15 (#86)
+
 
 # Publishing moved off geminabox: gems.ru.aegean.gr was repointed to GitLab's
 # RubyGems Package Registry (ru/rubygems, project 65) on 2026-08-18 and the
@@ -136,9 +161,40 @@ namespace :hyperstack do
     task :publish do
       component = ENV['COMPONENT'].to_s
       abort 'Set COMPONENT to the gem to publish, e.g. COMPONENT=hyper-model' if component.empty?
+      abort "#{component} is not in PUBLISHED_GEMS" unless PUBLISHED_GEMS.include?(component)
+
       dir = File.expand_path("ruby/#{component}", __dir__)
       abort "no such gem directory: #{dir}" unless Dir.exist?(dir)
       Dir.chdir(dir) { publish_gem(component) }
+    end
+
+    desc 'Verify .gitlab-ci.yml deploy jobs match PUBLISHED_GEMS (one list, two consumers)'
+    task :check do
+      ci = File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8')
+      # Every job extending .deploy_gem names its gem in COMPONENT. That is the
+      # pipeline's copy of the list; PUBLISHED_GEMS is ours.
+      in_ci = ci.scan(/extends:\s*\.deploy_gem\s*\n\s*variables:\s*\n\s*COMPONENT:\s*(\S+)/)
+                .flatten.sort
+      declared = PUBLISHED_GEMS.sort
+
+      msg = []
+      (declared - in_ci).tap { |x| msg << "declared but no deploy job: #{x.join(', ')}" if x.any? }
+      (in_ci - declared).tap { |x| msg << "deploy job but not declared: #{x.join(', ')}" if x.any? }
+
+      # A gem that exists on disk and is in neither list is the dangerous case:
+      # it ships to nobody and nothing says so. hyper-console is the one
+      # deliberate exclusion (#86) and is named so that adding a gem cannot be
+      # forgotten the same way.
+      on_disk = Dir[File.expand_path('ruby/*/*.gemspec', __dir__)]
+                .map { |p| File.basename(File.dirname(p)) }.sort
+      unaccounted = on_disk - declared - DELIBERATELY_UNPUBLISHED
+      msg << "gemspec on disk, published by nothing: #{unaccounted.join(', ')}" if unaccounted.any?
+
+      abort "hyperstack:gem:check FAILED — #{msg.join('; ')}" if msg.any?
+
+      puts "hyperstack:gem:check OK — #{declared.size} gem(s) published, " \
+           "#{DELIBERATELY_UNPUBLISHED.size} deliberately excluded " \
+           "(#{DELIBERATELY_UNPUBLISHED.join(', ')})"
     end
   end
 
@@ -172,26 +228,10 @@ namespace :hyperstack do
   end
 end
 
-desc 'Publish hyperstack gems to private dir'
-# NOTE for the rails-7+ rebase: those lines carry `task publish: 'version:check'`,
-# so this becomes `task publish: ['version:check', 'hyperstack:matrix:check']`
-# when the stack is replayed. Both prerequisites are wanted.
-task publish: 'hyperstack:matrix:check' do
+desc 'Publish hyperstack gems to the GitLab RubyGems registry'
+task publish: ['hyperstack:matrix:check', 'hyperstack:gem:check'] do
   base_path = ENV['PWD']
-  #  hyper-console
-  %w{
-    hyper-component
-    hyper-i18n
-    hyper-model
-    hyper-operation
-    hyper-router
-    hyper-spec
-    hyper-state
-    hyper-store
-    hyper-trace
-    hyperstack-config
-    rails-hyperstack
-  }.each do|gem|
+  PUBLISHED_GEMS.each do |gem|
     puts "Publishing #{gem} gem"
     Dir.chdir("#{base_path}/ruby/#{gem}") do
       puts "Delete #{gem} Gemfile.lock"
