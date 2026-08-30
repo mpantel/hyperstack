@@ -45,26 +45,56 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
   require 'uri'
   require 'json'
 
-  # Reuse the credential CI already has for the private gem server:
-  # BUNDLE_GEMS__RU__AEGEAN__GR is bundler's credential for
-  # `source "https://gems.ru.aegean.gr"`, and that host IS this registry now, so
-  # there is no second secret to provision. GEM_SERVER_TOKEN still wins if set,
-  # for a token with different scope.
+  # Credential order matters, and it changed after the 1.0.alpha1.9 publish
+  # attempt returned `HTTP 403 Forbidden` on every gem.
   #
-  # Bundler stores a source credential as `user:password`, while this endpoint
-  # wants the token alone -- so take everything after the first colon when the
-  # value carries a username, and use it as-is when it does not.
+  # The old order put BUNDLE_GEMS__RU__AEGEAN__GR second, which is bundler's
+  # credential for `source "https://gems.ru.aegean.gr"` -- i.e. the credential
+  # for READING gems. It is project 65's `capistrano-deploy-rubygems` deploy
+  # token, whose only scope is `read_package_registry`, so it can never upload.
+  # Nothing else in the `ru` group has write access either: the group's one
+  # deploy token is `read_registry` (Docker).
+  #
+  # So prefer CI_JOB_TOKEN, which every job already has, is scoped to that job,
+  # expires with it, and needs no secret stored anywhere. It requires ru/hyperstack
+  # to be on ru/rubygems' CI job token INBOUND allowlist (project 65 has
+  # `inbound_enabled: true`); without that the registry answers 403 exactly as the
+  # read-only token did, so the abort message below names it.
+  #
+  # GEM_SERVER_TOKEN still wins outright, for an explicitly provisioned token.
+  # The two read credentials stay last as a fallback for a local publish, where
+  # there is no job token -- and where the human running it can be told plainly
+  # that a read scope will fail.
+  #
   # `find`, not `||`: an empty string is TRUTHY in Ruby, and CI happily defines a
   # variable as "". `||` would then pick the empty one and never reach the real
   # credential -- the same trap documented in docker/cell-image/Dockerfile.
-  raw = [ENV['GEM_SERVER_TOKEN'],
-         ENV['BUNDLE_GEMS__RU__AEGEAN__GR'],
-         ENV['GEM_SERVER_KEY']].find { |v| !v.to_s.empty? }
-  if raw.to_s.empty?
-    abort 'No gem-server credential: set GEM_SERVER_TOKEN (or BUNDLE_GEMS__RU__AEGEAN__GR) ' \
-          'to a GitLab token with write_package_registry scope'
+  job_token = ENV['CI_JOB_TOKEN'].to_s
+  explicit  = [ENV['GEM_SERVER_TOKEN'],
+               ENV['BUNDLE_GEMS__RU__AEGEAN__GR'],
+               ENV['GEM_SERVER_KEY']].find { |v| !v.to_s.empty? }
+
+  # A job token authenticates through the JOB-TOKEN header; a PAT or deploy token
+  # through a plain Authorization header (this endpoint rejects both `Bearer` and
+  # `PRIVATE-TOKEN`). Which header to send is therefore decided by which
+  # credential won, not configured separately.
+  if !ENV['GEM_SERVER_TOKEN'].to_s.empty?
+    auth_header, token = 'Authorization', ENV['GEM_SERVER_TOKEN']
+  elsif !job_token.empty?
+    auth_header, token = 'JOB-TOKEN', job_token
+  elsif explicit
+    auth_header, token = 'Authorization', explicit
+  else
+    abort 'No gem-server credential. In CI this should be CI_JOB_TOKEN (add ru/hyperstack ' \
+          "to ru/rubygems' CI job token allowlist); locally set GEM_SERVER_TOKEN to a " \
+          'GitLab token with write_package_registry scope.'
   end
-  token = raw.include?(':') ? raw.split(':', 2).last : raw
+
+  # Bundler stores a source credential as `user:password`, while this endpoint
+  # wants the token alone -- so take everything after the first colon when the
+  # value carries a username, and use it as-is when it does not. Job tokens never
+  # carry a username, but the split is harmless for them.
+  token = token.include?(':') ? token.split(':', 2).last : token
 
   host       = ENV['GEM_SERVER_HOST'] || 'https://gitlab.ru.aegean.gr'
   project_id = ENV['GEM_SERVER_PROJECT_ID'] || '65' # ru/rubygems
@@ -75,7 +105,7 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
 
   uri = URI("#{registry}/api/v1/gems")
   request = Net::HTTP::Post.new(uri)
-  request['Authorization'] = token
+  request[auth_header] = token
   request['Content-Type']  = 'application/octet-stream'
   request.body = File.binread(gem_file)
   response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|
@@ -92,7 +122,7 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
   10.times do
     sleep 2
     check = Net::HTTP::Get.new(list)
-    check['Authorization'] = token
+    check[auth_header] = token
     result = Net::HTTP.start(list.hostname, list.port, use_ssl: list.scheme == 'https') do |http|
       http.request(check)
     end
