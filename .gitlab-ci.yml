@@ -505,6 +505,14 @@ supported-versions:
     # The SupportedVersions specs themselves run in the hyperstack-config job,
     # which has a bundle; this job only needs rake and the two files.
     - rake hyperstack:matrix:check
+    # Same rule for the gem list: PUBLISHED_GEMS in the Rakefile and the
+    # `*-deploy` jobs below are one list with two consumers, and this is what
+    # stops them drifting. It belongs here rather than on the deploy jobs
+    # because those are `when: manual` and `allow_failure: true` -- a check that
+    # only runs when someone starts a deploy, and cannot fail the pipeline when
+    # it does, would not be a gate at all. `rake publish` takes it as a
+    # prerequisite for the same reason.
+    - rake hyperstack:gem:check
 
 hyper-spec:
   extends: .test_gem
