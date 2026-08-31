@@ -63,25 +63,54 @@ Hyperstack::Component::ReactAPI.unmount_component_at_node(dom_container)
 
 This removes a mounted component from the DOM and cleans up its event handlers and state. If no component was mounted in the container, calling this function does nothing. Returns `true` if a component was unmounted and `false` if there was no component to unmount.
 
-### React.render\_to\_string
+### Server.render\_to\_string
 
 ```ruby
-Hyperstack::Component::ReactAPI.render_to_string(element)
+Hyperstack::Component::Server.render_to_string(element)
 ```
 
-Render an element to its initial HTML. This is should only be used on the server for prerendering content. React will return a string containing the HTML. You can use this method to generate HTML on the server and send the markup down on the initial request for faster page loads and to allow search engines to crawl your pages for SEO purposes.
+Render an element to its initial HTML. React returns a string containing the markup. You can use this to generate HTML ahead of the initial request, so the page paints without waiting for the client to boot and so search engines can crawl your pages for SEO purposes.
 
 If you call `ReactAPI.render` on a node that already has this server-rendered markup, React will preserve it and only attach event handlers, allowing you to have a very performant first-load experience.
 
-If you are using rails, then the prerendering functions are automatically performed. Otherwise you can use `render_to_string` to build your own prerendering system.
+If you are using Rails, prerendering is performed for you and you do not need to call this yourself — see [where these run](#where-these-run-and-what-they-cost-in-the-browser) below. Otherwise you can use `render_to_string` to build your own prerendering system.
 
-### React.render\_to\_static\_markup
+> `Hyperstack::Component::ReactAPI.render_to_string` is a deprecated spelling of the same method and logs a deprecation notice on every call. Use `Hyperstack::Component::Server`.
+
+### Server.render\_to\_static\_markup
 
 ```ruby
-React.render_to_static_markup(element)
+Hyperstack::Component::Server.render_to_static_markup(element)
 ```
 
-Similar to `render_to_string`, except this doesn't create extra DOM attributes such as `data-react-id`, that React uses internally. This is useful if you want to use React as a simple static page generator, as stripping away the extra attributes can save lots of bytes.
+Similar to `render_to_string`, except this doesn't create the extra DOM attributes React uses internally to reattach to the markup. This is useful if you want to use React as a simple static page generator, as stripping away the extra attributes can save lots of bytes.
+
+> Older documentation spelled this `React.render_to_static_markup`. That namespace predates both `ReactAPI` and `Server`; use `Hyperstack::Component::Server`.
+
+### Where these run, and what they cost in the browser
+
+Both methods are backed by `ReactDOMServer`, React's server renderer, and where that comes from depends on where you call them.
+
+**On the server, Rails prerendering needs nothing.** Prerendering runs in V8 against a separate bundle, `app/javascript/react_server_runtime.js`, which installs `ReactDOMServer` on the prerender context. None of the following applies to it.
+
+**In the browser, `ReactDOMServer` is opt-in.** It measures 189,490 bytes minified — 44% of the whole client bundle — and nothing in the framework calls it, so it is deliberately not part of `react_runtime.js`. Every app would otherwise pay for it, and most apps never generate HTML client-side.
+
+To call either method *from the browser* on the esbuild pipeline (Rails 7+), add one line to `app/assets/javascripts/application.js`:
+
+```js
+//= require react_dom_server_runtime
+```
+
+`app/javascript/react_dom_server_runtime.js` is written by the installer and built by `yarn build`, so opting in takes the require and a rebuild — no regeneration.
+
+On the Webpacker / react-rails pipeline (Rails 6.1), import it yourself and assign the global:
+
+```js
+import * as ReactDOMServer from "react-dom/server";
+window.ReactDOMServer = ReactDOMServer;
+```
+
+Without the opt-in, both methods raise an error naming the line to add rather than failing silently.
 
 ### HTML Entities
 

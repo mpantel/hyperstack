@@ -52,6 +52,33 @@ This guide is for **apps built on Hyperstack** moving from Rails 6.1 to Rails 7.
   rename `config/webpacker.yml` → `config/shakapacker.yml`. (Apps that serve
   everything through sprockets don't need this.)
 
+## Client-side `render_to_string` / `render_to_static_markup`
+
+Rails 7+ apps are scaffolded on the **esbuild** pipeline, whose
+`app/javascript/react_runtime.js` deliberately does **not** import
+`react-dom/server`: it measured 189,490 bytes minified, 44% of the whole client
+bundle, for an API the framework itself never calls.
+
+The consequence is a behaviour difference from the Rails 6.1 / react-rails
+pipeline, where `window.ReactDOMServer` was always present:
+
+- **Rails prerendering is unaffected.** It runs in V8 against a separate bundle,
+  `app/javascript/react_server_runtime.js`, which installs its own
+  `ReactDOMServer`. Nothing to do.
+- **Calling `Hyperstack::Component::Server.render_to_string` or
+  `.render_to_static_markup` from the browser is opt-in.** Add one line to
+  `app/assets/javascripts/application.js` and re-run `yarn build`:
+  ```js
+  //= require react_dom_server_runtime
+  ```
+  `app/javascript/react_dom_server_runtime.js` is written by the installer, so
+  there is nothing to regenerate. Without the require both methods raise an
+  error naming this line rather than failing silently.
+
+This only bites when you take the new template — an existing app's
+`app/javascript/react_runtime.js` is app-owned and the installer will not
+rewrite it, so an app that keeps its own copy keeps the global.
+
 ## Config
 
 - **`Rails.application.secrets` was removed in Rails 7.2.** Replace any use with
