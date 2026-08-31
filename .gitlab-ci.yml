@@ -452,10 +452,22 @@ hyper-model:
     # in ru/infrastructure (17 slots today, shared with hyperstack-addons) and
     # #58's reduced default matrix. Raise this again once either lands. (#113)
     PARALLEL_PROCESSES: "2"
-hyper-trace:
-  extends: .test_gem
-  variables:
-    COMPONENT: hyper-trace
+# hyper-trace has NO test job on purpose. It has no `spec/` directory and never
+# has -- the gem was imported in 2018 without one -- so its job ran bare `rake`,
+# which hit the no-op `task :default do end` in its Rakefile and exited 0 in 1.4s
+# having run zero examples. Ten cells of that per pipeline reported the gem green
+# on the whole support matrix while testing nothing at all. A false green is worse
+# than no job, so the job is gone rather than kept as decoration. (#121)
+#
+# Nothing is lost by removing it. hyper-component and hyper-model both carry
+# hyper-trace as a path dependency with no `require: false`, so `Bundler.require`
+# loads it and `Hyperstack.import 'hyper-trace'` compiles it into their test_apps'
+# client bundles -- on all ten cells. Whatever load-and-compile smoke coverage the
+# gem has always came from those two suites, never from this job.
+#
+# `hyperstack:gem:check` now asserts this absence deliberately: hyper-trace is
+# listed in UNTESTED_BY_CI in the Rakefile, and the check fails if a gem in that
+# list gains a test job, or if any other published gem loses one.
 hyperstack-config:
   extends: .test_gem
   variables:
