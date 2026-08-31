@@ -249,3 +249,50 @@ describe 'gemspec version selectors' do
     end
   end
 end
+
+# The sprockets `< 4.2` cap was carried by all ten Gemfiles and written into
+# generated apps by rails-hyperstack's Rakefile, on a reason that did not hold:
+# sprockets 4.1.1 and 4.2.2 have identical caching machinery, and react-rails
+# 2.6.2/2.7.1 ship identical sprockets-integration code, so "4.2 raises 'can't
+# modify immutable cached environment' because react-rails < 2.7" was wrong on
+# both halves. Verified across the matrix under 4.4.1 before removing it.
+#
+# It came back once already -- lifted on the rails-7 line in #17, then re-added
+# to edge in ec4b07b4b on a commit message asserting the release lines still
+# carried it, which they did not. This guard is what makes that round trip cost a
+# red spec rather than another archaeology session. (#123, #16, #17)
+describe 'the sprockets 4.2 cap' do
+  ROOT = File.expand_path('../../..', __dir__) unless defined?(ROOT)
+
+  SPROCKETS_CAP = /sprockets["'],\s*["']~> 4\.0["'],\s*["']< 4\.2["']/
+
+  gemfiles = Dir[File.join(ROOT, 'ruby', '*', 'Gemfile')].sort
+  rakefile = File.join(ROOT, 'ruby', 'rails-hyperstack', 'Rakefile')
+
+  it 'is not reintroduced by any Gemfile' do
+    offenders = gemfiles.select { |p| File.read(p).match?(SPROCKETS_CAP) }
+                        .map { |p| p.sub("#{ROOT}/", '') }
+    expect(offenders).to be_empty,
+                         "these Gemfiles re-pin sprockets below 4.2: #{offenders.join(', ')}"
+  end
+
+  it 'is not written into the app rails-hyperstack generates' do
+    expect(File.read(rakefile)).not_to match(SPROCKETS_CAP)
+  end
+
+  it 'still declares sprockets on 4.x wherever it is declared at all' do
+    # Lifting the upper bound must not become dropping the dependency: the
+    # test_apps serve the Opal bundle through sprockets, and the Rails 8 route
+    # (opal-sprockets, no opal-rails) has nothing else pulling it in. (#20)
+    declared = gemfiles.filter_map do |path|
+      line = File.read(path).lines.find { |l| l.match?(/^gem ['"]sprockets['"]/) }
+      [path.sub("#{ROOT}/", ''), line.strip] if line
+    end
+    expect(declared).not_to be_empty
+
+    wrong = declared.reject { |_, line| line.match?(/\Agem ['"]sprockets['"], ['"]~> 4\.0['"]\z/) }
+    expect(wrong).to be_empty,
+                     "these should declare sprockets '~> 4.0' exactly:\n" +
+                     wrong.map { |f, line| "  #{f}: #{line}" }.join("\n")
+  end
+end
