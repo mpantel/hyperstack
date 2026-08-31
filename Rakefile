@@ -309,6 +309,119 @@ namespace :hyperstack do
       end
     end
   end
+
+  namespace :workflow do
+    # Pin what workflow:rules DECIDES, not how it is spelled.
+    #
+    # The rules skip the matrix for a documentation-only merge request. Getting
+    # them wrong is silent in both directions: too eager and a code merge request
+    # ships with no pipeline at all; too shy and every docs typo starts ~121 jobs
+    # on a RAM-bound runner pool. Neither shows up as a red build -- the first
+    # shows up as no build.
+    #
+    # `rules:changes` has no negation, so the behaviour comes from THREE rules in
+    # order (code allowlist -> docs skip -> fallthrough) rather than one. That is
+    # exactly the kind of ordering a later edit reshuffles by accident, which is
+    # why the cases below include the mixed merge requests that a single docs
+    # rule would silently kill.
+    # One representative file per entry in the rules' code allowlist. Written
+    # out HERE rather than derived from .gitlab-ci.yml, so that deleting an entry
+    # from the allowlist fails this check instead of quietly deleting its own
+    # test case too.
+    CODE_PATHS = %w[
+      ruby/hyper-spec/lib/hyper-spec/rack.rb
+      ruby/hyper-model/README.md
+      docker/cell-image/Dockerfile
+      install/rails-webpacker.rb
+      .gitlab-ci.yml
+      .rubocop.yml
+      .ruby-version
+      Dockerfile
+      docker-compose.yml
+      Rakefile
+      HYPERSTACK_VERSION
+      supported_versions.yml
+      create-docker-image
+      login_to_registry.sh
+      run-local-docker-specs.sh
+      runall
+      runone
+      runtests
+      verify-gocd-yaml
+    ].freeze
+
+    # Changes that must NOT start the matrix: the whole point of the rules.
+    DOCS_ONLY = [
+      %w[docs/client-dsl/elements-and-rendering.md upgrade-from-rails-6-to-7.md],
+      %w[readme.md],
+      %w[CHANGELOG.md],
+      %w[CLAUDE.md],
+      %w[release-notes/1.0.alpha1.9.md],
+      %w[logos/hyperstack.png],
+      %w[LICENSE]
+    ].freeze
+
+    # Listed in NEITHER list. These must run: the fallthrough is the safety
+    # property of the whole arrangement -- an omission costs runner time, never
+    # coverage.
+    UNCLASSIFIED = [
+      %w[.gitignore],
+      %w[packages/thing/index.js]
+    ].freeze
+
+    # A docs file to pair each code path with. Every CODE_PATHS entry is asserted
+    # twice: alone, and alongside this. The paired form is the one that matters
+    # and the one a naive single-rule version gets wrong -- `rules:changes` has no
+    # negation, so a lone docs rule with `when: never` would skip a merge request
+    # that changed docs AND code. It is also the only way a missing allowlist
+    # entry can actually cost coverage.
+    DOCS_COMPANION = 'readme.md'.freeze
+
+    # GitLab matches with File.fnmatch and these flags.
+    FNM = File::FNM_PATHNAME | File::FNM_DOTMATCH | File::FNM_EXTGLOB
+
+    desc 'Verify workflow:rules skip docs-only merge requests and nothing else'
+    task :check do
+      require 'yaml'
+      ci = YAML.safe_load(
+        File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8'), aliases: true
+      )
+      rules = ci.dig('workflow', 'rules') or abort 'hyperstack:workflow:check FAILED — no workflow:rules'
+
+      # Top-down, first match wins; a `changes` rule matches when ANY glob
+      # matches ANY changed path. Evaluated as a merge_request_event with no
+      # [ci build] in the message, which is the case the rules exist for.
+      runs = lambda do |changed|
+        rules.each do |rule|
+          cond = rule['if'].to_s
+          next if cond.include?('CI_COMMIT_MESSAGE')
+          next unless cond.include?('merge_request_event')
+          globs = rule['changes']
+          next if globs && !changed.any? { |f| globs.any? { |g| File.fnmatch?(g, f, FNM) } }
+          return rule['when'] != 'never'
+        end
+        false
+      end
+
+      cases = []
+      CODE_PATHS.each do |path|
+        cases << [[path], true]
+        cases << [[path, DOCS_COMPANION], true]
+      end
+      DOCS_ONLY.each    { |changed| cases << [changed, false] }
+      UNCLASSIFIED.each { |changed| cases << [changed, true] }
+
+      msg = cases.filter_map do |changed, want|
+        next if runs.call(changed) == want
+        "#{changed.join(' + ')}: expected #{want ? 'a pipeline' : 'no pipeline'}, got the opposite"
+      end
+      abort "hyperstack:workflow:check FAILED — #{msg.join('; ')}" if msg.any?
+
+      skipped = cases.count { |_, want| !want }
+      puts "hyperstack:workflow:check OK — #{cases.size} change set(s): " \
+           "#{skipped} skip the matrix, #{cases.size - skipped} run it"
+    end
+  end
 end
 
 desc 'Publish hyperstack gems to the GitLab RubyGems registry'
