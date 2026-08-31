@@ -151,11 +151,46 @@ range will float onto the next minor and fail.
 
 ### 3. Add the id to `.gitlab-ci.yml`
 
-Three lists must include it — they are all `parallel: matrix:` axes:
+Two lists must include it — they are both `parallel: matrix:` axes:
 
-- `.test_gem_pg`
 - `.test_gem`
 - `build-cell-image`
+
+(There used to be a third, `.test_gem_pg`. It was a near-copy of `.test_gem` that
+also started PostgreSQL — except `.test_gem` started PostgreSQL too, so the only
+real difference was one `create database` line. The two are now one template with
+the services declared per job; see below. #116)
+
+### Which services a job gets
+
+`.test_gem` starts no services by default. A job asks for what it needs:
+
+| variable | effect | set by |
+|---|---|---|
+| `NEEDS_PG: "1"` | start PostgreSQL, wait for `pg_isready` | `hyper-model`, `hyper-operation:part1`, `hyper-operation:part2` |
+| `NEEDS_REDIS: "1"` | start `redis-server` | `hyper-operation:part1` |
+| `PG_CREATE_DB: <name>` | also `create database <name>` (implies `NEEDS_PG`) | `hyper-model` (`hyper_mesh_test_db`) |
+
+The rule is each gem's own `spec/test_app/config/database.yml`: `hyper-model` and
+`hyper-operation` are `postgresql`, everything else is `sqlite3`. Redis is only
+`hyper-operation`'s `:redis` connection adapter, exercised by
+`spec/aaa_run_first/{connection,transports}_spec.rb` — every test_app's
+`cable.yml` uses `adapter: async` in test, so ActionCable never needs it.
+
+The gemspecs are the independent cross-check, and they agree exactly:
+`add_development_dependency 'pg'` appears in `hyper-model.gemspec` and
+`hyper-operation.gemspec` and nowhere else; `'redis'` only in
+`hyper-operation.gemspec`. A gem that cannot even install the client library is
+not talking to the server.
+
+`NEEDS_PG` and `PG_CREATE_DB` are separate because "needs a Postgres server" and
+"needs this database created for it" are different: `hyper-operation`'s Rakefile
+runs `rails db:setup` and creates its own, `hyper-model` expects the unsuffixed
+`hyper_mesh_test_db` to exist already.
+
+If you add a gem whose test_app is not sqlite3, set these — nothing else starts
+the server for you, which is the point: before #116 every job started both, so a
+job could declare the wrong services and still pass.
 
 ### 4. Verify before pushing
 
