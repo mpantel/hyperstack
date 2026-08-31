@@ -113,6 +113,18 @@ jQuery = require('jquery');                    // remove if you don't need jQuer
       # instead, so an add-on generator works on whichever pipeline the app has.
       # (#98)
 
+      # No-op: there is no react_runtime asset on this pipeline (#108).
+      #
+      # Webpacker apps get React from the react-rails sprockets UMD or from a
+      # pack, both of which the application bundle already carries, so there is
+      # no separately-fingerprinted React file for the layout to load. Defined
+      # rather than left to method_missing because insure_layout_loads_javascript
+      # calls it on whichever strategy is selected, and a NoMethodError there
+      # would abort the installer on every Rails 6.1 app.
+      def insure_layout_loads_react_runtime(_layout)
+        nil
+      end
+
       # Webpacker: a pack manifest entry, evaluated into the bundle.
       def expose_npm_global(global, package)
         add_to_manifest('client_and_server.js') { "#{global} = require('#{package}');\n" }

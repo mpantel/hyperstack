@@ -128,33 +128,185 @@ describe 'hyperstack:install generator logic' do
       </html>
     ERB
 
-    # The #9 regression: without this the client never loads and / renders blank.
-    it 'adds the include tag when the layout has no javascript tag' do
-      write(layout, layout_without_js)
-      generator.insure_layout_loads_javascript
-      contents = File.read(File.join(app_dir, layout))
-      expect(contents).to include("<%= javascript_include_tag 'application' %>")
-      expect(contents.index('javascript_include_tag')).to be < contents.index('</head>')
+    # A layout that already loads the application bundle -- what Rails' own
+    # jsbundling scaffold writes, and what any app installed before #108 has.
+    let(:layout_with_application_tag) do
+      layout_without_js.sub('  </head>', %(    <%= javascript_include_tag "application" %>\n  </head>))
     end
 
-    it 'leaves a layout that already loads the bundle alone' do
-      write(layout, layout_without_js.sub(
-        '</head>', "  <%= javascript_include_tag \"application\" %>\n  </head>"
-      ))
-      before_contents = File.read(File.join(app_dir, layout))
-      generator.insure_layout_loads_javascript
-      expect(File.read(File.join(app_dir, layout))).to eq(before_contents)
+    # The pipeline is a run-time choice (HYPERSTACK_JS_PIPELINE, else the Rails
+    # major), and since #108 the two pipelines write DIFFERENT layouts -- esbuild
+    # needs a second tag for react_runtime, webpacker has no such asset. Pinning
+    # it per context keeps these examples from asserting whatever the cell's Rails
+    # version happens to imply.
+    around do |example|
+      saved = ENV['HYPERSTACK_JS_PIPELINE']
+      ENV['HYPERSTACK_JS_PIPELINE'] = pipeline
+      example.run
+      ENV['HYPERSTACK_JS_PIPELINE'] = saved
     end
 
-    it 'is idempotent, so re-running the installer does not stack tags' do
-      write(layout, layout_without_js)
-      generator.insure_layout_loads_javascript
-      generator.insure_layout_loads_javascript
-      expect(File.read(File.join(app_dir, layout)).scan('javascript_include_tag').size).to eq(1)
+    def layout_contents
+      File.read(File.join(app_dir, layout))
     end
 
-    it 'does nothing when there is no layout to patch' do
-      expect { generator.insure_layout_loads_javascript }.not_to raise_error
+    def tag_count(body, asset)
+      body.scan(/javascript_include_tag\s+(['"])#{asset}\1/).size
+    end
+
+    def tag_index(body, asset)
+      body.index(/javascript_include_tag\s+(['"])#{asset}\1/)
+    end
+
+    context 'on the webpacker pipeline' do
+      let(:pipeline) { 'webpacker' }
+
+      # The #9 regression: without this the client never loads and / renders blank.
+      it 'adds the include tag when the layout has no javascript tag' do
+        write(layout, layout_without_js)
+        generator.insure_layout_loads_javascript
+        expect(layout_contents).to include("<%= javascript_include_tag 'application' %>")
+        expect(layout_contents.index('javascript_include_tag')).to be < layout_contents.index('</head>')
+      end
+
+      # There is no react_runtime asset on this pipeline -- React comes from the
+      # react-rails UMD inside the application bundle -- so a tag for it would
+      # raise Sprockets::Rails::Helper::AssetNotFound on every page.
+      it 'does not add a react_runtime tag' do
+        write(layout, layout_without_js)
+        generator.insure_layout_loads_javascript
+        expect(layout_contents).not_to include('react_runtime')
+      end
+
+      it 'leaves a layout that already loads the bundle alone' do
+        write(layout, layout_with_application_tag)
+        before_contents = layout_contents
+        generator.insure_layout_loads_javascript
+        expect(layout_contents).to eq(before_contents)
+      end
+
+      it 'is idempotent, so re-running the installer does not stack tags' do
+        write(layout, layout_without_js)
+        generator.insure_layout_loads_javascript
+        generator.insure_layout_loads_javascript
+        expect(layout_contents.scan('javascript_include_tag').size).to eq(1)
+      end
+
+      it 'does not link app/assets/builds -- there is no esbuild output' do
+        write(layout, layout_without_js)
+        write('app/assets/config/manifest.js', "//= link_directory ../javascripts .js\n")
+        generator.insure_layout_loads_javascript
+        expect(File.read(File.join(app_dir, 'app/assets/config/manifest.js')))
+          .not_to include('builds')
+      end
+
+      it 'does nothing when there is no layout to patch' do
+        expect { generator.insure_layout_loads_javascript }.not_to raise_error
+      end
+    end
+
+    # #108: react_runtime is its own sprockets asset rather than part of
+    # application.js, so the layout carries two tags -- and the order is
+    # load-bearing, because window.React must exist before the Opal bundle boots.
+    context 'on the esbuild pipeline' do
+      let(:pipeline) { 'esbuild' }
+
+      it 'adds both tags, react_runtime first' do
+        write(layout, layout_without_js)
+        generator.insure_layout_loads_javascript
+        body = layout_contents
+        expect(tag_count(body, 'react_runtime')).to eq(1)
+        expect(tag_count(body, 'application')).to eq(1)
+        expect(tag_index(body, 'react_runtime')).to be < tag_index(body, 'application')
+        expect(tag_index(body, 'application')).to be < body.index('</head>')
+      end
+
+      # The case a single guard gets wrong: the layout already loads the
+      # application bundle, so the old "does it mention application?" check would
+      # skip everything and ship an app with no React at all.
+      it 'adds react_runtime ahead of an application tag the layout already had' do
+        write(layout, layout_with_application_tag)
+        generator.insure_layout_loads_javascript
+        body = layout_contents
+        expect(tag_count(body, 'react_runtime')).to eq(1)
+        expect(tag_count(body, 'application')).to eq(1)
+        expect(tag_index(body, 'react_runtime')).to be < tag_index(body, 'application')
+      end
+
+      # inject_into_file's :before inserts AT the match position, so anchoring on
+      # the bare tag regex rather than on the whole line would splice the new tag
+      # into the middle of the existing ERB expression.
+      it 'inserts a whole line rather than splicing into the existing ERB tag' do
+        write(layout, layout_with_application_tag)
+        generator.insure_layout_loads_javascript
+        expect(layout_contents).not_to include('<%= <%=')
+        expect(layout_contents).to include("<%= javascript_include_tag 'react_runtime' %>\n")
+      end
+
+      it 'is idempotent for both tags' do
+        write(layout, layout_without_js)
+        3.times { generator.insure_layout_loads_javascript }
+        body = layout_contents
+        expect(tag_count(body, 'react_runtime')).to eq(1)
+        expect(tag_count(body, 'application')).to eq(1)
+      end
+
+      # An app installed before #108 owns an application.js that still requires
+      # react_runtime; create_file never rewrote it. Adding the tag as well would
+      # load React twice -- the #66 failure mode. Re-running the installer on such
+      # an app has to leave it working, not "improve" it into two Reacts.
+      it 'leaves the layout alone when application.js still requires react_runtime' do
+        write(layout, layout_with_application_tag)
+        write('app/assets/javascripts/application.js',
+              "//= require react_runtime\n//= require hyperstack-loader\n")
+        generator.insure_layout_loads_javascript
+        body = layout_contents
+        expect(tag_count(body, 'react_runtime')).to eq(0)
+        expect(tag_count(body, 'application')).to eq(1)
+      end
+
+      it 'says how to opt that app in rather than failing silently' do
+        write(layout, layout_with_application_tag)
+        write('app/assets/javascripts/application.js', "//= require react_runtime\n")
+        expect { generator.insure_layout_loads_javascript }
+          .to output(/javascript_include_tag 'react_runtime'/).to_stdout
+      end
+
+      # `//= link_tree ../builds` is the only thing that makes sprockets serve
+      # react_runtime.js as a file of its own, and since #108 it is the only
+      # thing that puts React on the page at all. add_esbuild_setup appends it
+      # -- but only when the manifest already exists, and on the Rails 8
+      # --skip-asset-pipeline route it is created later, by
+      # check_javascript_link_directory, without that line. Survivable while
+      # application.js carried the require; fatal once the tag is on its own.
+      describe 'the builds link' do
+        let(:manifest) { 'app/assets/config/manifest.js' }
+        let(:manifest_without_builds) { "//= link_directory ../javascripts .js\n" }
+
+        it 'is added when the manifest does not have it' do
+          write(layout, layout_without_js)
+          write(manifest, manifest_without_builds)
+          generator.insure_layout_loads_javascript
+          expect(File.read(File.join(app_dir, manifest))).to include('//= link_tree ../builds')
+        end
+
+        it 'is not duplicated on a re-run' do
+          write(layout, layout_without_js)
+          write(manifest, manifest_without_builds)
+          2.times { generator.insure_layout_loads_javascript }
+          expect(File.read(File.join(app_dir, manifest)).scan('link_tree ../builds').size).to eq(1)
+        end
+
+        it 'does nothing when there is no manifest to patch' do
+          write(layout, layout_without_js)
+          expect { generator.insure_layout_loads_javascript }.not_to raise_error
+          expect(File.exist?(File.join(app_dir, manifest))).to be false
+        end
+      end
+
+      it 'does nothing when there is no layout to patch' do
+        expect { generator.insure_layout_loads_javascript }.not_to raise_error
+      end
     end
   end
 
@@ -205,6 +357,19 @@ describe 'hyperstack:install generator logic' do
       it "#{strategy.name.split('::').last} implements the add-on generator surface" do
         expect(strategy.instance_methods)
           .to include(:expose_npm_global, :add_npm_stylesheet, :build_js_bundle, :insure_yarn_loaded)
+      end
+
+      # insure_layout_loads_javascript calls this on whichever strategy is
+      # selected (#108). Webpacker answers with a no-op -- it has no react_runtime
+      # asset -- but it must ANSWER: a missing method here is a NoMethodError in
+      # the middle of `hyperstack:install` on every Rails 6.1 app, and nothing
+      # short of running a real install would say so.
+      it "#{strategy.name.split('::').last} answers for the layout's react_runtime tag" do
+        expect(strategy.instance_methods).to include(:insure_layout_loads_react_runtime)
+      end
+
+      it "#{strategy.name.split('::').last} takes the layout path for that" do
+        expect(strategy.instance_method(:insure_layout_loads_react_runtime).arity).to eq(1)
       end
 
       # `report` asks the strategy what to tell the user about adding JS assets.

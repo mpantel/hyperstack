@@ -53,9 +53,23 @@ hot-loader: bundle exec hyperstack-hotloader -p 25222 -d app/hyperstack
     # Make sure the application layout actually loads the sprockets application
     # bundle. Rails 7's --skip-javascript layout has no javascript tag at all, so
     # without this the Opal/Hyperstack code never runs in the browser.
+    #
+    # On esbuild the layout carries a second tag: react_runtime is its own
+    # sprockets asset rather than part of application.js (#108), and it has to
+    # load FIRST -- window.React must exist before the Opal bundle boots. The two
+    # tags are guarded independently, because a layout can already have the
+    # application tag (Rails' own jsbundling scaffold writes one) and still be
+    # missing React; a single guard would skip both and ship a broken app.
+    #
+    # The strategy is extended here rather than relying on install_webpack having
+    # run first. That ordering does hold today, but the same assumption is what
+    # webpack_check had to stop making (#51), and getting it wrong here is a
+    # NoMethodError mid-install.
     def insure_layout_loads_javascript
       layout = Rails.root.join('app', 'views', 'layouts', 'application.html.erb')
       return unless File.exist?(layout)
+      extend(js_pipeline_strategy)
+      insure_layout_loads_react_runtime(layout)
       return if File.foreach(layout).any? { |l| l =~ /javascript_include_tag\s+('|")application/ }
       inject_into_file layout.to_s, before: %r{\s*</head>} do
         "\n    <%= javascript_include_tag 'application' %>"

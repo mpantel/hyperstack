@@ -63,8 +63,57 @@ module HyperSpec
         end
 
         def application!(file)
+          react_runtime!
           @page << "<%= javascript_include_tag '#{file}' %>"
           @page << opal_bootstrap!(file)
+        end
+
+        # On the esbuild pipeline react_runtime is its own sprockets asset rather
+        # than part of application.js (#108), so the harness page has to load it
+        # itself -- these pages have no layout, which is the whole reason the
+        # generator used to fold React into application.js instead.
+        #
+        # It goes BEFORE the application bundle: window.React must exist by the
+        # time the Opal bundle boots.
+        #
+        # Guarded on the asset resolving rather than on the pipeline, because the
+        # same harness runs against the react-rails/Webpacker cells, where there
+        # is no react_runtime and javascript_include_tag would raise
+        # Sprockets::Rails::Helper::AssetNotFound on every page of every spec.
+        def react_runtime!
+          return unless react_runtime_asset?
+
+          @page << "<%= javascript_include_tag 'react_runtime' %>"
+        end
+
+        # True when sprockets can actually serve `react_runtime`.
+        #
+        # Asked in the same order sprockets-rails resolves, and split on the same
+        # thing it splits on -- `Rails.application.assets` is built only when
+        # config.assets.compile is true (sprockets/railtie.rb:222), which is
+        # exactly what puts :environment in config.assets.resolve_with:
+        #
+        # * live compilation -- the environment is the resolver. Ask it.
+        # * precompiled (PRECOMPILED_ASSETS sets config.assets.compile = false,
+        #   leaving .assets nil) -- the manifest is the only resolver, and it
+        #   lists react_runtime.js because `//= link_tree ../builds` links it.
+        #
+        # Environment-first rather than manifest-first, even though the hash
+        # lookup is cheaper than compiling: these test_apps set
+        # config.assets.debug, which drops :manifest from resolve_with entirely,
+        # so a stale public/assets manifest left by an earlier precompile would
+        # otherwise report an asset the tag cannot resolve -- AssetNotFound on
+        # every page, from a file nothing in the current run wrote.
+        def react_runtime_asset?
+          env = ::Rails.application.assets
+          return !env['react_runtime'].nil? unless env.nil?
+
+          return false unless ::Rails.application.respond_to?(:assets_manifest)
+
+          manifest = ::Rails.application.assets_manifest
+          !manifest.nil? && manifest.assets.key?('react_runtime.js')
+        rescue StandardError
+          false
         end
 
         # opal-rails appended the `Opal.load(...)` bootstrap to the top-level Opal

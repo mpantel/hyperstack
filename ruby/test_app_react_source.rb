@@ -33,12 +33,16 @@ module TestAppReactSource
   # the gem path, so the React source is a per-run choice in a local checkout too.
   #
   # Without this the wiring is one-way: the rewrites are idempotent and nothing
-  # undoes them, so one npm run leaves application.js requiring react_runtime and
-  # the react-rails imports cancelled -- and every subsequent gem-path run in that
-  # checkout quietly keeps serving React 19 while claiming to be a React 16/17/18
-  # cell. CI never sees this (fresh checkout per job); a developer would.
+  # undoes them, so one npm run leaves the layout loading react_runtime, the
+  # react-rails React stripped out of application.js and the react-rails imports
+  # cancelled -- and every subsequent gem-path run in that checkout quietly keeps
+  # serving React 19 while claiming to be a React 16/17/18 cell. CI never sees
+  # this (fresh checkout per job); a developer would.
+  LAYOUT = 'app/views/layouts/application.html.erb'.freeze
+
   REWRITTEN = %w[
     app/assets/javascripts/application.js
+    app/views/layouts/application.html.erb
     app/assets/config/manifest.js
     config/initializers/hyperstack.rb
     config/initializers/assets.rb
@@ -82,7 +86,7 @@ module TestAppReactSource
     back_up(app_dir)
     install_scaffold(app_dir)
     write_package_json(app_dir)
-    require_react_runtime(app_dir)
+    wire_react_runtime(app_dir)
     cancel_gem_react(app_dir)
     link_builds(app_dir)
     add_builds_paths(app_dir)
@@ -128,6 +132,14 @@ module TestAppReactSource
         FileUtils.rm_f(target)
       end
     end
+    # Belt and braces for the layout tag (#108). A .react_source_backup created
+    # before #108 has no copy of the layout -- back_up runs once and never
+    # re-captures -- so the loop above would put the react-rails React back into
+    # application.js while leaving the layout asking for a react_runtime asset the
+    # gem path never builds: Sprockets::Rails::Helper::AssetNotFound on every page
+    # of every spec. Strip it directly instead of trusting the backup. A no-op
+    # when the layout WAS restored, since the restored copy has no tag.
+    strip_react_runtime_tag(app_dir)
     # The placed scaffolding and the esbuild output are gitignored and inert once
     # nothing requires them, but remove them too so `gem` means gem.
     SCAFFOLD.each_value { |rel| FileUtils.rm_f(File.join(app_dir, rel)) }
@@ -177,8 +189,8 @@ module TestAppReactSource
     JSON
   end
 
-  # BEFORE the Opal loader, so window.React exists on every page that loads
-  # application.js -- including the hyper-spec harness, which has no layout.
+  # React reaches the page through its own include tag, NOT by being
+  # concatenated into application.js (#108).
   #
   # Two shapes of application.js exist across the test_apps:
   #
@@ -187,25 +199,26 @@ module TestAppReactSource
   #   //= require 'react_ujs'
   #   //= require 'components'
   #
-  # The second shape pulls the react-rails UMD in directly, so requiring
-  # react_runtime is not enough -- that line has to go, or the page loads two
-  # Reacts and the last one wins (the defect in #66). react_ujs STAYS: it is the
-  # mount shim, not a React source, and it reads whichever global React it finds.
-  def require_react_runtime(app_dir)
+  # The second shape pulls the react-rails UMD in directly, and that line has to
+  # go: left in place the page loads two Reacts and the last one wins (the defect
+  # in #66). react_ujs STAYS -- it is the mount shim, not a React source, and it
+  # reads whichever global React it finds, which the tag has already set.
+  #
+  # A `//= require react_runtime` from a checkout prepared before #108 is removed
+  # for the same reason: the tag carries it now, and keeping both would load
+  # React twice.
+  def wire_react_runtime(app_dir)
+    strip_gem_react_require(app_dir)
+    layout_loads_react_runtime(app_dir)
+  end
+
+  def strip_gem_react_require(app_dir)
     path = File.join(app_dir, 'app/assets/javascripts/application.js')
     return unless File.exist?(path)
 
     body = File.read(path, encoding: 'UTF-8')
-    body = body.gsub(%r{^//=\s*require\s+['"]?react['"]?\s*$}, "//= require react_runtime")
-    unless body.include?('require react_runtime')
-      # hyper-i18n quotes the loader (`//= require 'hyperstack-loader'`); match either.
-      loader = %r{^//=\s*require\s+['"]?hyperstack-loader['"]?}
-      body = if body =~ loader
-               body.sub(/(#{loader})/, "//= require react_runtime\n\\1")
-             else
-               "//= require react_runtime\n#{body}"
-             end
-    end
+    body = body.gsub(%r{^//=\s*require\s+['"]?react['"]?\s*$\n?}, '')
+    body = body.gsub(%r{^//=\s*require\s+react_runtime\s*$\n?}, '')
     # Opt in to client-side ReactDOMServer (#119). Real apps do NOT get this
     # line -- it is opt-in precisely so the 44% of the client bundle that
     # react-dom/server costs is not paid by apps that never call
@@ -217,9 +230,52 @@ module TestAppReactSource
     # than being deleted. Wiring it here also means CI actually exercises the
     # opt-in path, so "the extra bundle works when required" is tested rather
     # than assumed.
+    #
+    # Prepended rather than anchored on a neighbouring require: sprockets reads
+    # directives only from the header comment block, and the react_runtime line
+    # this used to anchor on is exactly what #108 removed.
     unless body.include?('require react_dom_server_runtime')
-      body = body.sub(%r{^//=\s*require\s+react_runtime\s*$},
-                      "//= require react_runtime\n//= require react_dom_server_runtime")
+      body = "//= require react_dom_server_runtime\n#{body}"
+    end
+    File.write(path, body)
+  end
+
+  # The layout loads react_runtime ahead of the application bundle.
+  #
+  # Most specs never render a layout -- hyper-spec's harness builds its own page
+  # and emits the tag itself -- but not all of them: hyper-spec's own "can use
+  # the application's layout" example sets `client_option layout: 'application'`,
+  # which makes application_file nil, skips the harness's application! entirely,
+  # and leaves the layout as the only thing that can load React.
+  #
+  # It also keeps the test_apps shaped like what the installer now generates,
+  # which is the point of #106.
+  # Remove the tag layout_loads_react_runtime adds. Used by restore!, so a
+  # checkout can be moved back onto the react-rails React.
+  def strip_react_runtime_tag(app_dir)
+    path = File.join(app_dir, LAYOUT)
+    return unless File.exist?(path)
+
+    body = File.read(path, encoding: 'UTF-8')
+    stripped = body.gsub(
+      /^[ \t]*<%=\s*javascript_include_tag\s+(['"])react_runtime\1\s*%>[ \t]*\n/, ''
+    )
+    File.write(path, stripped) unless stripped == body
+  end
+
+  def layout_loads_react_runtime(app_dir)
+    path = File.join(app_dir, LAYOUT)
+    return unless File.exist?(path)
+
+    body = File.read(path, encoding: 'UTF-8')
+    return if body =~ /javascript_include_tag\s+(['"])react_runtime\1/
+
+    tag_line = %r{^([ \t]*)(.*javascript_include_tag\s+['"]application['"].*)$}
+    return unless body =~ tag_line
+
+    body = body.sub(tag_line) do
+      indent = Regexp.last_match(1)
+      "#{indent}<%= javascript_include_tag 'react_runtime' %>\n#{indent}#{Regexp.last_match(2)}"
     end
     File.write(path, body)
   end
