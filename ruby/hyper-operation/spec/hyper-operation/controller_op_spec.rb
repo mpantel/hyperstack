@@ -2,6 +2,32 @@ require 'spec_helper'
 
 describe "controller operations", js: true do
   before(:each) do
+    # `Hyperstack::HyperstackController` is defined INSIDE
+    # `Hyperstack::Engine.routes.append` (transport/hyperstack_controller.rb:2),
+    # so the constant does not exist until the engine's routes are actually
+    # drawn. Rails draws routes lazily, so whether it is loaded here depends on
+    # whether something earlier in this rspec process already triggered route
+    # loading -- which is not a property of this spec at all.
+    #
+    # That made it order-dependent, and the order is decided by how
+    # parallel_tests happens to shard 14 spec files across PARALLEL_PROCESSES.
+    # At 3 processes this file landed behind a spec that drew the routes; at 2
+    # (#113) it came first in its group and every example died with
+    # `NameError: uninitialized constant Hyperstack::HyperstackController`,
+    # on all four Rails 8.0/8.1 cells and none of the Rails 6.1/7.2 ones --
+    # older Rails drew the routes early enough on its own.
+    #
+    # Guarded on the constant rather than on a routes-loaded flag, because there
+    # is no portable flag: `routes_reloader.execute_unless_loaded` only exists
+    # from Rails 8.0 (railties 6.1.7.10 and 7.2.3 have neither it nor `loaded`),
+    # and those are exactly the cells that pass today. `reload_routes!` is
+    # present in all of 6.1, 7.2 and 8.1.
+    #
+    # So this is a no-op wherever the constant is already there -- every cell
+    # that is currently green does nothing at all -- and only the Rails 8 cells
+    # actually reload.
+    Rails.application.reload_routes! unless defined?(Hyperstack::HyperstackController)
+
     Hyperstack::HyperstackController.class_eval do
       def a_controller_method
         12
