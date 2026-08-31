@@ -10,10 +10,13 @@ gem 'hyperstack-config', path: '../hyperstack-config'
 # never be false. (#51)
 gem 'opal-browser', git: 'https://github.com/opal/opal-browser'
 
-# CI/test harness: pin transitive deps to versions compatible with the
-# react-rails this cell selected. sprockets >= 4.2 raises "can't modify immutable
-# cached environment".
-gem 'sprockets', '~> 4.0', '< 4.2'
+# CI/test harness: sprockets is held on 4.x but NOT capped below 4.2. That cap's
+# stated cause did not survive checking: 4.1.1 and 4.2.2 have identical caching
+# machinery, and react-rails 2.6.2/2.7.1 ship identical sprockets-integration
+# code, so neither half of "sprockets >= 4.2 raises 'can't modify immutable
+# cached environment', because react-rails < 2.7" can be the reason. The rails-7,
+# rails-8.0 and rails-8.1 lines have all run uncapped since #17. (#123)
+gem 'sprockets', '~> 4.0'
 # connection_pool 3.0 made ConnectionPool#initialize keyword-only, which the
 # react-rails 2.x server-renderer pool calls positionally; 3.3 does not. So this
 # belongs to the 2.x cells only -- see Hyperstack.connection_pool_selector. (#122)

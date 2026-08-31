@@ -104,13 +104,12 @@ namespace :spec do
           sh('cat ../gems.rb >> Gemfile')
           if hyperstack_rails_major >= 8
             # --skip-asset-pipeline above added no asset gem, so ask for
-            # sprockets by name... pinned below 4.2, which raises "can't modify
-            # immutable cached environment" and stops compiling the Opal assets --
-            # the browser then just reports "Opal is not defined". Every
-            # component's own Gemfile carries this pin; the generated app was
-            # resolving sprockets unbounded. (#16, #20)
+            # sprockets by name. Held on 4.x, and no longer capped below 4.2:
+            # that cap did not survive checking (4.1.1 and 4.2.2 have identical
+            # caching machinery), and every component's Gemfile has dropped it,
+            # so a generated app matches what the suite runs. (#16, #20, #123)
             sh("echo 'gem \"sprockets-rails\"' >> Gemfile")
-            sh("echo 'gem \"sprockets\", \"~> 4.0\", \"< 4.2\"' >> Gemfile")
+            sh("echo 'gem \"sprockets\", \"~> 4.0\"' >> Gemfile")
             # ...and write the manifest it insists on. sprockets-rails raises
             # "Expected to find a manifest file in app/assets/config/manifest.js"
             # at BOOT, which happens well before `rails g hyperstack:install`

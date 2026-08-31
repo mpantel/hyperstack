@@ -17,7 +17,10 @@ gem 'logger'
 # longer ships it with the framework. The test_app serves the Opal bundle
 # through sprockets, so declare it. (#20)
 gem 'sprockets-rails'
-# sprockets >= 4.2 raises "can't modify immutable cached environment" and stops
-# compiling the Opal assets, which reaches the browser as "Opal is not defined".
-# Every other component pins this; this Gemfile was the one that did not. (#16)
-gem 'sprockets', '~> 4.0', '< 4.2'
+# Held on sprockets 4.x, but NOT capped below 4.2. The cap this Gemfile gained in
+# #16 -- ">= 4.2 raises 'can't modify immutable cached environment' and stops
+# compiling the Opal assets, which reaches the browser as 'Opal is not defined'"
+# -- did not survive checking: 4.1.1 and 4.2.2 have identical caching machinery.
+# The rails-7, rails-8.0 and rails-8.1 lines have all run uncapped since #17, and
+# the Opal bundle compiles under 4.4.1 on every cell. (#123)
+gem 'sprockets', '~> 4.0'
