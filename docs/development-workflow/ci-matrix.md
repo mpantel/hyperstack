@@ -149,6 +149,26 @@ Pin npm React to a series (`~19.2.0`), not a caret range (`^19.0.0`) — the
 contract spec compares the browser's actual version against `react:`, and a caret
 range will float onto the next minor and fail.
 
+`REACT_NPM_VERSION` moves `react` and `react-dom`, and **only** those. The four
+libraries the esbuild runtime ships alongside them — `react-router`,
+`react-router-dom`, `history`, `create-react-class` — are deliberately not on the
+React axis, and a new cell must not try to select them:
+
+- `react-router`/`react-router-dom` are pinned by **hyper-router's Ruby DSL**, not
+  by React. `Switch`, `Redirect` and `<Router history=>` are the react-router 4/5
+  API; v6 removed all three and v7 also requires `react >= 18`, which the React 16
+  and 17 cells could not satisfy. v5.3.4's own peer range is `react: >=15`, which
+  spans the whole matrix.
+- `history` follows react-router, which depends on `history ^4.9.0` — one copy
+  must be shared, because `window.History` is what feeds `<Router history=>`.
+- `create-react-class` is what every Hyperstack component is built from, on every
+  cell.
+
+All four live in `Hyperstack::ReactNpmDependencies`, with the failure mode behind
+each pin written down; `hyperstack-config`'s `react_npm_dependencies_spec.rb`
+fails if a cell's selector disagrees with its `react:`, if the default falls
+behind this table, or if either package.json writer starts restating a pin. (#124)
+
 ### 3. Add the id to `.gitlab-ci.yml`
 
 Two lists must include it — they are both `parallel: matrix:` axes:

@@ -22,6 +22,7 @@
 #
 # Every step is idempotent: a re-prepared app is not double-wired.
 require 'fileutils'
+require_relative 'rails-hyperstack/lib/generators/hyperstack/js_pipeline/react_npm_dependencies'
 
 module TestAppReactSource
   TEMPLATES = File.expand_path(
@@ -68,8 +69,12 @@ module TestAppReactSource
     ENV['HYPERSTACK_REACT_SOURCE'] || 'gem'
   end
 
+  # Every gem's Rakefile logs this after spec:prepare ("wired to npm React ..."),
+  # so it stays -- but the rule, and the default, now come from
+  # Hyperstack::ReactNpmDependencies instead of a second copy of the literal.
+  # (#124)
   def npm_version
-    ENV['REACT_NPM_VERSION'] || '^19.0.0'
+    Hyperstack::ReactNpmDependencies.react_version
   end
 
   # Returns true when it actually rewired, so callers can log it.
@@ -163,30 +168,18 @@ module TestAppReactSource
   # patching is what let hyper-component's stub keep an empty "dependencies" and
   # produce a bundle with no React in it.
   #
-  # The list mirrors the generator's package.json. react-router/history are here
-  # for hyper-router; they cost one npm package in the other apps and keep a
-  # single shared react_runtime.js valid everywhere.
+  # The list is not "mirrored from" the generator any more, it IS the generator's:
+  # both call Hyperstack::ReactNpmDependencies, for the same reason the four
+  # scaffolding files above are read rather than copied. As two heredocs they
+  # could drift, and the suite would then be proving a dependency set no
+  # generated app has. (#124)
+  #
+  # react-router/history are in the set for hyper-router; they cost one npm
+  # package in the other apps and keep a single shared react_runtime.js valid
+  # everywhere.
   def write_package_json(app_dir)
-    File.write(File.join(app_dir, 'package.json'), <<~JSON)
-      {
-        "name": "test_app",
-        "private": true,
-        "scripts": {
-          "build": "node esbuild.config.js"
-        },
-        "dependencies": {
-          "create-react-class": "^15.7.0",
-          "history": "^4.10.1",
-          "react": "#{npm_version}",
-          "react-dom": "#{npm_version}",
-          "react-router": "^5.3.4",
-          "react-router-dom": "^5.3.4"
-        },
-        "devDependencies": {
-          "esbuild": "^0.23.0"
-        }
-      }
-    JSON
+    File.write(File.join(app_dir, 'package.json'),
+               Hyperstack::ReactNpmDependencies.package_json(name: 'test_app'))
   end
 
   # React reaches the page through its own include tag, NOT by being

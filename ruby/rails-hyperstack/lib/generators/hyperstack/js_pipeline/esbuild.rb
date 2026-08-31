@@ -1,3 +1,5 @@
+require_relative 'react_npm_dependencies'
+
 module Rails
   module Generators
     module JsPipeline
@@ -55,28 +57,17 @@ module Rails
         end
       end
 
+      # The dependency set belongs to Hyperstack::ReactNpmDependencies, not to
+      # this file (#124). It was a heredoc here and a second, hand-synchronised
+      # heredoc in ruby/test_app_react_source.rb -- so the suite could have been
+      # proving a dependency set we do not generate. That module also records the
+      # reason each pin has the value it has.
       def add_javascript_dependencies
         unless File.exist?(Rails.root.join('package.json'))
-          create_file 'package.json', <<-JSON
-{
-  "name": "#{File.basename(Rails.root.to_s)}",
-  "private": true,
-  "scripts": {
-    "build": "node esbuild.config.js"
-  },
-  "dependencies": {
-    "create-react-class": "^15.7.0",
-    "history": "^4.10.1",
-    "react": "#{react_npm_version}",
-    "react-dom": "#{react_npm_version}",
-    "react-router": "^5.3.4",
-    "react-router-dom": "^5.3.4"
-  },
-  "devDependencies": {
-    "esbuild": "^0.23.0"
-  }
-}
-          JSON
+          create_file 'package.json',
+                      Hyperstack::ReactNpmDependencies.package_json(
+                        name: File.basename(Rails.root.to_s)
+                      )
         end
         run 'yarn install'
       end
@@ -239,9 +230,11 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
       # honestly claim React 19: the only lever moved react-rails, and react-rails
       # tops out at 3.3 / React 18.2.
       #
-      # Default stays ^19.0.0, so an unparameterised install is unchanged.
+      # The default now lives in Hyperstack::ReactNpmDependencies, with the rest
+      # of the dependency set, instead of being restated here AND in
+      # ruby/test_app_react_source.rb. (#124)
       def react_npm_version
-        ENV['REACT_NPM_VERSION'] || '^19.0.0'
+        Hyperstack::ReactNpmDependencies.react_version
       end
 
       # The esbuild scaffolding, verbatim from lib/generators/hyperstack/js_pipeline/templates.
