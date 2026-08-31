@@ -4,7 +4,12 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
-import * as ReactDOMServer from "react-dom/server";
+// react-dom/server is NOT imported here (#119). It measured 189,490 bytes
+// minified -- 44% of this bundle -- and is only used by apps that call
+// render_to_string / render_to_static_markup from the BROWSER. Server-side
+// prerendering is unaffected: it runs in V8 via react_server_runtime.js, a
+// separate entrypoint. Apps that need it client-side add one line to
+// application.js:  //= require react_dom_server_runtime
 import createReactClass from "create-react-class";
 import * as History from "history";
 import * as ReactRouter from "react-router";
@@ -33,6 +38,6 @@ ReactDOM.createRoot = function (container, options) {
 ReactDOM.hydrateRoot = ReactDOMClient.hydrateRoot;
 
 Object.assign(window, {
-  React, ReactDOM, ReactDOMServer, createReactClass, History, ReactRouter, ReactRouterDOM
+  React, ReactDOM, createReactClass, History, ReactRouter, ReactRouterDOM
 });
 // add additional npm packages here, e.g.:  import Foo from "foo"; window.Foo = Foo;

@@ -53,6 +53,7 @@ module TestAppReactSource
   SCAFFOLD = {
     'react_runtime.js'        => 'app/javascript/react_runtime.js',
     'react_server_runtime.js' => 'app/javascript/react_server_runtime.js',
+    'react_dom_server_runtime.js' => 'app/javascript/react_dom_server_runtime.js',
     'text_encoder_polyfill.js' => 'app/javascript/text_encoder_polyfill.js',
     'esbuild.config.js'       => 'esbuild.config.js'
   }.freeze
@@ -204,6 +205,21 @@ module TestAppReactSource
              else
                "//= require react_runtime\n#{body}"
              end
+    end
+    # Opt in to client-side ReactDOMServer (#119). Real apps do NOT get this
+    # line -- it is opt-in precisely so the 44% of the client bundle that
+    # react-dom/server costs is not paid by apps that never call
+    # render_to_string in the browser.
+    #
+    # The test_apps DO need it: hyper-component/spec/client_features/server_spec.rb
+    # exercises Server.render_to_string and .render_to_static_markup from the
+    # browser, which is the whole reason this stayed a supported feature rather
+    # than being deleted. Wiring it here also means CI actually exercises the
+    # opt-in path, so "the extra bundle works when required" is tested rather
+    # than assumed.
+    unless body.include?('require react_dom_server_runtime')
+      body = body.sub(%r{^//=\s*require\s+react_runtime\s*$},
+                      "//= require react_runtime\n//= require react_dom_server_runtime")
     end
     File.write(path, body)
   end

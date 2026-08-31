@@ -41,6 +41,12 @@ module Rails
       def add_esbuild_setup
         create_file 'app/javascript/react_runtime.js', esbuild_template('react_runtime.js')
         create_file 'app/javascript/react_server_runtime.js', esbuild_template('react_server_runtime.js')
+        # Written but deliberately NOT required by application.js (#119): it is
+        # opt-in, so the 44% of the client bundle react-dom/server costs is only
+        # paid by apps that actually call render_to_string in the browser. On
+        # disk from the start so opting in is one line in application.js and no
+        # regeneration.
+        create_file 'app/javascript/react_dom_server_runtime.js', esbuild_template('react_dom_server_runtime.js')
         create_file 'app/javascript/text_encoder_polyfill.js', esbuild_template('text_encoder_polyfill.js')
         create_file 'esbuild.config.js', esbuild_template('esbuild.config.js')
         # let sprockets precompile/serve the esbuild output
