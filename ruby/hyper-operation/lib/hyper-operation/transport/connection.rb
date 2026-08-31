@@ -38,6 +38,20 @@ module Hyperstack
         adapter.active
       end
 
+      # Can a message written by *this* process be read back by the client?
+      # `send_to_channel` queues rows that the client polls out over HTTP, so any
+      # adapter whose store is shared between processes -- both of the ones
+      # shipped here, a database table and a redis server -- can be written from a
+      # console, a rake task or a background worker. An adapter that holds its
+      # queue in process memory cannot, and says so by defining
+      # `direct_delivery?`. Read by `Hyperstack.direct_delivery?`, which also has
+      # to answer for the transport. (#112)
+      def direct_delivery?
+        return true unless adapter.respond_to?(:direct_delivery?)
+
+        adapter.direct_delivery?
+      end
+
       def open(channel, session = nil, root_path = nil)
         puts "open(#{channel}, #{session}, #{root_path})" if show_diagnostics
 

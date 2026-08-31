@@ -141,12 +141,7 @@ module Hyperstack
   end
 
   def self.send_data(channel, data)
-    # The root_path test matches `dispatch` and `Broadcast.after_commit`. Without
-    # it a process that is not the server and has no server to forward to (a rake
-    # task on a box where the app has never served a request) raised 'no server
-    # running' out of `send_to_server` instead of queueing the message locally,
-    # which is both harmless and what the polling transports actually read. (#105)
-    if !on_server? && Connection.root_path
+    if forward_to_server?
       send_to_server(channel, data)
     elsif transport == :pusher
       pusher.trigger("#{Hyperstack.channel}-#{data[1][:channel].gsub('::', '==')}", *data)
@@ -222,6 +217,70 @@ module Hyperstack
   # nil (the default) leaves it to `on_server?`.
   define_setting(:on_server, nil)
 
+  # Should this broadcast be handed to the running server over HTTP instead of
+  # being delivered from here?
+  #
+  # `send_data`, `dispatch` and `ReactiveRecord::Broadcast.after_commit` all ask
+  # this. Until #112 they asked only `!on_server? && Connection.root_path`, which
+  # is the wrong axis: whether the *local* branch works is decided by the
+  # transport and its adapter, not by which process we happen to be in.
+  #
+  #   transport / adapter                        deliver from a rake task?
+  #   :simple_poller (or :none), AR or redis      yes -- writes the QueuedMessage
+  #                                                   rows the client polls out
+  #   :pusher                                     yes -- an outbound API call
+  #   :action_cable, cable adapter redis/postgres yes -- shared cable backend
+  #   :action_cable, cable adapter async/inline   NO  -- the subscriber list is
+  #                                                   inside the web process
+  #
+  # Only the last row needs the hop, and `console_update` -- the route
+  # `send_to_server` posts to -- is `raise unless Rails.env.development?`, which
+  # is consistent with exactly that row, since `async` is Rails' development
+  # default. On the other three rows the old condition sent a production rake
+  # task, `rails runner` or Sidekiq worker down a route that answers 401,
+  # skipping `Connection.send_to_channel` and so writing no rows at all: the
+  # dispatch was dropped, silently, on transports where delivering it here would
+  # have worked. (#112, the residue of #105.)
+  #
+  # `on_server?` stays in the condition -- the server must never forward to
+  # itself, whatever the transport -- but it is no longer the whole of it. So
+  # does `root_path`: with no server recorded there is nothing to forward to, and
+  # queueing locally is both harmless and what the polling transports read, where
+  # forwarding would raise 'no server running' out of `send_to_server`. (#105)
+  def self.forward_to_server?
+    !on_server? && !direct_delivery? && !!Connection.root_path
+  end
+
+  # Cable pubsub adapters that keep their subscriber list in the memory of the
+  # process that created it, so `ActionCable.server.broadcast` from anywhere else
+  # reaches nobody. `async` is Rails' development and test default.
+  PROCESS_LOCAL_CABLE_ADAPTERS = %w[async inline test].freeze
+
+  # Can a broadcast issued by *this* process reach the clients?
+  def self.direct_delivery?
+    return false unless Connection.direct_delivery?
+    return true unless transport == :action_cable
+
+    !PROCESS_LOCAL_CABLE_ADAPTERS.include?(action_cable_adapter)
+  end
+
+  # The pubsub adapter ActionCable is configured with for this environment, as a
+  # string, or nil when it cannot be determined -- in which case `direct_delivery?`
+  # assumes a shared backend. Guessing "process-local" instead would send the
+  # broadcast to a route that refuses it in production, which is the failure this
+  # is here to remove.
+  def self.action_cable_adapter
+    return nil unless defined?(::ActionCable)
+
+    cable = ::ActionCable.server.config.cable
+    return nil if cable.nil? || cable.empty?
+
+    adapter = cable[:adapter] || cable['adapter']
+    adapter&.to_s
+  rescue StandardError
+    nil
+  end
+
   def self.pusher
     unless @pusher
       unless channel_prefix
@@ -262,14 +321,27 @@ module Hyperstack
     request.body = {
       channel: channel, data: data, salt: salt, authorization: authorization
     }.to_json
-    Timeout::timeout(Hyperstack.send_to_server_timeout) { http.request(request) }
+    response = Timeout::timeout(Hyperstack.send_to_server_timeout) { http.request(request) }
+    # Nothing used to read this. A 401 -- which is what `console_update` answers
+    # outside development, and what it answers for any exception raised inside it
+    # -- looked exactly like a delivered broadcast, so a dropped dispatch left no
+    # trace anywhere. #103 and #105 were both silent for the same kind of reason.
+    # (#112)
+    unless response.is_a?(Net::HTTPSuccess)
+      raise "broadcast on channel #{channel} was refused by #{uri}: "\
+            "#{response.code} #{response.message}. The message has NOT been sent. "\
+            '(console_update only accepts forwarded broadcasts in development; '\
+            'outside development the broadcasting process has to be able to '\
+            'deliver directly -- see Hyperstack.direct_delivery?)'
+    end
+    response
   rescue Timeout::Error
     puts "\n********* FAILED TO RECEIVE RESPONSE FROM SERVER WITHIN #{Hyperstack.send_to_server_timeout} SECONDS. CHANGES WILL NOT BE SYNCED ************\n"
     raise 'no server running'
   end
 
   def self.dispatch(data)
-    if !Hyperstack.on_server? && Connection.root_path
+    if forward_to_server?
       Hyperstack.send_to_server(data[:channel], [:dispatch, data])
     else
       Connection.send_to_channel(data[:channel], [:dispatch, data])
