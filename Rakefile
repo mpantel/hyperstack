@@ -222,6 +222,7 @@ namespace :hyperstack do
 
     desc 'Verify .gitlab-ci.yml deploy jobs match PUBLISHED_GEMS (one list, two consumers)'
     task :check do
+      require 'yaml'
       ci = File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8')
       # Every job extending .deploy_gem names its gem in COMPONENT. That is the
       # pipeline's copy of the list; PUBLISHED_GEMS is ours.
@@ -244,12 +245,25 @@ namespace :hyperstack do
 
       # Same rule again for TEST jobs, which is how #121 stayed invisible: a gem
       # can have a job that runs nothing, or lose its job entirely, and the only
-      # signal either way is a green pipeline. Every job extending .test_gem or
-      # .test_gem_pg names its gem in COMPONENT (hyper-operation has two, part1
-      # and part2, hence .uniq). `supported-versions` deliberately does not
-      # extend the template, so it is correctly not counted here.
-      tested = ci.scan(/extends:\s*\.test_gem(?:_pg)?\s*\n\s*variables:\s*\n\s*COMPONENT:\s*(\S+)/)
-                 .flatten.uniq.sort
+      # signal either way is a green pipeline. Every job extending a .test_gem*
+      # template names its gem in COMPONENT (hyper-operation has two, part1 and
+      # part2, hence .uniq). `supported-versions` deliberately does not extend
+      # the template, so it is correctly not counted here.
+      #
+      # PARSED, not pattern-matched. The first version of this scanned for
+      # `extends:` followed directly by `variables:` then `COMPONENT:`, which
+      # broke the moment #116 put an explanatory comment between `variables:`
+      # and `COMPONENT:` in the hyper-i18n job -- the gem silently stopped
+      # counting as tested and this check failed on edge. Structure that YAML
+      # considers irrelevant must not change the answer, so ask the parser.
+      ci_yaml = YAML.safe_load(File.read(File.expand_path('.gitlab-ci.yml', __dir__), encoding: 'UTF-8'), aliases: true)
+      tested = ci_yaml.filter_map do |name, body|
+        next if name.start_with?('.')          # templates, not jobs
+        next unless body.is_a?(Hash)
+        extends = Array(body['extends']).map(&:to_s)
+        next unless extends.any? { |e| e.start_with?('.test_gem') }
+        body.dig('variables', 'COMPONENT')
+      end.compact.uniq.sort
       (declared - UNTESTED_BY_CI - tested).tap do |x|
         msg << "published but no test job, and not listed in UNTESTED_BY_CI: #{x.join(', ')}" if x.any?
       end
