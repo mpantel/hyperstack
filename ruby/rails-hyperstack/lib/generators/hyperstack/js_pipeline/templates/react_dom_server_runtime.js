@@ -7,9 +7,13 @@
 // happens server-side in V8 via react_server_runtime.js, which is a separate
 // entrypoint and unaffected by this file.
 //
-// To use it, add to app/assets/javascripts/application.js, after react_runtime:
+// To use it, add to app/assets/javascripts/application.js:
 //
 //     //= require react_dom_server_runtime
+//
+// (react_runtime itself is NOT in application.js -- the layout loads it with its
+// own include tag so browsers can cache it across deploys, #108. This one is a
+// require because it is opt-in: sprockets serves only what is asked for.)
 //
 // Without it, the two Server methods raise a message naming this line rather
 // than failing silently -- see hyper-component/lib/hyperstack/component/server.rb.

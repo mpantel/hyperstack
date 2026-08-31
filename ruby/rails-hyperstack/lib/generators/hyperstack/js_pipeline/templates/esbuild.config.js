@@ -4,8 +4,8 @@
 
 // One signal for both `define` and `minify`, so a development build is
 // development in both senses. Defaults to production: this bundle is served to
-// every page of the app (application.js does `//= require react_runtime`), so
-// the default has to be what ships, not what debugs. (#107)
+// every page of the app (the layout loads it with its own include tag, #108),
+// so the default has to be what ships, not what debugs. (#107)
 const nodeEnv = process.env.NODE_ENV || 'production';
 
 require('esbuild').build({

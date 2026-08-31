@@ -14,7 +14,6 @@ module Rails
           insure_yarn_loaded
           add_esbuild_setup
           add_javascript_dependencies
-          wire_react_runtime_into_application_js
           add_builds_asset_paths
           cancel_react_source_import
           install_jsbundling_and_mini_racer
@@ -82,18 +81,95 @@ module Rails
         run 'yarn install'
       end
 
-      # //= require react_runtime BEFORE the Opal loader, so window.React exists
-      # on every page that loads application.js (incl. the hyper-spec harness,
-      # which doesn't use app/views/layouts).
-      def wire_react_runtime_into_application_js
-        application_js = Rails.root.join('app', 'assets', 'javascripts', 'application.js')
-        insure_hyperstack_loader_installed unless File.exist?(application_js)
-        return unless File.exist?(application_js)
-        return if File.foreach(application_js).any? { |l| l =~ %r{//=\s+require\s+react_runtime} }
-        inject_into_file application_js.to_s, verbose: false,
-                         before: %r{//=\s+require\s+hyperstack-loader} do
-          "//= require react_runtime\n"
+      # react_runtime gets its OWN include tag; it is no longer concatenated into
+      # application.js (#108).
+      #
+      # It used to be `//= require react_runtime` ahead of the Opal loader, which
+      # put both halves under one sprockets fingerprint -- and the two halves have
+      # opposite change rates. react_runtime changes when React is version-bumped,
+      # a few times a year; the Opal bundle changes on every application code
+      # change. Concatenated, the volatile half dictated the fingerprint, so every
+      # deploy invalidated the React bytes too and every returning visitor
+      # re-downloaded them.
+      #
+      # Measured on hyper-component's test_app (see the MR for #108): the Opal
+      # half is 400 KB gzipped against React's 73 KB, so splitting takes roughly
+      # 15% off what a returning visitor re-fetches per deploy. Modest, but they
+      # are bytes nobody needed to move, and `//= link_tree ../builds` already
+      # makes sprockets fingerprint and serve react_runtime.js on its own -- only
+      # the `//= require` folded it back in.
+      #
+      # The cost is that load order becomes a layout concern: window.React has to
+      # exist before the Opal bundle boots, so this tag MUST precede the
+      # application tag. Two places emit it -- here, for app layouts, and
+      # hyper-spec's harness, whose pages have no layout at all.
+      REACT_RUNTIME_INCLUDE_TAG = %r{javascript_include_tag\s+(['"])react_runtime\1}.freeze
+      APPLICATION_INCLUDE_TAG   = %r{javascript_include_tag\s+(['"])application\1}.freeze
+      # Line-anchored, because inject_into_file's :before inserts at the match
+      # position: anchoring on the bare tag regex would splice the new tag into
+      # the MIDDLE of the existing ERB expression.
+      APPLICATION_TAG_LINE = %r{^[^\n]*javascript_include_tag\s+['"]application['"][^\n]*\n}.freeze
+
+      def insure_layout_loads_react_runtime(layout)
+        insure_builds_linked
+        return if File.foreach(layout).any? { |l| l =~ REACT_RUNTIME_INCLUDE_TAG }
+
+        # An app installed before #108 owns an application.js that still requires
+        # react_runtime -- create_file never rewrote it. Adding the tag there
+        # would load React twice, which is the #66 failure mode (two Reacts in one
+        # page, last one wins) with the versions happening to match. Leave it
+        # alone and say what to do; dropping a require from a file the app owns is
+        # the app's call, not a silent rewrite.
+        if application_js_requires_react_runtime?
+          say 'app/assets/javascripts/application.js already requires react_runtime, so the '\
+              'layout was left alone (adding the tag would load React twice). To let browsers '\
+              'cache React across deploys, drop that require and put '\
+              "<%= javascript_include_tag 'react_runtime' %> before the application tag. (#108)",
+              :yellow
+          return
         end
+
+        if File.foreach(layout).any? { |l| l =~ APPLICATION_INCLUDE_TAG }
+          inject_into_file layout.to_s, verbose: false, before: APPLICATION_TAG_LINE do
+            "    <%= javascript_include_tag 'react_runtime' %>\n"
+          end
+        else
+          # No application tag yet -- insure_layout_loads_javascript adds it right
+          # after this one, because both anchor on </head> and the second insert
+          # lands after the first.
+          inject_into_file layout.to_s, verbose: false, before: %r{\s*</head>} do
+            "\n    <%= javascript_include_tag 'react_runtime' %>"
+          end
+        end
+      end
+
+      # `//= link_tree ../builds` is what makes sprockets fingerprint and serve
+      # react_runtime.js as a file of its own -- and since #108 that is the only
+      # thing that puts it on the page.
+      #
+      # add_esbuild_setup appends it, but only if app/assets/config/manifest.js
+      # already exists. On the Rails 8 `rails new --skip-asset-pipeline` route
+      # (#20) it does not: check_javascript_link_directory CREATES it later, in
+      # add_component, with three link lines that do not include ../builds.
+      #
+      # That ordering was survivable while application.js carried
+      # `//= require react_runtime` -- the React bytes rode in on an asset that
+      # was linked. With the split it is fatal: the include tag has nothing to
+      # resolve, and the app boots with no React. So re-assert the link here,
+      # which runs after the manifest is guaranteed to exist. Idempotent, so the
+      # normal path where add_esbuild_setup already appended it is a no-op.
+      def insure_builds_linked
+        manifest = Rails.root.join('app', 'assets', 'config', 'manifest.js')
+        return unless File.exist?(manifest)
+        return unless File.readlines(manifest).grep(%r{link_tree \.\./builds}).empty?
+
+        append_file manifest.to_s, "//= link_tree ../builds\n", verbose: false
+      end
+
+      def application_js_requires_react_runtime?
+        application_js = Rails.root.join('app', 'assets', 'javascripts', 'application.js')
+        File.exist?(application_js) &&
+          File.foreach(application_js).any? { |l| l =~ %r{//=\s*require\s+react_runtime\s*$} }
       end
 
       def add_builds_asset_paths
@@ -131,8 +207,9 @@ Opal.append_path Rails.root.join('app', 'assets', 'builds').to_s
       # line, which documents the option for a fresh app but cancels nothing --
       # so `rails-hyperstack.rb`'s unconditional
       # `js_import 'react/react-source-browser'` still put the react-rails UMD
-      # into the Opal loader manifest. application.js requires react_runtime
-      # BEFORE hyperstack-loader, so the UMD assigned window.React last and won:
+      # into the Opal loader manifest. React was loaded before the Opal loader
+      # (then by a `//= require react_runtime` inside application.js, now by the
+      # layout's own tag -- #108), so the UMD assigned window.React last and won:
       # the app shipped a 1.2 MB React 19 bundle and then ran React 16.14.
       #
       # Ported from rails-7, where it has always been the real thing. Kept in the

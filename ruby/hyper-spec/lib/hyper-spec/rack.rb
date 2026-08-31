@@ -34,6 +34,17 @@ class HyperSpecTestController < SimpleDelegator
     [204, {}, []]
   end
 
+  # No react_runtime tag here, unlike the Rails harness (#108).
+  #
+  # This harness serves a Rack/Sinatra app from its own Opal::Sprockets::Server
+  # rooted at `app`. There is no Rails asset pipeline behind it, no
+  # `app/assets/builds`, and nothing that runs esbuild -- so react_runtime is not
+  # an asset it could resolve, in any configuration. The split that made the
+  # Rails harness emit a second tag has no counterpart to emit here.
+  #
+  # Recorded rather than left implicit because the two harnesses are easy to
+  # assume identical: if a Rack app ever gains the esbuild pipeline, this is the
+  # method that has to grow the same guarded tag.
   def application!(file)
     @page << Opal::Sprockets.javascript_include_tag(
       file,
