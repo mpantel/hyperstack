@@ -12,6 +12,11 @@ require('esbuild').build({
   entryPoints: [
     'app/javascript/react_runtime.js',        // client: window globals
     'app/javascript/react_server_runtime.js', // prerender (V8): Opal.global globals
+    // Opt-in, NOT required by application.js unless the app asks for it (#119).
+    // Built unconditionally so it is on disk the moment someone adds
+    // `//= require react_dom_server_runtime`; building it costs disk, not
+    // bandwidth, since sprockets only serves what is required.
+    'app/javascript/react_dom_server_runtime.js', // client-side ReactDOMServer
   ],
   bundle: true,
   outdir: 'app/assets/builds',
