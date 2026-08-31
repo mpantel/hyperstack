@@ -104,11 +104,11 @@ variables:
 
 # Cache gems between pipelines, per component and Ruby version.
 #
-# NOTE (#57): the matrix test jobs no longer use this. `.test_gem` and
-# `.test_gem_pg` run on prebaked cell images that already contain `local_gems`
-# and override this with `cache: []`. What follows still governs the jobs that
-# run on base24 -- `supported-versions` and the `.deploy_gem` jobs -- which are
-# not per-cell and so have no image to inherit gems from.
+# NOTE (#57): the matrix test jobs no longer use this. `.test_gem` runs on
+# prebaked cell images that already contain `local_gems` and overrides this with
+# `cache: []`. What follows still governs the jobs that run on base24 --
+# `supported-versions` and the `.deploy_gem` jobs -- which are not per-cell and so
+# have no image to inherit gems from.
 #
 # `key: gems-$COMPONENT-$RBENV_VERSION` gives each component its own cache, so the
 # ~13 parallel jobs don't clobber a single shared key (default cache policy is
@@ -171,137 +171,6 @@ stages:
 #  - approve
   - deploy
 
-.test_gem_pg:
-  interruptible: true
-  stage: test
-  # Run on this cell's prebaked dependency image instead of base24 + a restored
-  # gem cache. The image bakes `local_gems` (every gem's bundle, including
-  # compiled native extensions) for exactly this cell's version selectors, built
-  # from supported_versions.yml by the same `rake hyperstack:cell:env` this job
-  # uses -- so the image and the test run cannot disagree about which versions
-  # they are. (#57)
-  image:
-    name: $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL
-    docker:
-      user: ubuntu
-  # No cache at all: the gems are in the image. Measured on job 40440, keeping it
-  # would cost 19-58s restoring 258 MB over gems already present, plus ~28s
-  # re-uploading them (`policy: pull-push`, `when: always`) -- ~47s/job of pure
-  # waste.
-  #
-  # NOTE: `cache: []` REPLACES `default:`'s list, it does not merge with it, so
-  # this switches off the `yarn-v1` cache too -- an earlier version of this
-  # comment claimed otherwise. Job 44293's trace confirms it: no
-  # restore_cache/archive_cache sections, and every yarn run reported "No
-  # lockfile found" and refetched. npm packages come from the image instead, via
-  # HYPERSTACK_PREBAKED_YARN_CACHE (see before_script). (#75)
-  cache: []
-  # Retry the whole job once, but ONLY for failures that are never the code's
-  # fault. `script_failure` is deliberately NOT retried.
-  #
-  # It was originally included (!72) on the belief that browser specs were
-  # failing to environment-level flakiness that in-process rspec-retry could not
-  # absorb. That diagnosis was wrong: the failures were the runner running out of
-  # disk (#56, ru/infrastructure#7) -- Postgres, Rails logging and hyper-spec's
-  # cache all failing to write, and Chrome dying with it. With the cause handled
-  # in infrastructure, retrying `script_failure` no longer absorbs flakiness; it
-  # hides genuine test failures and, worse, would quietly paper over the next
-  # resource exhaustion instead of letting it fail loudly.
-  retry:
-    max: 1
-    when:
-      - runner_system_failure
-      - stuck_or_timeout_failure
-
-
-  # One job per configuration in supported_versions.yml. The pipeline only names
-  # cells; their values live in the table and are resolved by
-  # `rake hyperstack:cell:env`, so the two cannot drift.
-  # `rake hyperstack:matrix:check` fails if this list and the table disagree. (#51)
-  parallel:
-    matrix:
-      - HYPERSTACK_CELL: [rails61-react16, rails61-react17, rails61-react18, rails72-react16, rails61-react19, rails72-react19, rails80-react19-ruby40, rails80-react19-ruby34, rails81-react19-ruby34, rails81-react19-ruby40]
-
-  before_script:
-    # - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
-    # - sudo service postgresql restart
-    # - sleep 1
-    # - postgres --version
-    # - sudo rm -f /usr/local/bin/yarn
-    # - nvm install 10
-    # - rvm install 2.6.3  # was 2.5.1
-    # - gem install bundler
-    # - ln -s /usr/lib/chromium-browser/chromedriver ~/bin/chromedriver
-    # - echo 'install completed'
-
-    - sudo service postgresql start
-    - until pg_isready --username=postgres --host=localhost; do sleep 1; done
-    - sudo redis-server --daemonize yes
-
-    - git config --global --add safe.directory $CI_PROJECT_DIR
-
-    - echo "cell $HYPERSTACK_CELL"
-    - eval "$(rake hyperstack:cell:env)"
-    # Gems come from the image, not from restore_cache. Fail loudly rather than
-    # silently falling back to a cold `bundle install`, which would look like a
-    # slow but successful job and hide a broken or missing image.
-    - test -d "$HYPERSTACK_PREBAKED_GEMS" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked gems at $HYPERSTACK_PREBAKED_GEMS"; exit 1; }
-    - ln -sfn "$HYPERSTACK_PREBAKED_GEMS" "$CI_PROJECT_DIR/local_gems"
-    # npm packages come from the image too (#75). The global YARN_CACHE_FOLDER
-    # points into $CI_PROJECT_DIR for the base24 jobs that still cache it;
-    # override it here so every yarn the generated app runs -- spec:prepare's
-    # included -- reads the cache the image warmed. Same rule as the gems: say so
-    # and stop, rather than silently redownloading the whole tree.
-    - test -d "$HYPERSTACK_PREBAKED_YARN_CACHE" || { echo "image $CI_REGISTRY_IMAGE/cell:$HYPERSTACK_CELL has no prebaked yarn cache at $HYPERSTACK_PREBAKED_YARN_CACHE"; exit 1; }
-    - export YARN_CACHE_FOLDER="$HYPERSTACK_PREBAKED_YARN_CACHE"
-
-# - bundle config set --local path local_gems
-    # - bundle install
-
-    - echo initialized for $COMPONENT
-    - cd ruby/$COMPONENT
-
-    - echo creating psql database
-    - psql -c 'create database hyper_mesh_test_db;' -U postgres
-
-    - gem install bundler -v '~> 4.0'
-    - bundle -v   # confirm the activated Bundler (#36)
-    - bundle config set --local path ../../local_gems
-
-    - bundle install --jobs=3 --retry=3
-    - google-chrome --version
-    - bundle exec rake spec:prepare
-    - ln -s /node_modules/ ../../node_modules
-    - yarn install
-#    - cd spec/test_app
-#    - bundle exec rails assets:precompile
-#    - cd ../..
-    - bundle list
-    - echo 'install completed'
-
-  # Keep the generated app's server log when a job fails. Chasing #81 cost several
-  # full-matrix runs precisely because this did not exist: the browser reported
-  # 79 HTTP 500s from the harness route and there was not one backtrace anywhere
-  # to say what raised. The client-side symptom is visible in the trace; the
-  # server-side cause never is.
-  #
-  # `when: on_failure` so a green pipeline uploads nothing. Ignore a missing path
-  # rather than failing the job over it -- the gems that use a COMMITTED test_app
-  # always have one, but rails-hyperstack GENERATES its app at spec:prepare, so
-  # when that step is what failed there is no log to collect.
-  artifacts:
-    when: on_failure
-    expire_in: 1 week
-    name: "$CI_JOB_NAME-$CI_JOB_ID-logs"
-    paths:
-      - ruby/*/spec/test_app/log/
-    exclude:
-      - ruby/*/spec/test_app/log/**/*.gz
-
-  script:
-    - echo running script $COMPONENT
-    - DRIVER=travis bundle exec rake $TASK
-
 .test_gem:
   interruptible: true
   stage: test
@@ -344,6 +213,15 @@ stages:
       - runner_system_failure
       - stuck_or_timeout_failure
 
+
+  # Default to no services. `extends:` deep-merges `variables:`, so a job that
+  # needs one overrides just that key and inherits the rest. Declared here rather
+  # than left unset so the interface is visible in one place and every job's
+  # variables list says, in the trace, which services it asked for. (#116)
+  variables:
+    NEEDS_PG: "0"
+    NEEDS_REDIS: "0"
+    PG_CREATE_DB: ""
 
   # One job per configuration in supported_versions.yml. The pipeline only names
   # cells; their values live in the table and are resolved by
@@ -405,9 +283,35 @@ stages:
 #    - rvm install 2.6.3  # was 2.5.1
 #    - gem install bundler
 
-    - sudo service postgresql start
-    - until pg_isready --username=postgres --host=localhost; do sleep 1; done
-    - sudo redis-server --daemonize yes
+    # Services are opt-in per job (#116). Until now EVERY test job started a
+    # PostgreSQL 16 cluster and a redis-server -- ~2.7s and a resident 7-process
+    # cluster in each of the ~10 of 13 components whose test_app is sqlite3 and
+    # never opens a socket to either.
+    #
+    # The wasted seconds were the smaller problem. Starting both everywhere meant
+    # a job could DECLARE the wrong services and still pass, and two of them did:
+    # hyper-i18n (sqlite3) extended the Postgres template, while hyper-operation
+    # -- the one gem needing BOTH Postgres and Redis -- extended the other one.
+    # Neither ever failed, because the "wrong" template started the server anyway.
+    # Gating on these variables makes the declaration load-bearing, so the next
+    # such mismatch fails loudly instead of being absorbed.
+    #
+    #   NEEDS_PG      "1"  -> start PostgreSQL and wait for it
+    #   NEEDS_REDIS   "1"  -> start redis-server
+    #   PG_CREATE_DB  name -> also `create database <name>` as postgres
+    #
+    # PG_CREATE_DB is separate from NEEDS_PG because "needs Postgres" and "needs
+    # this database created for it" are genuinely different: hyper-operation's
+    # Rakefile runs `rails db:setup` and creates its own, hyper-model expects CI
+    # to have made hyper_mesh_test_db first. Setting it implies NEEDS_PG, so the
+    # two cannot be set inconsistently.
+    - |
+      if [ "$NEEDS_PG" = "1" ] || [ -n "$PG_CREATE_DB" ]; then
+        sudo service postgresql start
+        until pg_isready --username=postgres --host=localhost; do sleep 1; done
+      fi
+    - if [ "$NEEDS_REDIS" = "1" ]; then sudo redis-server --daemonize yes; fi
+    - if [ -n "$PG_CREATE_DB" ]; then echo "creating psql database $PG_CREATE_DB"; psql -c "create database $PG_CREATE_DB;" -U postgres; fi
 
     - git config --global --add safe.directory $CI_PROJECT_DIR
     # - bundle config set --local path local_gems
@@ -523,11 +427,16 @@ hyper-spec:
 # spec:parallel). Set PARALLEL_SPECS: "0" to fall back to the serial path
 # (all batches in one process). part1..part7 remain as ad-hoc per-batch rake tasks.
 hyper-model:
-  extends: .test_gem_pg
+  extends: .test_gem
   variables:
     COMPONENT: hyper-model
     TASK: spec
     DB: hyper_mesh_test_db
+    # postgresql, per spec/test_app/config/database.yml. The Rakefile creates the
+    # per-process hyper_mesh_test_db<N> itself; the unsuffixed one it expects to
+    # already exist, which is what PG_CREATE_DB does. (#116)
+    NEEDS_PG: "1"
+    PG_CREATE_DB: hyper_mesh_test_db
     PRECOMPILED_ASSETS: "1"
     # 4 -> 2. Each parallel process runs its own Chrome, so this job alone held
     # 4 browsers, and ten cells of it held ~40 on a 16-core / 32 GB host that
@@ -573,6 +482,15 @@ hyper-operation:part1:
     COMPONENT: hyper-operation
     TASK: part1
     PRECOMPILED_ASSETS: "1"
+    # The one gem that needs both, and until #116 the one declaring neither: its
+    # test_app is postgresql (test_hyper_operation_db<N>, created by its own
+    # Rakefile's `rails db:setup`, so no PG_CREATE_DB), and aaa_run_first's
+    # connection_spec/transports_spec run every example twice --
+    # `%i[redis active_record].each` -- against the gem's own :redis connection
+    # adapter. Nothing else in the repo talks to Redis: every test_app's cable.yml
+    # uses `adapter: async` in test.
+    NEEDS_PG: "1"
+    NEEDS_REDIS: "1"
 # part2 (the 12 independent specs) runs in PARALLEL by default across a pool of
 # PARALLEL_PROCESSES databases; set PARALLEL_SPECS: "0" to fall back to serial.
 # part1 (aaa_run_first) stays serial above.
@@ -582,12 +500,21 @@ hyper-operation:part2:
     COMPONENT: hyper-operation
     TASK: part2
     PRECOMPILED_ASSETS: "1"
+    # Postgres for the same reason as part1. Redis is deliberately NOT started
+    # here: only aaa_run_first (part1) sets `config.connection = { adapter:
+    # :redis }`, the default is :active_record, and spec_helper's flushdb is
+    # guarded on the adapter actually being :redis. A part2 spec that later wants
+    # Redis has to say so here -- which is the point of the gating. (#116)
+    NEEDS_PG: "1"
     # 3 -> 2, same reasoning as hyper-model above: one Chrome per process, and
     # this job's ten cells were among the OOM casualties. (#113)
     PARALLEL_PROCESSES: "2"
 hyper-i18n:
-  extends: .test_gem_pg
+  extends: .test_gem
   variables:
+    # No services. This job extended the Postgres template and created
+    # hyper_mesh_test_db for years; its test_app is db/test.sqlite3 and it has
+    # never opened a Postgres connection. (#116)
     COMPONENT: hyper-i18n
 rails-hyperstack:
   extends: .test_gem
