@@ -6,11 +6,15 @@ gem 'hyperstack-config', path: '../hyperstack-config'
 #gem 'unparser', path: '../../../unparser'
 gem 'opal' #, '1.0.5'
 
-# CI/test harness: pin transitive deps to versions compatible with react-rails
-# (< 2.7.0). sprockets >= 4.2 raises "can't modify immutable cached environment";
-# connection_pool >= 3.0 breaks react-rails' server-renderer pool.
+# CI/test harness: pin transitive deps to versions compatible with the
+# react-rails this cell selected. sprockets >= 4.2 raises "can't modify immutable
+# cached environment".
 gem 'sprockets', '~> 4.0', '< 4.2'
-gem 'connection_pool', '< 3.0'
+# connection_pool 3.0 made ConnectionPool#initialize keyword-only, which the
+# react-rails 2.x server-renderer pool calls positionally; 3.3 does not. So this
+# belongs to the 2.x cells only -- see Hyperstack.connection_pool_selector. (#122)
+require_relative '../version_selector'
+gem 'connection_pool', *Hyperstack.connection_pool_selector
 gemspec
 
 # Ruby 3.4 dropped several gems from the default set (now "bundled gems"), but
