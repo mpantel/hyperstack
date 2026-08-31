@@ -115,6 +115,83 @@ describe 'gemspec version selectors' do
     end
   end
 
+  # The Gemfiles used to carry a flat `gem 'connection_pool', '< 3.0'`, so all ten
+  # cells were held on connection_pool 2.5.5 for a constraint that belongs to the
+  # three still on react-rails 2.x.
+  #
+  # connection_pool 3.0 made ConnectionPool#initialize keyword-only, and
+  # react-rails calls it from React::ServerRendering.reset_pool:
+  #
+  #   2.6.2 / 2.7.1   ConnectionPool.new(options)     -- positional, ArgumentError on 3.x
+  #   3.3.1           ConnectionPool.new(**options)   -- keyword, fine on 3.x
+  #
+  # so the pin is now selected from REACT_RAILS_VERSION. (#122)
+  describe 'Hyperstack.connection_pool_selector' do
+    # Straight out of supported_versions.yml. If a cell's REACT_RAILS_VERSION
+    # changes, this table is what should fail first.
+    {
+      '~> 2.6.0' => ['< 3.0'],  # rails61-react16, rails72-react16
+      '~> 2.7.1' => ['< 3.0'],  # rails61-react17
+      '~> 3.3' => []            # the other seven cells
+    }.each do |selector, expected|
+      it "pins #{expected.empty? ? 'nothing' : expected.first} for REACT_RAILS_VERSION #{selector}" do
+        with_env('REACT_RAILS_VERSION' => selector) do
+          expect(Hyperstack.connection_pool_selector).to eq expected
+        end
+      end
+    end
+
+    # Deliberately conservative: the default range admits both majors, so an
+    # unset selector keeps the pin rather than betting on what bundler resolves.
+    it 'keeps the pin when the variable is absent' do
+      with_env('REACT_RAILS_VERSION' => nil) do
+        expect(Hyperstack.connection_pool_selector).to eq ['< 3.0']
+      end
+    end
+
+    # Same trap as version_selector's: '' is truthy, and a cell whose env block
+    # maps to nil exports an empty string. (#78)
+    it 'keeps the pin when the variable is exported but empty' do
+      with_env('REACT_RAILS_VERSION' => '') do
+        expect(Hyperstack.connection_pool_selector).to eq ['< 3.0']
+      end
+    end
+
+    it 'pins whenever the selector can still resolve to a react-rails 2.x' do
+      with_env('REACT_RAILS_VERSION' => '>= 2.4.0') do
+        expect(Hyperstack.connection_pool_selector).to eq ['< 3.0']
+      end
+    end
+
+    it 'lifts the pin when the selector excludes every react-rails 2.x' do
+      with_env('REACT_RAILS_VERSION' => '>= 3.0') do
+        expect(Hyperstack.connection_pool_selector).to eq []
+      end
+    end
+  end
+
+  # The pin lives in nine Gemfiles; the point of #122 is that the rule behind it
+  # lives in one place. A tenth Gemfile growing its own copy is the regression.
+  describe 'the Gemfiles' do
+    gemfiles = Dir[File.join(H::ROOT, 'ruby', '*', 'Gemfile')].sort
+
+    it 'has Gemfiles to guard' do
+      expect(gemfiles).not_to be_empty
+    end
+
+    gemfiles.each do |path|
+      it "#{File.basename(File.dirname(path))}/Gemfile does not hard-code the connection_pool pin" do
+        source = File.read(path)
+        next unless source.include?('connection_pool')
+
+        expect(source).to include('Hyperstack.connection_pool_selector'),
+                          'pin the gem via the selector, not a literal, so the ' \
+                          'react-rails 3.3 cells are not held on connection_pool 2.x (#122)'
+        expect(source).not_to match(/gem\s+['"]connection_pool['"]\s*,\s*['"]< 3\.0['"]/)
+      end
+    end
+  end
+
   H::GEMSPECS.each do |path|
     describe File.basename(path) do
       let(:source) { File.read(path) }
