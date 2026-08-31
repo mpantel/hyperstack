@@ -15,6 +15,16 @@ require('esbuild').build({
   ],
   bundle: true,
   outdir: 'app/assets/builds',
+  // Declare the browser baseline instead of inheriting it (#120). Unset, esbuild
+  // defaults to `esnext` and downlevels NOTHING, so "which browsers does this app
+  // support?" was answered by whichever esbuild version happened to be in
+  // package.json -- and an esbuild upgrade could move it silently.
+  //
+  // es2020 is Chrome 80 / Safari 13.1 / Firefox 72, all 2020 or earlier, and
+  // comfortably below what React 18/19 already require, so pinning it costs
+  // nothing today. It is a floor, not a ceiling: an app that needs a different
+  // baseline edits this file, which is generated into the app and owned by it.
+  target: ['es2020'],
   define: { 'process.env.NODE_ENV': JSON.stringify(nodeEnv) },
   // Without this the bundle shipped unminified -- 1.2 MB, which esbuild itself
   // flags. `define` above already selects React's production code, so this is
@@ -25,6 +35,19 @@ require('esbuild').build({
   //
   // NODE_ENV=development skips it, for anyone who needs to read the bundle.
   minify: nodeEnv === 'production',
+  // Same signal, pointing the same way: a development build is minify-off and
+  // mapped-on, a production build is minify-on and mapped-off. (#120)
+  //
+  // Production maps are deliberately NOT emitted. They only earn their place
+  // when something CONSUMES them -- an error tracker ingesting maps privately to
+  // symbolicate traces. A generated app has no such integration, so publishing
+  // them would just serve the original module structure that minifying above
+  // removed, at a guessable path. An app that does run a tracker turns this on
+  // in its own copy of this file.
+  //
+  // 'inline' would be actively wrong here: the map is typically larger than the
+  // minified code it describes, which would undo most of #107.
+  sourcemap: nodeEnv !== 'production',
   // `keepNames` was tried here and removed. It preserves `Function.prototype.name`,
   // which is NOT what React >= 17 error frames report -- they name the JavaScript
   // function as the engine sees it, so the frames stayed minified (`at b` became
