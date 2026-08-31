@@ -101,8 +101,23 @@ module HyperSpec
     # add a before eval hook to pry so we can capture the source
     class << self
       attr_accessor :current_pry_code_block
-      Pry.hooks.add_hook(:before_eval, 'hyper_spec_code_capture') do |code|
-        HyperSpec.current_pry_code_block = code
+      # Registered only once. `Pry::Hooks#add_hook` RAISES on a duplicate name:
+      #
+      #   ArgumentError: Hook with name 'hyper_spec_code_capture' already defined!
+      #     pry-0.16.0/lib/pry/hooks.rb:87:in 'Pry::Hooks#add_hook'
+      #
+      # and this file can be loaded more than once in a single process, because
+      # `require` keys on the resolved path: `require 'hyper-spec'` and a load of
+      # `./lib/hyper-spec.rb` are two different entries in `$LOADED_FEATURES`, so
+      # the body runs twice and the second registration blows up at load time --
+      # taking the whole suite with it rather than failing one example.
+      #
+      # Checking first is enough; the hook is idempotent by name, and a second
+      # identical registration would add nothing.
+      unless Pry.hooks.hook_exists?(:before_eval, 'hyper_spec_code_capture')
+        Pry.hooks.add_hook(:before_eval, 'hyper_spec_code_capture') do |code|
+          HyperSpec.current_pry_code_block = code
+        end
       end
     end
   end
@@ -115,8 +130,93 @@ module HyperSpec
     RSpec.configuration.reset_between_examples
   end
 
+  # Errors that mean the browser is ALREADY GONE, so there is nothing left to
+  # reset. Resolved BY NAME, and lazily. `require 'selenium-webdriver'` is at the foot
+  # of this file, ~60 lines below, so naming these constants at load time here is
+  # a NameError waiting on whether something else happened to load selenium
+  # first -- `capybara/rspec` above does not, it loads drivers lazily. The first
+  # version of this did exactly that and broke the load.
+  #
+  # Deliberately a short, specific list rather than WebDriverError: a blanket
+  # rescue here would swallow real driver faults, and this file has been bitten
+  # by exactly that before (#77 -- `size_window`'s blanket `rescue StandardError`
+  # hid two genuine bugs for as long as it existed).
+  #
+  # NoSuchDriverError / NoSuchWindowError do not exist on every selenium version
+  # this gem supports, hence resolving each name independently and keeping
+  # whatever is actually there.
+  DEAD_SESSION_ERROR_NAMES = %w[
+    Selenium::WebDriver::Error::InvalidSessionIdError
+    Selenium::WebDriver::Error::NoSuchDriverError
+    Selenium::WebDriver::Error::NoSuchWindowError
+  ].freeze
+
+  # Not memoised, deliberately. Memoising would cache whatever happened to be
+  # loaded at the first call, and if that call ever landed before
+  # selenium-webdriver the short list would stick for the rest of the process --
+  # the same load-order trap in a slower-acting form. Three `const_get`s once per
+  # example teardown is not worth that risk.
+  def self.dead_session_errors
+    DEAD_SESSION_ERROR_NAMES.filter_map do |name|
+      begin
+        Object.const_get(name)
+      rescue NameError
+        nil
+      end
+    end + [
+      Errno::ECONNREFUSED, # chromedriver's port is gone
+      EOFError             # chromedriver died mid-request
+    ]
+  end
+
+  # Reset the browser between examples, and SURVIVE a browser that has already
+  # died.
+  #
+  # When Chrome crashes -- `tab crashed`, or the host OOM-killing it under load
+  # -- the session is dead before the next teardown runs, and
+  # `Capybara.reset_sessions!` then raises `InvalidSessionIdError`. That error is
+  # raised in an `after` hook, so it fails the CURRENT example and, because the
+  # session stays poisoned, every example after it in the same process. One crash
+  # is reported as a whole batch of failures: observed as `155 examples, 122
+  # failures` and `30 examples, 29 failures`, where a single Chrome death
+  # accounted for all of them.
+  #
+  # That is bad for two reasons beyond the noise. The real failure is buried
+  # under a hundred identical teardown errors, and a retry of the job re-runs
+  # everything rather than the one example that actually broke -- which is a
+  # large part of why a contended pipeline can take several attempts to converge.
+  #
+  # So: drop the dead session instead of propagating. Capybara lazily builds a
+  # new one on the next `Capybara.current_session`, so the following example gets
+  # a fresh browser and either passes or fails on its own merits.
+  #
+  # This does NOT hide the crash. The example that was running when Chrome died
+  # still fails, and the reason is warned to stderr, so a job that loses its
+  # browser is still visible -- it just stops taking the rest of the batch with
+  # it. (#101-adjacent; see also #68, where a retried example silently lost its
+  # mount code, and #56, where 268 InvalidSessionIdErrors made 2 real failures
+  # unfindable.)
   def self.reset_sessions!
     Capybara.old_reset_sessions!
+  rescue *dead_session_errors => e
+    discard_dead_sessions!(e)
+  end
+
+  # Throw away the pooled sessions so the next one is built fresh.
+  #
+  # `session_pool` is not public API, hence the `respond_to?` guard and the
+  # rescue: if a future Capybara renames it, the worst case must be the old
+  # behaviour (a poisoned session), never a NoMethodError raised from an `after`
+  # hook, which would be a worse failure than the one being fixed.
+  def self.discard_dead_sessions!(error)
+    warn "hyper-spec: browser session was already gone at reset " \
+         "(#{error.class}: #{error.message.to_s.lines.first.to_s.strip}). " \
+         'Dropping it; the next example gets a fresh browser.'
+    pool = Capybara.send(:session_pool) if Capybara.respond_to?(:session_pool, true)
+    pool&.clear
+  rescue StandardError => e
+    warn "hyper-spec: could not clear the Capybara session pool (#{e.class}). " \
+         'Subsequent examples in this process may still fail at teardown.'
   end
 end
 
@@ -153,8 +253,13 @@ require 'selenium-webdriver'
 module Capybara
   class << self
     alias old_reset_sessions! reset_sessions!
+    # Routed through HyperSpec.reset_sessions! rather than calling
+    # old_reset_sessions! directly, so the dead-session recovery applies to BOTH
+    # entry points -- this one (between examples) and the `after(:all)` hook,
+    # which calls HyperSpec.reset_sessions! itself. Previously only the
+    # conditional lived here and neither path survived a crashed browser.
     def reset_sessions!
-      old_reset_sessions! if HyperSpec.reset_between_examples?
+      HyperSpec.reset_sessions! if HyperSpec.reset_between_examples?
     end
   end
 end

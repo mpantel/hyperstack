@@ -7,7 +7,7 @@ The releases published by the retired `rails-7` / `rails-8.0` / `rails-8.1`
 branch lines are archived in
 [`CHANGELOG_rails-7-and-8-lines.md`](./CHANGELOG_rails-7-and-8-lines.md).
 
-## 1.0.alpha1.9 — 2026-08-30
+## 1.0.alpha1.9 — 2026-08-31
 
 The release that collapses the four release lines into one. Since
 `1.0.alpha1.8.34.18.61.1614.6` this project maintained `edge`, `rails-7`,
@@ -772,6 +772,43 @@ the race.
   would permit 4.49 and float again. This narrows the window rather than closing
   it — Chrome for Testing in the cell image still moves independently.
 
+- **One dead browser must not fail the whole batch at teardown (#113).** When
+  Chrome dies mid-run, the session is gone before the next
+  `Capybara.reset_sessions!` — which then raised `InvalidSessionIdError` from an
+  `after` hook, failing the *current* example and, because the poisoned session
+  stayed in Capybara's pool, every example after it in the same process. One crash
+  was therefore reported as an entire batch: `hyper-operation:part2` at 155
+  examples / 122 failures, `hyper-model batch4` at 30 / 29, with 431 `tab crashed`
+  markers in a single trace. Those were not 122 problems; they were one crash and
+  121 teardowns tripping over the corpse. #56 is the precedent — 268
+  `InvalidSessionIdError`s among which only 2 of 69 reported failures were
+  genuine. The dead session is now dropped rather than propagated, and Capybara
+  lazily builds a fresh one for the next example. It does not hide the crash: the
+  example that was running when the browser died still fails, and the reason is
+  warned to stderr. The permitted list is deliberately short
+  (`InvalidSessionIdError`, `NoSuchDriverError`, `NoSuchWindowError`,
+  `ECONNREFUSED`, `EOFError`) and explicitly *not* `WebDriverError` — a blanket
+  rescue here would swallow real driver faults, the mistake #77 documented in this
+  same file. Clearing the pool is itself rescued, since raising out of an `after`
+  hook would be worse than the problem being fixed.
+
+  The amplification also made retries far more expensive than the underlying fault
+  warranted: a retry re-runs the whole job rather than the one example that broke,
+  so a single early crash forfeited a ~12-minute job. Tag pipeline 6900 spent 249
+  attempts across 121 jobs, 77 of them failed, every one eventually passing on
+  identical code.
+
+  Confirmed against real crashes rather than only against stubs — the pipeline
+  that shipped it recorded live recoveries from both `EOFError` and
+  `InvalidSessionIdError`, and carried on.
+
+- **Register the Pry code-capture hook only once (#113).** `require` keys on the
+  resolved path, so reaching `hyper-spec.rb` by a second path re-ran the
+  registration and raised `ArgumentError: Hook with name 'hyper_spec_code_capture'
+  already defined!`. Latent since the hook was introduced and unrelated to the
+  dead-session work above, which merely exposed it; now guarded with
+  `hook_exists?`.
+
 ### hyper-i18n
 
 - **Guard the async Store writes in `t` / `t_async` / `l` (#42).** The three wrote
@@ -1139,6 +1176,18 @@ the race.
   6.1/8.0/8.1 — while the `rails-hyperstack` version ru/hyperstack-addons depends
   on is exactly Rails 7.2 + React 19. Also adds
   `docs/development-workflow/ci-matrix.md`.
+
+- **Halve the parallel rspec processes on the heaviest jobs (#113).** The browser
+  crashes that #113's teardown fix stops *amplifying* were themselves caused by
+  the kernel OOM-killer: containers exit with code 137 (SIGKILL), and no runner
+  block sets `memory` or `memory_swap`, so the containers are unbounded and the
+  kernel picks an arbitrary victim — usually Chrome. Ruled out along the way: no
+  per-container CPU limit is configured, `--disable-dev-shm-usage` is already
+  passed so `/dev/shm` is not the constraint, and no trace carries an `ENOSPC`.
+  The ceiling is RAM, not cores. `PARALLEL_PROCESSES` drops 4 → 2 on hyper-model
+  and 3 → 2 on `hyper-operation:part2`, the two jobs that ran the most browsers at
+  once. This buys headroom rather than a guarantee; a memory limit on the runner
+  registrations is the actual fix and belongs to infrastructure.
 
 - **Documentation.** `docs/development-workflow/ci-matrix.md` describes the matrix
   and how to add a cell; the prebaked-image work is recorded job by job (#57).

@@ -529,7 +529,20 @@ hyper-model:
     TASK: spec
     DB: hyper_mesh_test_db
     PRECOMPILED_ASSETS: "1"
-    PARALLEL_PROCESSES: "4"
+    # 4 -> 2. Each parallel process runs its own Chrome, so this job alone held
+    # 4 browsers, and ten cells of it held ~40 on a 16-core / 32 GB host that
+    # also runs ru/hyperstack-addons. On 2026-08-30 that tipped over: jobs died
+    # with `Killed` and `exit code 137` -- SIGKILL from the kernel OOM-killer,
+    # not a spec failure, not `tab crashed`. 38 of 121 jobs on one pipeline.
+    #
+    # Halving the processes halves this job's peak browser count. It costs
+    # wall-clock per job (the batches share fewer workers) and buys the run
+    # actually finishing, which at 249 attempts for 121 jobs it was not.
+    #
+    # This is a mitigation, not the fix. The real levers are the runner `limit`
+    # in ru/infrastructure (17 slots today, shared with hyperstack-addons) and
+    # #58's reduced default matrix. Raise this again once either lands. (#113)
+    PARALLEL_PROCESSES: "2"
 hyper-trace:
   extends: .test_gem
   variables:
@@ -569,7 +582,9 @@ hyper-operation:part2:
     COMPONENT: hyper-operation
     TASK: part2
     PRECOMPILED_ASSETS: "1"
-    PARALLEL_PROCESSES: "3"
+    # 3 -> 2, same reasoning as hyper-model above: one Chrome per process, and
+    # this job's ten cells were among the OOM casualties. (#113)
+    PARALLEL_PROCESSES: "2"
 hyper-i18n:
   extends: .test_gem_pg
   variables:

@@ -74,20 +74,25 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
                ENV['BUNDLE_GEMS__RU__AEGEAN__GR'],
                ENV['GEM_SERVER_KEY']].find { |v| !v.to_s.empty? }
 
-  # A job token authenticates through the JOB-TOKEN header; a PAT or deploy token
-  # through a plain Authorization header (this endpoint rejects both `Bearer` and
-  # `PRIVATE-TOKEN`). Which header to send is therefore decided by which
-  # credential won, not configured separately.
-  if !ENV['GEM_SERVER_TOKEN'].to_s.empty?
-    auth_header, token = 'Authorization', ENV['GEM_SERVER_TOKEN']
-  elsif !job_token.empty?
-    auth_header, token = 'JOB-TOKEN', job_token
-  elsif explicit
-    auth_header, token = 'Authorization', explicit
-  else
-    abort 'No gem-server credential. In CI this should be CI_JOB_TOKEN (add ru/hyperstack ' \
-          "to ru/rubygems' CI job token allowlist); locally set GEM_SERVER_TOKEN to a " \
-          'GitLab token with write_package_registry scope.'
+  # EVERY credential goes in a plain `Authorization` header, the job token
+  # included. This endpoint reads only that header -- it already rejected `Bearer`
+  # and `PRIVATE-TOKEN`, and a first attempt at sending the job token as
+  # `JOB-TOKEN` was rejected too.
+  #
+  # The status codes are what settle it, and they are worth keeping:
+  #
+  #   Authorization: <read-only deploy token>  -> 403 Forbidden
+  #   JOB-TOKEN:     <CI_JOB_TOKEN>            -> 401 Unauthorized
+  #
+  # 403 means authenticated but not permitted; 401 means not authenticated at
+  # all. So the deploy token WAS read from Authorization and merely lacked
+  # write_package_registry, while the job token in JOB-TOKEN was not read at all.
+  # The header is the variable, not the credential.
+  token = [ENV['GEM_SERVER_TOKEN'], job_token, explicit].find { |v| !v.to_s.empty? }
+  if token.to_s.empty?
+    abort 'No gem-server credential. In CI this should be CI_JOB_TOKEN (ru/hyperstack ' \
+          "must be on ru/rubygems' CI job token inbound allowlist); locally set " \
+          'GEM_SERVER_TOKEN to a GitLab token with write_package_registry scope.'
   end
 
   # Bundler stores a source credential as `user:password`, while this endpoint
@@ -105,7 +110,7 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
 
   uri = URI("#{registry}/api/v1/gems")
   request = Net::HTTP::Post.new(uri)
-  request[auth_header] = token
+  request['Authorization'] = token
   request['Content-Type']  = 'application/octet-stream'
   request.body = File.binread(gem_file)
   response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|
@@ -122,7 +127,7 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
   10.times do
     sleep 2
     check = Net::HTTP::Get.new(list)
-    check[auth_header] = token
+    check['Authorization'] = token
     result = Net::HTTP.start(list.hostname, list.port, use_ssl: list.scheme == 'https') do |http|
       http.request(check)
     end
