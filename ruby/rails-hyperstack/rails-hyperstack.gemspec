@@ -20,41 +20,16 @@ Gem::Specification.new do |spec|
   # }
   spec.files       = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(tasks)/}) }
   spec.require_paths = ['lib']
-  spec.post_install_message = %q{
-*******************************************************************************
-
-Welcome to Hyperstack!
-
-For a quick start simply add a component using one of the generators:
-
-  >> bundle exec rails generate hyper:component CompName --add-route="/test/(*others)"
-     # Add a new component named CompName and route to it with /test/
-
-  >> bundle exec rails generate hyper:router CompName --add-route="/test/(*others)"
-     # Add a top level router named CompName and route to it
-
-The generators will insure you have the minimal additions to your system for the
-new component to run.  And note: --add-route is optional.
-
-For a complete install run the hyperstack install task:
-
-  >> bundle exec rails hyperstack:install
-
-This will add everything you need including the hotloader, webpack integration,
-hyper-model (active record model client synchronization) and a top level
-component to get you started.
-
-You can control how much of the stack gets installed as well:
-
-  >> bundle exec rails hyperstack:install:webpack          # just add webpack
-  >> bundle exec rails hyperstack:install:skip-webpack     # all but webpack
-  >> bundle exec rails hyperstack:install:hyper-model      # just add hyper-model
-  >> bundle exec rails hyperstack:install:skip-hyper-model # all but hyper-model
-  >> bundle exec rails hyperstack:install:hotloader        # just add the hotloader
-  >> bundle exec rails hyperstack:install:skip-hotloader   # skip the hotloader
-
-*******************************************************************************
-}
+  # post_install_message deliberately removed (#117).
+  #
+  # rails-hyperstack was the ONLY one of the 11 gemspecs setting this field, and
+  # the only one whose upload failed GitLab's server-side metadata extraction --
+  # twice, deterministically, each time leaving a `Gem.Temporary.Package` record
+  # in `error` status while the deploy job still reported success.
+  #
+  # The welcome banner is cosmetic; publishing the gem is not. If #117 later
+  # identifies a length threshold rather than the field itself, a shortened
+  # version can come back.
 
   spec.add_dependency 'hyper-model', Hyperstack::VERSION
   spec.add_dependency 'hyper-router', Hyperstack::ROUTERVERSION
