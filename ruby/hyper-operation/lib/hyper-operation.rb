@@ -55,7 +55,7 @@ else
   require 'hyper-operation/railway/params_wrapper'
   require 'hyper-operation/railway/run.rb'
   require 'hyper-operation/railway/validations'
-  require 'hyper-operation/transport/hyperstack_controller'
+  require 'hyper-operation/transport/routes'
   require 'hyper-operation/server_op'
   require 'hyper-operation/boot'
   Opal.use_gem 'mutations', false
