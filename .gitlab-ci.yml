@@ -58,8 +58,74 @@ image:
 
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    # The explicit override comes FIRST so it beats the docs-only skip below --
+    # an author who wants the matrix on a documentation merge request can still
+    # ask for it. (It used to sit second, where the skip rule would have won.)
     - if: $CI_COMMIT_MESSAGE =~ /\[ci build]/i
+
+    # ---- documentation-only merge requests do not run the matrix ------------
+    #
+    # A docs merge request used to start all ~121 jobs, which re-run every gem
+    # suite against byte-identical code. On a RAM-bound, contended runner pool
+    # (#114, infra#10) that is real capacity spent on nothing.
+    #
+    # THREE rules rather than one, because `rules:changes` has no negation. It
+    # answers "did ANY of these paths change?", so the obvious single rule -- the
+    # docs list plus `when: never` -- would also kill a merge request that
+    # touched docs AND code, which is most of them.
+    #
+    #   1. anything that can affect a build or a test result  -> run
+    #   2. only then, a change confined to the docs set       -> skip
+    #   3. anything matching neither list                     -> run
+    #
+    # Rule 3 is the safety property, and the reason this is a safe change to
+    # make: a path in NEITHER list runs the pipeline. Omissions cost runner time,
+    # never coverage.
+    #
+    # The one case that can still skip real code is a MIXED merge request whose
+    # code path is missing from rule 1 -- rule 1 would not match, and rule 2
+    # would. So when a new top-level code directory appears, add it to rule 1.
+    # Rule 2 needs no such care: anything missing there merely runs.
+    #
+    # Scoped to merge_request_event on purpose. `changes` is only meaningful when
+    # there are two commits to compare, and this is the source that reliably has
+    # them (source vs target); on a branch pipeline it can evaluate true for
+    # everything. The default branch, tags and master keep running
+    # unconditionally, where a wrongly-skipped pipeline would cost most.
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      changes:
+        - ruby/**/*
+        - docker/**/*
+        - install/**/*
+        - .gitlab-ci.yml
+        - .rubocop.yml
+        - .ruby-version
+        - Dockerfile
+        - docker-compose.yml
+        - Rakefile
+        - HYPERSTACK_VERSION
+        - supported_versions.yml
+        - create-docker-image
+        - login_to_registry.sh
+        - run-local-docker-specs.sh
+        - runall
+        - runone
+        - runtests
+        - verify-gocd-yaml
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+      changes:
+        # Top-level `*.md` does not cross a `/`, so this is the root markdown
+        # (readme, the CHANGELOGs, upgrade-from-*, CLAUDE.md ...) and not a
+        # README inside a gem -- those live under ruby/**/* and are packaged into
+        # the gems, so they keep running the suite.
+        - "*.md"
+        - docs/**/*
+        - release-notes/**/*
+        - logos/**/*
+        - LICENSE
+      when: never
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - if: $CI_COMMIT_BRANCH =='master'
@@ -417,6 +483,12 @@ supported-versions:
     # it does, would not be a gate at all. `rake publish` takes it as a
     # prerequisite for the same reason.
     - rake hyperstack:gem:check
+    # And the same for workflow:rules, which decide whether this pipeline exists
+    # at all. A mistake there is silent in both directions -- too eager and a
+    # code merge request ships with NO pipeline; too shy and a docs typo starts
+    # ~121 jobs. The first does not show up as a red build, it shows up as no
+    # build, so nothing else would report it.
+    - rake hyperstack:workflow:check
 
 hyper-spec:
   extends: .test_gem
