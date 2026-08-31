@@ -25,6 +25,23 @@ PUBLISHED_GEMS = %w[
 # added a gem and forgot the deploy job".
 DELIBERATELY_UNPUBLISHED = %w[hyper-console].freeze # untested by CI, frozen on React 15 (#86)
 
+# Published, but deliberately has NO test job in .gitlab-ci.yml. Same "listed
+# rather than merely absent" rule as above, for the same reason: an unexplained
+# gap is indistinguishable from an accident.
+#
+# hyper-trace has no `spec/` directory and never has. Its job therefore ran bare
+# `rake` -> the no-op `:default` task -> exit 0 with zero examples, ten times a
+# pipeline, reporting the gem green across the whole support matrix. That is a
+# false green, so the job was removed rather than left as decoration (#121).
+#
+# It is still published: it is a hand-invoked client-side debugging tool
+# (`SomeClass.hypertrace instrument: :all` traces methods to the browser console),
+# it is a development dependency only -- never a runtime dependency of any gem
+# here -- and rails-hyperstack's generators do not put it in a generated app. So
+# nothing installs it unless a developer asks for it, and it is inert until they
+# call `hypertrace` by hand.
+UNTESTED_BY_CI = %w[hyper-trace].freeze
+
 
 # Publishing moved off geminabox: gems.ru.aegean.gr was repointed to GitLab's
 # RubyGems Package Registry (ru/rubygems, project 65) on 2026-08-18 and the
@@ -225,11 +242,28 @@ namespace :hyperstack do
       unaccounted = on_disk - declared - DELIBERATELY_UNPUBLISHED
       msg << "gemspec on disk, published by nothing: #{unaccounted.join(', ')}" if unaccounted.any?
 
+      # Same rule again for TEST jobs, which is how #121 stayed invisible: a gem
+      # can have a job that runs nothing, or lose its job entirely, and the only
+      # signal either way is a green pipeline. Every job extending .test_gem or
+      # .test_gem_pg names its gem in COMPONENT (hyper-operation has two, part1
+      # and part2, hence .uniq). `supported-versions` deliberately does not
+      # extend the template, so it is correctly not counted here.
+      tested = ci.scan(/extends:\s*\.test_gem(?:_pg)?\s*\n\s*variables:\s*\n\s*COMPONENT:\s*(\S+)/)
+                 .flatten.uniq.sort
+      (declared - UNTESTED_BY_CI - tested).tap do |x|
+        msg << "published but no test job, and not listed in UNTESTED_BY_CI: #{x.join(', ')}" if x.any?
+      end
+      (UNTESTED_BY_CI & tested).tap do |x|
+        msg << "listed in UNTESTED_BY_CI but has a test job: #{x.join(', ')}" if x.any?
+      end
+
       abort "hyperstack:gem:check FAILED — #{msg.join('; ')}" if msg.any?
 
       puts "hyperstack:gem:check OK — #{declared.size} gem(s) published, " \
            "#{DELIBERATELY_UNPUBLISHED.size} deliberately excluded " \
-           "(#{DELIBERATELY_UNPUBLISHED.join(', ')})"
+           "(#{DELIBERATELY_UNPUBLISHED.join(', ')}), " \
+           "#{tested.size} with test jobs, " \
+           "#{UNTESTED_BY_CI.size} published without one (#{UNTESTED_BY_CI.join(', ')})"
     end
   end
 
