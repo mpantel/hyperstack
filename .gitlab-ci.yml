@@ -437,8 +437,46 @@ stages:
   environment:
     name: production
     url: https://gitlab.ru.aegean.gr/ru/rubygems/-/packages
-  when: manual
-  allow_failure: true
+  # A failed publish must make the pipeline RED. It did not: these jobs were
+  # `when: manual` + `allow_failure: true`, and GitLab documents that an allowed-
+  # failure job "does not contribute to the overall pipeline status" -- so a
+  # pipeline succeeds even if every deploy in it failed. Combined with
+  # publish_gem exiting 0 on a detected failure (both now fixed, #117), that is
+  # how rails-hyperstack went missing from 1.0.alpha1.9 behind eleven green
+  # check marks.
+  #
+  # `allow_failure: false` alone would NOT have been the fix. On a manual job it
+  # makes the job BLOCKING: the pipeline stops at this stage and reports
+  # `blocked` rather than `success` until a human runs it. These jobs carried no
+  # `rules:`, so they existed in every pipeline -- every ordinary push to edge
+  # would have sat blocked forever, waiting for eleven deploys nobody intends to
+  # run, and "green" would have stopped meaning anything at all. Trading a false
+  # green for a permanent amber is not a gate.
+  #
+  # So the jobs are gated to the pipelines where a release is actually made, and
+  # made blocking only there:
+  #
+  #   ordinary push / MR   no deploy jobs exist   -> pipeline green as before
+  #   tag, or RELEASE=1    manual + blocking      -> `blocked` until published,
+  #                                                  RED if any gem fails
+  #
+  # On a release pipeline `blocked` is the honest status: the release is not
+  # finished until the gems are out. RELEASE=1 (set when running a pipeline
+  # manually) keeps the path that actually published 1.0.alpha1.9 -- from a
+  # branch pipeline rather than the tag -- and is also how a single failed gem is
+  # retried without cutting a new tag.
+  #
+  # `allow_failure` is spelled out in both rules rather than left to default: the
+  # default flips to false inside `rules:` and true outside it, which is exactly
+  # the kind of invisible difference this issue is about.
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: manual
+      allow_failure: false
+    - if: '$RELEASE == "1"'
+      when: manual
+      allow_failure: false
+    - when: never
   script:
     - echo deploying $COMPONENT
     # Was `gem build` + a `gem push --host https://michail:$GEM_SERVER_KEY@...`
@@ -478,10 +516,11 @@ supported-versions:
     # Same rule for the gem list: PUBLISHED_GEMS in the Rakefile and the
     # `*-deploy` jobs below are one list with two consumers, and this is what
     # stops them drifting. It belongs here rather than on the deploy jobs
-    # because those are `when: manual` and `allow_failure: true` -- a check that
-    # only runs when someone starts a deploy, and cannot fail the pipeline when
-    # it does, would not be a gate at all. `rake publish` takes it as a
-    # prerequisite for the same reason.
+    # because those now exist ONLY on a release pipeline (a tag, or RELEASE=1 --
+    # see .deploy_gem), so a check living there would not run on the ordinary
+    # pipelines where the two lists actually drift apart. It has to run wherever
+    # the Rakefile or .gitlab-ci.yml changes, which is here. `rake publish` takes
+    # it as a prerequisite for the same reason.
     - rake hyperstack:gem:check
     # And the same for workflow:rules, which decide whether this pipeline exists
     # at all. A mistake there is silent in both directions -- too eager and a

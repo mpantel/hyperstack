@@ -161,8 +161,62 @@ def publish_gem(gem, version = Hyperstack::VERSION.tr("'", ''))
       abort "Package #{package['id']} is in state 'error' - delete it and retry"
     end
   end
-  puts "Uploaded, but #{gem} #{version} has not appeared in #{registry} yet - check the registry."
-  false
+  # ABORT, not `false`. This branch used to print the line above and return a
+  # value both callers discarded, so the task exited 0 and the deploy job went
+  # green on a gem that never published -- which is exactly how rails-hyperstack
+  # went missing from 1.0.alpha1.9 while its job reported success. The method
+  # already aborts on a failed upload and on an `error` package; returning
+  # falsely here was the one path that reported a failure it had just detected
+  # and then claimed success. (#117)
+  #
+  # Note this is the branch a failed extraction ACTUALLY takes, so it carries the
+  # diagnosis rather than a bare timeout. GitLab creates a temporary package while
+  # extracting the gemspec and renames it once extraction succeeds; when
+  # extraction fails the record keeps its placeholder name and never acquires the
+  # real one. So the `when 'error'` case above -- which looks for OUR version --
+  # is near-unreachable for this failure: the package we are waiting for never
+  # comes into existence under that name. Say so, and name the leftover, because
+  # a stale `error` record blocks a retry of the same version and is findable
+  # only by listing recent packages and spotting the placeholder.
+  leftovers = temporary_error_packages(host, project_id, token)
+  detail =
+    if leftovers.empty?
+      'No failed extraction record was found, so the gemspec may still be ' \
+      'extracting -- re-run this task to poll again before assuming it failed.'
+    else
+      "Extraction FAILED. Delete the leftover record(s) and retry:\n  " +
+        leftovers.map { |p| "package #{p['id']} #{p['name']} #{p['version']} (#{p['status']})" }
+                 .join("\n  ")
+    end
+  abort <<~MSG
+    Upload of #{gem_file} was accepted (HTTP 201) but #{gem} #{version} never reached
+    status 'default' in #{registry}.
+
+    THE GEM IS NOT PUBLISHED. #{detail}
+  MSG
+end
+
+# The placeholder records GitLab leaves behind when gemspec extraction fails.
+# They are why a failed publish is invisible to the obvious query: a gem that
+# fails extraction never gets its real name, so
+# `?package_name=<gem>&status=error` returns nothing and only a listing of
+# recent packages shows them. Best-effort -- this runs while already aborting,
+# so a failure to enumerate must not mask the real message. (#117)
+def temporary_error_packages(host, project_id, token)
+  uri = URI("#{host}/api/v4/projects/#{project_id}/packages" \
+            '?package_type=rubygems&per_page=100&order_by=created_at&sort=desc')
+  request = Net::HTTP::Get.new(uri)
+  request['Authorization'] = token
+  response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    http.request(request)
+  end
+  return [] unless response.code == '200'
+
+  JSON.parse(response.body).select do |pkg|
+    pkg['status'] == 'error' && pkg['name'].to_s.include?('Gem.Temporary.Package')
+  end
+rescue StandardError
+  []
 end
 
 namespace :hyperstack do
@@ -269,6 +323,49 @@ namespace :hyperstack do
       end
       (UNTESTED_BY_CI & tested).tap do |x|
         msg << "listed in UNTESTED_BY_CI but has a test job: #{x.join(', ')}" if x.any?
+      end
+
+      # The deploy gate (#117). Both halves of it are one-word edits away from
+      # being undone, and undoing either is SILENT -- the pipeline goes green,
+      # which is the exact failure being fixed. So the shape is asserted, not
+      # just written down in a comment.
+      #
+      # Two properties, and they pull in opposite directions, which is why both
+      # are needed:
+      #
+      #   every rule that RUNS the job must be allow_failure: false
+      #     -- or a failed publish leaves the pipeline green, and
+      #        rails-hyperstack goes missing behind eleven green check marks.
+      #
+      #   some rule must be `when: never`
+      #     -- or the jobs exist in every pipeline; blocking manual jobs then
+      #        park every ordinary push at `blocked` forever, and "green" stops
+      #        meaning anything. Trading a false green for a permanent amber is
+      #        not a gate either.
+      deploy = ci_yaml['.deploy_gem']
+      if deploy.nil?
+        msg << '.deploy_gem template is missing'
+      else
+        rules = deploy['rules']
+        if !rules.is_a?(Array) || rules.empty?
+          msg << '.deploy_gem has no `rules:` — the deploy jobs would exist in every ' \
+                 'pipeline (#117)'
+        else
+          running = rules.reject { |r| r.is_a?(Hash) && r['when'].to_s == 'never' }
+          permissive = running.reject { |r| r.is_a?(Hash) && r['allow_failure'] == false }
+          if permissive.any?
+            msg << '.deploy_gem has rule(s) that run the job without `allow_failure: false`, ' \
+                   "so a failed publish would not fail the pipeline: #{permissive.inspect} (#117)"
+          end
+          unless rules.any? { |r| r.is_a?(Hash) && r['when'].to_s == 'never' }
+            msg << '.deploy_gem has no `when: never` fallback, so the blocking deploy jobs ' \
+                   'would exist in ordinary pipelines and leave them permanently blocked (#117)'
+          end
+        end
+        if deploy['allow_failure'] == true
+          msg << ".deploy_gem sets a top-level `allow_failure: true`, which defeats the " \
+                 'rules below it (#117)'
+        end
       end
 
       abort "hyperstack:gem:check FAILED — #{msg.join('; ')}" if msg.any?

@@ -23,9 +23,30 @@ To release a new gem set:
    GitLab RubyGems registry and then polls the packages API until the version
    reports status `default` — a 201 only means the file was stored (#49). They
    share `resource_group: production`, so they serialise.
-8. **Check each deploy job actually succeeded.** They are `allow_failure: true`,
-   so a failed publish leaves the pipeline green. Pipeline colour is not evidence
-   that the gems went out; the job statuses are.
+
+   The deploy jobs exist **only on a release pipeline**: a tag pipeline, or one
+   started manually with the variable `RELEASE=1`. Ordinary pushes carry no deploy
+   jobs at all, which is what lets them report a plain green (#117). If you are
+   looking for the deploy jobs and they are not there, you are on an ordinary
+   pipeline — start a new one with `RELEASE=1`, which is also how you retry a
+   single gem without cutting another tag.
+8. **The pipeline now tells you.** The deploy jobs are blocking, so a release
+   pipeline reads `blocked` until they have run, and goes **red** if any gem
+   fails to publish. `rake hyperstack:gem:publish` aborts when the upload is
+   accepted but the version never reaches status `default`, naming any leftover
+   `Gem.Temporary.Package` record to delete before retrying (#117).
+
+   This replaces the old rule that pipeline colour was not evidence and the job
+   statuses had to be read by hand. That rule existed because a failed publish
+   used to leave the pipeline green — which is how `rails-hyperstack` went
+   missing from `1.0.alpha1.9` behind eleven green check marks. Colour is now
+   evidence. Verifying against the registry is still the strongest check, and
+   costs one command:
+
+   ```
+   glab api "projects/65/packages?package_type=rubygems&package_name=rails-hyperstack" \
+     | grep -o '"version":"<version>"'
+   ```
 9. Add a new release note (add release in GitLab): copy the CHANGELOG entry.
 
 Notes on the version number
