@@ -184,6 +184,13 @@ describe 'Hyperstack.on_server?' do
       without_rails_server do
         freshly_booted!
 
+        # #112 narrowed the forwarding branch to the one case that needs it:
+        # action_cable over a cable adapter whose subscriber list is inside the
+        # web process. On this test_app's :simple_poller a console delivers
+        # locally instead -- see direct_delivery_spec.rb.
+        allow(Hyperstack).to receive(:transport).and_return(:action_cable)
+        allow(Hyperstack).to receive(:action_cable_adapter).and_return('async')
+
         expect(Hyperstack).to receive(:send_to_server).with('Test', packet)
         Hyperstack.send_data('Test', packet)
       end

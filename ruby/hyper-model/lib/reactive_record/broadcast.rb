@@ -8,7 +8,15 @@ module ReactiveRecord
       Hyperstack::InternalPolicy.regulate_broadcast(model) do |data|
         puts "Broadcast aftercommit hook: #{data}" if Hyperstack::Connection.show_diagnostics
 
-        if !Hyperstack.on_server? && Hyperstack::Connection.root_path
+        # Same question as `Hyperstack.send_data` and `Hyperstack.dispatch` ask:
+        # can this process deliver the broadcast itself? Model change broadcasts
+        # forward through `SendPacket.remote` -> `execute_remote_api`, which is
+        # not environment-gated, so unlike a ServerOp dispatch they were never
+        # dropped in production -- but a rake task on a shared transport was
+        # still making an HTTP round trip to have the server run the very op it
+        # could have run here. Asking the same predicate collapses the asymmetry
+        # between the two forwarding paths. (#112)
+        if Hyperstack.forward_to_server?
           send_to_server(operation, data, model.__synchromesh_update_time) rescue nil # fails if server no longer running so ignore
         else
           # see: https://github.com/hyperstack-org/hyperstack/issues/453
